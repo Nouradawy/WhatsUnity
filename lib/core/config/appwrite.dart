@@ -19,6 +19,9 @@ late final TablesDB appwriteTables;
 /// Realtime WebSocket for database document subscriptions (e.g. chat [messages]).
 late final Realtime appwriteRealtime;
 
+/// HTTP executions for Appwrite Functions (e.g. R2 presign, Gumlet asset create).
+late final Functions appwriteFunctions;
+
 /// The Appwrite database that holds all collections (profiles, user_roles, …).
 /// Read from APPWRITE_DATABASE_ID in .env.
 late final String appwriteDatabaseId;
@@ -36,4 +39,5 @@ Future<void> initAppwrite() async {
   appwriteDatabases = Databases(appwriteClient);
   appwriteTables = TablesDB(appwriteClient);
   appwriteRealtime = Realtime(appwriteClient);
+  appwriteFunctions = Functions(appwriteClient);
 }

@@ -172,7 +172,35 @@ class ChatRepositoryImpl implements ChatRepository {
     final meta = message.metadata;
     if (meta == null) return;
     await remoteDataSource.updateMessageMetadata(message.id, Map<String, dynamic>.from(meta));
-    await localDataSource.insertMessagesFromTypes(channelId, [message]);
+    try {
+      await localDataSource.insertMessagesFromTypes(channelId, [message]);
+    } catch (e, st) {
+      debugPrint(
+        'updateMessageMetadata: local SQLite persist failed after remote save '
+        '(UI should still refresh from cubit): $e\n$st',
+      );
+    }
+  }
+
+  @override
+  Future<types.Message?> fetchMessageById(String messageId) async {
+    if (messageId.isEmpty) return null;
+    try {
+      final row = await remoteDataSource.fetchMessageRow(messageId);
+      final msg = MessageModel.fromMap(row);
+      try {
+        final ch = MessageModel.channelIdFromRow(row);
+        if (ch.isNotEmpty) {
+          await localDataSource.insertMessagesFromTypes(ch, [msg]);
+        }
+      } catch (e, st) {
+        debugPrint('fetchMessageById local persist: $e\n$st');
+      }
+      return msg;
+    } catch (e, st) {
+      debugPrint('fetchMessageById: $e\n$st');
+      return null;
+    }
   }
 
   @override

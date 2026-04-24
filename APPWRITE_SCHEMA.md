@@ -36,8 +36,8 @@ They imply referential behavior and complicate **offline-first** and **LWW** mer
 **Chat RPC**  
 `get_messages_with_pagnation` is **not** represented in the schema. Replace with an Appwrite Function and/or list queries on `messages` in a later phase.
 
-**Storage (R2 / buckets)**  
-File URLs remain **opaque strings** in `metadata`, `source_url` JSON, or `uri`.
+**Storage (Cloudflare R2 + Gumlet)**  
+File URLs remain **opaque strings** in `metadata`, `source_url` JSON, `uri`, `verFiles`, and other media blobs. **Convention:** **R2** for static files — images, PDFs, generic attachments, verification files (optionally behind your CDN). **Gumlet** for **voice-note / voice-recording audio and video** (playback URLs from the [Gumlet Video API](https://docs.gumlet.com/reference/create-asset)). Encode optional Gumlet `asset_id` (or equivalent) **inside** existing JSON metadata for time-based media — no new collection attributes required for the split.
 
 ---
 
@@ -417,10 +417,10 @@ Replaces: `BrainStorming`
 | attribute | expected JSON shape (after decode) | size cap (chars, guidance) |
 | --- | --- | --- |
 | verFiles | `List<Map<String, dynamic>>` | 50k string attr |
-| messages.metadata | voice/text/file meta; `reply_to` also on root attr | 50k |
-| posts.Comments / source_url | list of comment / media objects | 200k / 100k |
-| maintenance_attachments.source_url | list of url maps | 100k |
-| brainstorms: imageSources, options, votes, comments | per social models | 200k each |
+| messages.metadata | voice/text/file meta; `reply_to` also on root attr. **Voice and video** entries: Gumlet playback URL / optional `asset_id`. **Images and generic files**: **R2** URLs (same JSON shape, different origin). | 50k |
+| posts.Comments / source_url | list of comment / media objects; **video** items → Gumlet, **static images** → **R2** | 200k / 100k |
+| maintenance_attachments.source_url | list of url maps; **video** → Gumlet, **photos/PDFs** → **R2** | 100k |
+| brainstorms: imageSources, options, votes, comments | per social models; **video** (if present) → Gumlet, images → **R2** where applicable | 200k each |
 
 **Rule**: keep blobs under the attribute `size`; for rare overflow, split into Storage + pointer rows in a later iteration.
 
@@ -503,6 +503,7 @@ flowchart LR
 
 ## 7. Changelog
 
+- **2026-04-24** — Storage: **R2** for static files (images, PDFs, generic attachments, verification); **Gumlet** for **voice and video** (playback URLs and optional `asset_id` in JSON metadata).
 - **2026-04-23** — Initial `APPWRITE_SCHEMA.md` and alignment with [appwrite_schema_translation_625b1b5f.plan.md](.cursor/plans/appwrite_schema_translation_625b1b5f.plan.md).
 
 ---

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,8 +15,8 @@ import 'package:uuid/uuid.dart';
 
 import 'package:WhatsUnity/core/config/Enums.dart';
 import 'package:WhatsUnity/core/config/supabase.dart';
-import 'package:WhatsUnity/core/constants/Constants.dart';
-import 'package:WhatsUnity/core/services/gumletService.dart';
+import 'package:WhatsUnity/core/media/media_services.dart';
+import 'package:WhatsUnity/core/media/recorder_upload_bridge.dart';
 import 'package:WhatsUnity/features/social/presentation/pages/Social.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
@@ -246,9 +248,21 @@ class HomePage extends StatelessWidget {
               if (authState is Authenticated)
               BlocBuilder<AppCubit ,AppCubitStates>(
                   builder: (context , appState){
-                final appCubit = AppCubit.get(context);
                 if (AppCubit.get(context).tabBarIndex == 1 || AppCubit.get(context).bottomNavIndex == 1) {
                  return BlocBuilder<ChatCubit, ChatState>(
+                    // [ChatMessagesLoaded] emits on every message change (_version);
+                    // the mic overlay only needs input-empty, brainstorm, and channel.
+                    buildWhen: (previous, current) {
+                      if (previous is ChatMessagesLoaded &&
+                          current is ChatMessagesLoaded) {
+                        return previous.isChatInputEmpty !=
+                                current.isChatInputEmpty ||
+                            previous.isBrainStorming !=
+                                current.isBrainStorming ||
+                            previous.channelId != current.channelId;
+                      }
+                      return previous.runtimeType != current.runtimeType;
+                    },
                     builder: (context, state) {
                       final chatCubit = context.read<ChatCubit>();
 
@@ -284,19 +298,30 @@ class HomePage extends StatelessWidget {
                                 // Assuming uploadVoiceNote logic is similar to BuildingChat
                                 // We'll need to move uploadVoiceNote to ChatCubit or a Service
                                 final fileName = 'voice_note_${const Uuid().v4()}.m4a';
-                                final driveLink = await driveService.uploadFile(soundFile, fileName, 'audio');
-
-                                if (driveLink != null) {
-                                  final gumletUrl = await uploadVoiceNoteGumlet(driveLink);
-                                  if (gumletUrl != null && authState is Authenticated) {
+                                File? staged;
+                                try {
+                                  staged = stageRecorderFileForUpload(soundFile);
+                                  final meta = await mediaUploadService.uploadFromLocalPath(
+                                    localFilePath: staged.path,
+                                    filenameOverride: fileName,
+                                  );
+                                  final playbackUrl =
+                                      meta['playback_url'] as String? ?? meta['url'] as String?;
+                                  if (playbackUrl != null) {
                                     chatCubit.sendVoiceNote(
-                                      uri: gumletUrl,
+                                      uri: playbackUrl,
                                       duration: parsedDuration,
                                       waveform: amplitudesToUpload,
-                                      channelId: channelIdLocal!,
+                                      channelId: channelIdLocal,
                                       userId: authState.user.id,
                                     );
                                   }
+                                } catch (e, st) {
+                                  debugPrint('Voice upload failed: $e\n$st');
+                                } finally {
+                                  try {
+                                    staged?.deleteSync();
+                                  } catch (_) {}
                                 }
                               },
 
@@ -349,7 +374,7 @@ class HomePage extends StatelessWidget {
             return homeScaffold;
           }
           return ChatScope(
-            compoundId: currentSelectedCompoundId!,
+            compoundId: currentSelectedCompoundId,
             channelScopeId: 'COMPOUND_GENERAL',
             userId: uid,
             child: homeScaffold,
@@ -390,6 +415,24 @@ class _TabChangeHandlerState extends State<TabChangeHandler> {
   }
 
   void _handleTabSelection() {
+    if (_tabController != null && _tabController!.index == 1 && !_tabController!.indexIsChanging) {
+
+      // 2. Get the scroll controller that manages the NestedScrollView
+      final scrollController = PrimaryScrollController.of(context);
+
+      if (scrollController.hasClients) {
+        // 3. Animate the SCROLL position, not the tab index.
+        // 200 is an estimate of your SliverAppBar height.
+        // This "pushes" the header up to make the chat area "big".
+        final double headerHeight = MediaQuery.of(context).size.width * 0.40;
+
+        scrollController.animateTo(
+          headerHeight,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.fastOutSlowIn,
+        );
+      }
+    }
     print("_handleTabSelection called : ${_tabController!.index}");
     if (_tabController != null) {
       // To prevent duplicate calls, only emit if the index has actually changed

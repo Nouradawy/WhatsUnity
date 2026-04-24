@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:WhatsUnity/features/social/presentation/bloc/social_cubit.dart';
@@ -10,7 +12,8 @@ import 'package:uuid/uuid.dart';
 
 import 'package:WhatsUnity/core/constants/Constants.dart';
 import 'package:WhatsUnity/core/config/appwrite.dart';
-import 'package:WhatsUnity/core/services/gumletService.dart';
+import 'package:WhatsUnity/core/media/media_services.dart';
+import 'package:WhatsUnity/core/media/recorder_upload_bridge.dart';
 import 'package:WhatsUnity/features/social/data/datasources/social_remote_data_source.dart';
 import 'package:WhatsUnity/features/social/data/repositories/social_repository_impl.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
@@ -109,25 +112,31 @@ class BuildingChat extends StatelessWidget {
 
                           final fileName =
                               'voice_note_${const Uuid().v4()}.m4a';
-                          final driveLink = await driveService.uploadFile(
-                            soundFile,
-                            fileName,
-                            'audio',
-                          );
-
-                          if (driveLink != null) {
-                            final gumletUrl =
-                                await uploadVoiceNoteGumlet(driveLink);
-
-                            if (gumletUrl != null && context.mounted) {
+                          File? staged;
+                          try {
+                            staged = stageRecorderFileForUpload(soundFile);
+                            final meta =
+                                await mediaUploadService.uploadFromLocalPath(
+                              localFilePath: staged.path,
+                              filenameOverride: fileName,
+                            );
+                            final playbackUrl = meta['playback_url'] as String? ??
+                                meta['url'] as String?;
+                            if (playbackUrl != null && context.mounted) {
                               context.read<ChatCubit>().sendVoiceNote(
-                                    uri: gumletUrl,
+                                    uri: playbackUrl,
                                     duration: parsedDuration,
                                     waveform: amplitudesToUpload,
                                     channelId: channelId,
                                     userId: userId,
                                   );
                             }
+                          } catch (e, st) {
+                            debugPrint('Voice upload failed: $e\n$st');
+                          } finally {
+                            try {
+                              staged?.deleteSync();
+                            } catch (_) {}
                           }
                         },
                         fullRecordPackageHeight: 80,

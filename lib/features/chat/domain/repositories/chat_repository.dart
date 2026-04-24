@@ -47,6 +47,9 @@ abstract class ChatRepository {
     required types.Message message,
   });
 
+  /// Loads one message from Appwrite (e.g. refresh [metadata] when realtime lags).
+  Future<types.Message?> fetchMessageById(String messageId);
+
   Future<types.User> resolveUser(String id);
 
   ChatRealtimeHandle subscribeToChannel({

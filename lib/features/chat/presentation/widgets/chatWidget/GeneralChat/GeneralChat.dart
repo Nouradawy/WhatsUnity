@@ -19,8 +19,12 @@ import 'package:WhatsUnity/features/chat/presentation/bloc/chat_details_cubit.da
 import 'package:WhatsUnity/core/config/supabase.dart';
 import 'package:WhatsUnity/core/config/Enums.dart';
 import 'package:WhatsUnity/core/constants/Constants.dart';
+import 'package:WhatsUnity/core/media/media_services.dart';
+import 'package:WhatsUnity/core/media/media_upload_exception.dart';
+import 'package:WhatsUnity/core/media/media_upload_metadata.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_state.dart';
+import 'package:WhatsUnity/features/chat/presentation/utils/audio_message_playable.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:mime/mime.dart';
@@ -307,6 +311,9 @@ class _GeneralChatState extends State<GeneralChat>
     for (final message in loaded.messages) {
       if (message is types.AudioMessage &&
           message.metadata?['status'] == 'processing') {
+        if (_audioPollingTimers.containsKey(message.id)) {
+          continue;
+        }
         _startPollingForAudioMessage(message);
       }
     }
@@ -561,18 +568,8 @@ class _GeneralChatState extends State<GeneralChat>
   }
 
   void _handleAttachmentTap() {
-    final authState = context.read<AuthCubit>().state;
-    final googleUser = (authState is Authenticated) ? authState.googleUser : null;
 
-    if (googleUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              "Looks like you aren't signed in with Google. We'll try to log you in first."),
-        ),
-      );
-      return;
-    }
+
 
     showModalBottomSheet<void>(
       context: context,
@@ -659,20 +656,33 @@ class _GeneralChatState extends State<GeneralChat>
     setState(() => _uploadProgressByMessageId[localId] = 0.0);
 
     final fileName = '${const Uuid().v4()}.${pickedFile.path.split('.').last}';
-    final driveUrl = await driveService.uploadFile(
-      file,
-      fileName,
-      'image',
-      onProgress: (progress) {
-        setState(() => _uploadProgressByMessageId[localId] = progress);
-      },
-    );
 
-    if (driveUrl != null) {
+    String? imageUrl;
+    try {
+      if (mounted) {
+        setState(() => _uploadProgressByMessageId[localId] = 0.1);
+      }
+      final meta = await mediaUploadService.uploadFromLocalPath(
+        localFilePath: pickedFile.path,
+        filenameOverride: fileName,
+        mimeType: lookupMimeType(pickedFile.path),
+      );
+      imageUrl = meta[MediaUploadMetadataKeys.url] as String?;
+      if (mounted) {
+        setState(() => _uploadProgressByMessageId[localId] = 1.0);
+      }
+    } on MediaUploadException catch (e, st) {
+      debugPrint('Image upload failed: $e\n$st');
+      imageUrl = null;
+    }
+
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      if (!mounted || _disposed || _tearingDown) return;
       final bytes = await file.readAsBytes();
       final image = await decodeImageFromList(bytes);
+      if (!mounted || _disposed || _tearingDown) return;
       await context.read<ChatCubit>().sendFileMessage(
-            uri: driveUrl,
+            uri: imageUrl,
             name: pickedFile.name,
             size: bytes.length,
             channelId: _channelId!,
@@ -868,37 +878,130 @@ class _GeneralChatState extends State<GeneralChat>
   // Audio Processing
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Starts a 3-second polling loop for [message]. Stops once the audio file
-  /// is confirmed ready at its URL, then updates Supabase so all clients see
-  /// the 'ready' status.
+  bool _audioMetadataIndicatesReady(types.AudioMessage m) =>
+      audioMessageShowsPlayButton(m);
+
+  /// Every 3s: (1) pull full document from Appwrite → SQLite + cubit
+  /// [ChatCubit.refreshMessageFromServer], (2) if still not ready, HEAD/GET the
+  /// audio URL and write `status: ready` to Appwrite (then repository syncs local).
   void _startPollingForAudioMessage(types.AudioMessage message) {
     _audioPollingTimers[message.id]?.cancel();
+
+    Future<void> pollTick() async {
+      if (_disposed || _tearingDown || !mounted || _channelId == null) {
+        _audioPollingTimers[message.id]?.cancel();
+        _audioPollingTimers.remove(message.id);
+        return;
+      }
+
+      final cubit = context.read<ChatCubit>();
+      await cubit.refreshMessageFromServer(message.id);
+      if (_disposed || _tearingDown || !mounted || _channelId == null) return;
+
+      types.AudioMessage? currentAudio;
+      final st = cubit.state;
+      if (st is ChatMessagesLoaded) {
+        for (final m in st.messages) {
+          if (m.id == message.id && m is types.AudioMessage) {
+            currentAudio = m;
+            break;
+          }
+        }
+      }
+
+      if (currentAudio != null && _audioMetadataIndicatesReady(currentAudio)) {
+        _audioPollingTimers[message.id]?.cancel();
+        _audioPollingTimers.remove(message.id);
+        return;
+      }
+
+      final probeUrl = currentAudio?.source ?? message.source;
+      final isUrlReady = await _checkAudioUrlIsReady(probeUrl);
+      if (!isUrlReady) return;
+
+      _audioPollingTimers[message.id]?.cancel();
+      _audioPollingTimers.remove(message.id);
+
+      if (_disposed || _tearingDown || !mounted || _channelId == null) return;
+
+      final audioForWrite = currentAudio ?? message;
+      final meta = {
+        ...?audioForWrite.metadata,
+        'status': 'ready',
+        'ready_at': DateTime.now().toUtc().millisecondsSinceEpoch,
+      };
+      final updated = types.AudioMessage(
+        id: audioForWrite.id,
+        authorId: audioForWrite.authorId,
+        createdAt: audioForWrite.createdAt,
+        size: audioForWrite.size,
+        source: audioForWrite.source,
+        duration: audioForWrite.duration,
+        metadata: meta,
+        replyToMessageId: audioForWrite.replyToMessageId,
+        deliveredAt: audioForWrite.deliveredAt,
+        sentAt: audioForWrite.sentAt,
+        seenAt: audioForWrite.seenAt,
+      );
+      try {
+        await context.read<ChatCubit>().updateMessageMetadata(
+              channelId: _channelId!,
+              message: updated,
+            );
+      } catch (e, st) {
+        debugPrint(
+          'GeneralChat: audio ready metadata update failed: $e\n$st',
+        );
+      }
+    }
+
     _audioPollingTimers[message.id] = Timer.periodic(
       const Duration(seconds: 3),
-      (timer) async {
-        final isReady = await _checkAudioUrlIsReady(message.source);
-        if (!isReady) return;
-
-        timer.cancel();
-        _audioPollingTimers.remove(message.id);
-
-        await supabase.from('messages').update({
-          'metadata': {
-            ...?message.metadata,
-            'status': 'ready',
-          },
-        }).eq('id', message.id);
+      (_) {
+        unawaited(pollTick());
       },
     );
   }
 
-  Future<bool> _checkAudioUrlIsReady(String url) async {
+  Future<bool> _checkAudioUrlIsReady(String url, [int redirectDepth = 0]) async {
+    if (redirectDepth > 5) return false;
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme) return false;
+
+    bool okCode(int code) => code == 200 || code == 206;
+
     try {
-      final response = await http.head(Uri.parse(url));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+      final head = await http.head(uri).timeout(const Duration(seconds: 15));
+      if (okCode(head.statusCode)) return true;
+      if (head.statusCode >= 300 &&
+          head.statusCode < 400 &&
+          head.headers['location'] != null) {
+        return _checkAudioUrlIsReady(
+          uri.resolve(head.headers['location']!).toString(),
+          redirectDepth + 1,
+        );
+      }
+    } catch (_) {}
+
+    try {
+      final get = await http
+          .get(
+            uri,
+            headers: const {'Range': 'bytes=0-0'},
+          )
+          .timeout(const Duration(seconds: 15));
+      if (okCode(get.statusCode)) return true;
+      if (get.statusCode >= 300 &&
+          get.statusCode < 400 &&
+          get.headers['location'] != null) {
+        return _checkAudioUrlIsReady(
+          uri.resolve(get.headers['location']!).toString(),
+          redirectDepth + 1,
+        );
+      }
+    } catch (_) {}
+
+    return false;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1359,6 +1462,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('[] ${ context.watch<AuthCubit>().state.compoundsLogos}');
     return AppBar(
       title: MaterialButton(
         onPressed: onTitleTap,

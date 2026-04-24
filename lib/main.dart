@@ -16,6 +16,7 @@ import 'core/constants/Constants.dart';
 import 'core/config/Enums.dart';
 import 'core/config/supabase.dart';
 import 'core/config/appwrite.dart';
+import 'core/media/media_services.dart';
 import 'core/theme/lightTheme.dart';
 
 import 'features/auth/domain/entities/app_user.dart';
@@ -61,6 +62,7 @@ void main() async {
 
   // ── Appwrite (auth primary backend) ───────────────────────────────────────
   await initAppwrite();
+  initMediaUploadService();
 
   // ── Supabase (kept for non-auth features until full migration) ────────────
   await Supabase.initialize(

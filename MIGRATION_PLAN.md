@@ -8,7 +8,8 @@ Scope includes `Auth`, `Admin`, `Chat`, `Social`, and `Maintenance` (including m
 - Local-first reads: UI reads from local `sqflite` tables only.
 - Write path: local DB first, then enqueue sync job.
 - Conflict strategy: **Last-Write-Wins (LWW)** using server timestamps.
-- File storage target: **Cloudflare R2** (signed upload URLs).
+- File storage target — **Cloudflare R2** (default): static blobs only — images, PDFs, generic file attachments, verification files — via signed upload URLs; store `key`, `url`, `mime`, `size` (and dimensions when relevant) on Appwrite documents or inside JSON metadata. **Do not** put user voice recordings or **video** files on R2.
+- File storage target — **Gumlet** (voice **and** video): user voice notes / voice-recording audio (e.g. `.m4a`, `.aac`) **and** video (e.g. `.mp4`, `.mov`) wherever the product records or shares time-based media, via [Gumlet Video API](https://docs.gumlet.com/reference/create-asset) (create asset, [direct](https://docs.gumlet.com/reference/create-asset-direct-upload) or multipart upload as you standardize); persist playback URL and optional Gumlet `asset_id` in `messages.metadata`, `posts.source_url`, `maintenance_attachments.source_url`, or equivalent JSON.
 - Runtime release strategy: **big-bang backend cutover** after full parity verification.
 
 ## Current Supabase Touchpoints (Analyzed)
@@ -104,7 +105,7 @@ Supabase metadata and profile fields (`role_id`, `owner_type`, `phone_number`, `
   - Repository orchestration
   - Appwrite Functions for multi-entity consistency
 - `ON DELETE CASCADE` behavior becomes explicit delete orchestration:
-  - Parent delete function deletes child documents and related R2 objects.
+  - Parent delete function deletes child documents and related **R2** objects **and Gumlet assets (voice and video)** where applicable.
 
 ## 3.3 Upsert/unique behavior
 - Supabase `onConflict` patterns become:
@@ -132,21 +133,27 @@ Supabase metadata and profile fields (`role_id`, `owner_type`, `phone_number`, `
 
 ## 5) Storage & RPC/Function Migration
 
-## 5.1 Cloudflare R2 for files
+## 5.1 Cloudflare R2 (static files) and Gumlet (voice + video)
+
+### 5.1a Cloudflare R2
 - Replace Supabase Storage + Google Drive writes with:
   - Request signed upload URL
   - Upload directly to R2
   - Store metadata in Appwrite document (`key`, `url`, `mime`, `size`, dimensions)
 
-Applies to:
+**Applies to:**
 - verification files
-- chat images/audio/files
-- social post/brainstorm media
-- maintenance report attachments
+- chat **non-voice, non-video** attachments: images, generic files (documents, etc.)
+- social / brainstorm **static** media: images (and any non-video files)
+- maintenance report attachments that are **not** video: photos, PDFs, etc.
+
+### 5.1b Gumlet (voice and video)
+- **Voice notes / voice-recording** and **video** (chat video messages, video in posts/brainstorms, maintenance video attachments if supported): Appwrite Function (or backend) creates a Gumlet asset and returns upload instructions; client uploads; document/JSON stores Gumlet **playback URL** and optional **`asset_id`** for lifecycle/delete.
+- **Images and generic static files** use §5.1a — not Gumlet.
 
 ## 5.2 RPC/function mapping
 - `get_messages_with_pagnation` -> Appwrite Function endpoint for paginated message retrieval.
-- `delete_user` (if exists in DB) -> Appwrite admin Function for account purge + dependent document cleanup + R2 cleanup.
+- `delete_user` (if exists in DB) -> Appwrite admin Function for account purge + dependent document cleanup + **R2** cleanup + **Gumlet** asset deletion for any referenced **voice or video** media where applicable.
 
 ## 5.3 Client vs function rule
 - Client-side CRUD: single collection, no cascade, no elevated permissions.
@@ -173,7 +180,7 @@ Applies to:
 ## 6.3 Sync flow
 1. Push report create first.
 2. On remote report ID resolution, map local temp ID -> remote ID.
-3. Upload attachments to R2.
+3. Upload each attachment via **R2** (photos, PDFs, etc.) or **Gumlet** (video clips), per file type.
 4. Patch report/attachment metadata in Appwrite.
 5. Mark local rows `clean`.
 
@@ -212,11 +219,11 @@ Applies to:
 - Deploy pagination, delete cascade, and presence TTL functions.
 
 ## Phase 6: Storage cutover
-- Replace Google Drive/Supabase storage write paths with R2 signed uploads.
-- Validate media fetch/render behavior.
+- Replace Google Drive/Supabase storage write paths with **R2** signed uploads for static files and **Gumlet** for **voice and video**.
+- Validate media fetch/render (R2 direct URLs vs Gumlet playback / HLS or player SDK expectations).
 
 ## Phase 7: Big-bang cutover
-- Switch backend env/config to Appwrite + R2.
+- Switch backend env/config to Appwrite + **R2** + **Gumlet** (Gumlet collection / API credentials and R2 bucket config as provisioned).
 - Execute smoke/regression suite.
 - Monitor sync failures and rollback window.
 
@@ -234,8 +241,11 @@ flowchart LR
   syncEngine --> appwriteRealtime[AppwriteRealtime]
   syncEngine --> signedUploadService[SignedUploadService]
   signedUploadService --> cloudflareR2[CloudflareR2]
+  repositories --> gumletUploadService[GumletUploadService]
+  gumletUploadService --> gumletVideoAPI[GumletVideoAPI]
   appwriteFunctions[AppwriteFunctions] --> appwriteTables
   appwriteFunctions --> cloudflareR2
+  appwriteFunctions --> gumletVideoAPI
 ```
 
 ```mermaid
@@ -268,6 +278,7 @@ flowchart TD
 - Maintenance parity: report create/read/update/history/attachments.
 - Chat parity: pagination/send/edit/delete/receipts/realtime.
 - Social/admin parity: posts/comments/brainstorms/reports/status updates.
+- **Storage parity**: **voice and video** play via **Gumlet** URLs; **images, PDFs, and other static files** load via **R2** URLs.
 
 ## 9.4 Operational readiness
 - Error telemetry for sync failures and dead-letter jobs.

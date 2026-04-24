@@ -12,6 +12,7 @@ import '../../domain/usecases/delete_message.dart';
 import '../../domain/usecases/resolve_user.dart';
 import '../../domain/usecases/subscribe_to_channel.dart';
 import '../../domain/usecases/update_message_metadata.dart';
+import '../../domain/usecases/fetch_message_by_id.dart';
 import 'chat_state.dart';
 
 class ChatCubit extends Cubit<ChatState> {
@@ -24,6 +25,7 @@ class ChatCubit extends Cubit<ChatState> {
   final ResolveUser resolveUserUsecase;
   final SubscribeToChannel subscribeToChannelUsecase;
   final UpdateMessageMetadata updateMessageMetadataUsecase;
+  final FetchMessageById fetchMessageByIdUsecase;
 
   ChatCubit({
     required this.fetchMessagesUsecase,
@@ -35,6 +37,7 @@ class ChatCubit extends Cubit<ChatState> {
     required this.resolveUserUsecase,
     required this.subscribeToChannelUsecase,
     required this.updateMessageMetadataUsecase,
+    required this.fetchMessageByIdUsecase,
   }) : super(ChatInitial());
 
   bool isRecording = false;
@@ -194,6 +197,9 @@ class ChatCubit extends Cubit<ChatState> {
   void _addOrUpdateMessage(types.Message message) {
     final index = _messages.indexWhere((m) => m.id == message.id);
     if (index != -1) {
+      if (_messages[index] == message) {
+        return;
+      }
       final next = List<types.Message>.from(_messages);
       next[index] = message;
       _messages = _sortedCopyAsc(next);
@@ -295,6 +301,16 @@ class ChatCubit extends Cubit<ChatState> {
       channelId: channelId,
       message: message,
     );
+    // Local merge so UI updates even if Appwrite realtime is delayed.
+    _addOrUpdateMessage(message);
+  }
+
+  /// Re-fetches one document from Appwrite and merges into [_messages].
+  Future<void> refreshMessageFromServer(String messageId) async {
+    final m = await fetchMessageByIdUsecase(messageId);
+    if (m != null) {
+      _addOrUpdateMessage(m);
+    }
   }
 
   Future<types.User> resolveUser(String id) async {

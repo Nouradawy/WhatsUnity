@@ -19,6 +19,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'AudioWaveformPainter.dart';
 import 'Details/ChatMember.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:WhatsUnity/features/chat/presentation/utils/audio_message_playable.dart';
 
 
 class MessageWidget extends StatelessWidget {
@@ -300,10 +301,60 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
 
     // Default to square if metadata is missing to prevent 0-height collapse
     double aspectRatio = (w != null && h != null && h > 0) ? w / h : 1.0;
-    
-    // 2. Resolve the effective File ID from multiple potential sources
-    final String? effectiveFileId = fileId 
-        ?? message.metadata?['fileId'] 
+
+    final source = message.source;
+    if (isDirectHttpImageUrl(source)) {
+      final networkImage = ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          source,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  value: progress.expectedTotalBytes != null
+                      ? progress.cumulativeBytesLoaded /
+                          progress.expectedTotalBytes!
+                      : null,
+                ),
+              ),
+            );
+          },
+          errorBuilder: (_, __, ___) => const Center(
+            child: Icon(Icons.broken_image, color: Colors.grey),
+          ),
+        ),
+      );
+      final imageWidget = GestureDetector(
+        onTap: () => openNetworkImageFullScreen(context, source),
+        child: networkImage,
+      );
+
+      if (isReply) {
+        return SizedBox(
+          height: 50,
+          width: 50,
+          child: imageWidget,
+        );
+      }
+
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 250, maxWidth: 250),
+        child: AspectRatio(
+          aspectRatio: aspectRatio,
+          child: imageWidget,
+        ),
+      );
+    }
+
+    // 2. Google Drive-backed images
+    final String? effectiveFileId = fileId
+        ?? message.metadata?['fileId']
         ?? extractDriveFileId(message.source);
 
     if (effectiveFileId == null) {
@@ -338,14 +389,34 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
       ),
     );
 
-      } else if(message is types.AudioMessage) {
-        // 1. Safely get the raw list from metadata. If it's null, use an empty list.
-        final List<dynamic> rawAmplitudes = message.metadata?['waveform'] ?? [];
-
-        // 2. Safely convert each element of the raw list to a double.
-        // This handles both integers and doubles from the database.
-        final List<double> amplitudes = rawAmplitudes.map((e) => (e as num).toDouble()).toList();
-        return AudioMessageBuilder(audioUrl: message.source, duration: message.duration, amplitudes: amplitudes , audioMessage: message,);
+      } else if (message is types.AudioMessage) {
+        // Resolve latest row from the controller without subscribing to
+        // [operationsStream] (that would rebuild every audio bubble on *every*
+        // chat op → severe jank).
+        types.AudioMessage audioMsg = message;
+        for (final m in chatController.messages) {
+          if (m.id == message.id && m is types.AudioMessage) {
+            audioMsg = m;
+            break;
+          }
+        }
+        final List<dynamic> rawAmplitudes = audioMsg.metadata?['waveform'] ?? [];
+        final List<double> amplitudes =
+            rawAmplitudes.map((e) => (e as num).toDouble()).toList();
+        final meta = audioMsg.metadata;
+        final playback = meta?['playback_url'] ?? meta?['playbackUrl'];
+        final String playUrl = (playback is String && playback.trim().isNotEmpty)
+            ? playback.trim()
+            : audioMsg.source;
+        return AudioMessageBuilder(
+          key: ValueKey(
+            'audio_${audioMsg.id}_${audioMsg.metadata?['status']}_${audioMsg.metadata?['ready_at']}_$playUrl',
+          ),
+          audioUrl: playUrl,
+          duration: audioMsg.duration,
+          amplitudes: amplitudes,
+          audioMessage: audioMsg,
+        );
       }  else {
         return const SizedBox.shrink();
       }
@@ -709,39 +780,12 @@ class AudioMessageBuilder extends StatefulWidget {
 class _AudioMessageBuilderState extends State<AudioMessageBuilder> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlaying = false;
-  bool isReady = false;
 
   @override
   void dispose() {
     _audioPlayer.dispose();
     super.dispose();
   }
-  @override
-  void initState() {
-    super.initState();
-    // Set the initial state based on the metadata
-    isReady = (widget.audioMessage.metadata?['status'] ?? 'ready') == 'ready';
-  }
-
-  // 2. ▼▼▼ ADD THIS LIFECYCLE METHOD ▼▼▼
-  // This function is called whenever the widget's properties are updated from the parent.
-  @override
-  void didUpdateWidget(covariant AudioMessageBuilder oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    // Check if the status has changed from the old version of the widget to the new one.
-    final oldStatus = oldWidget.audioMessage.metadata?['status'];
-    final newStatus = widget.audioMessage.metadata?['status'];
-
-    if (oldStatus != newStatus && newStatus == 'ready' ) {
-      // If the status changed to 'ready', call setState to rebuild the UI.
-      setState(() {
-        isReady = true;
-      });
-    }
-  }
-
-
 
   String _formatDuration(Duration d) {
     final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -776,7 +820,7 @@ class _AudioMessageBuilderState extends State<AudioMessageBuilder> {
 
   @override
   Widget build(BuildContext context) {
-
+    final ready = audioMessageShowsPlayButton(widget.audioMessage);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -787,7 +831,7 @@ class _AudioMessageBuilderState extends State<AudioMessageBuilder> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (isReady)
+          if (ready)
             IconButton(
               icon: Icon(_isPlaying ? Icons.pause_circle : Icons.play_circle),
               onPressed: _togglePlay,
@@ -847,6 +891,56 @@ class MessageStatusIcon extends StatelessWidget {
 }
 
 
+
+/// R2, CDN, or any non–Google-Drive HTTPS image [message.source].
+bool isDirectHttpImageUrl(String url) {
+  if (url.isEmpty) return false;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return false;
+  }
+  return !isGoogleDriveImageHost(url);
+}
+
+bool isGoogleDriveImageHost(String url) {
+  try {
+    final host = Uri.parse(url).host.toLowerCase();
+    return host.contains('drive.google.com') ||
+        host.contains('docs.google.com');
+  } catch (_) {
+    return false;
+  }
+}
+
+void openNetworkImageFullScreen(BuildContext context, String url) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black54,
+    builder: (ctx) => Dialog(
+      backgroundColor: Colors.black,
+      insetPadding: EdgeInsets.zero,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4,
+            child: Center(
+              child: Image.network(url, fit: BoxFit.contain),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(ctx).top + 4,
+            left: 4,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
 String? extractDriveFileId(String url) {
   if (url.isEmpty) return null;

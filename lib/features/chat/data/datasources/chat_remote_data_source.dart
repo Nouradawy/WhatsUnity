@@ -153,6 +153,9 @@ abstract class ChatRemoteDataSource {
     Map<String, dynamic> metadata,
   );
 
+  /// Single message row (same shape as [fetchMessages]) for metadata refresh.
+  Future<Map<String, dynamic>> fetchMessageRow(String messageId);
+
   Future<Map<String, dynamic>> resolveUser(String id);
 
   ChatRealtimeHandle subscribeToChannel({
@@ -312,6 +315,16 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         'metadata': _jsonEncodeMap(metadata),
       },
     );
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchMessageRow(String messageId) async {
+    final doc = await _databases.getDocument(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kMessagesCollectionId,
+      documentId: messageId,
+    );
+    return _documentToMessageRow(doc);
   }
 
   @override

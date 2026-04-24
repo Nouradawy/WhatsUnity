@@ -12,6 +12,7 @@ import '../../domain/usecases/send_text_message.dart';
 import '../../domain/usecases/send_voice_note.dart';
 import '../../domain/usecases/subscribe_to_channel.dart';
 import '../../domain/usecases/update_message_metadata.dart';
+import '../../domain/usecases/fetch_message_by_id.dart';
 import '../bloc/chat_cubit.dart';
 
 /// Provides an isolated [ChatCubit] (in-memory messages + realtime) per
@@ -52,6 +53,7 @@ class ChatScope extends StatelessWidget {
         resolveUserUsecase: ResolveUser(repo),
         subscribeToChannelUsecase: SubscribeToChannel(repo),
         updateMessageMetadataUsecase: UpdateMessageMetadata(repo),
+        fetchMessageByIdUsecase: FetchMessageById(repo),
       ),
       child: child,
     );

@@ -22,6 +22,50 @@
             "buildSpecification": "s-0.5vcpu-512mb",
             "runtimeSpecification": "s-0.5vcpu-512mb",
             "deploymentRetention": 0
+        },
+        {
+            "$id": "69ebd76a002e5208b777",
+            "name": "get_r2_signed_url",
+            "runtime": "node-25",
+            "path": "functions/get-r2-signed-url",
+            "entrypoint": "src/main.js",
+            "execute": [
+                "users"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "commands": "npm install",
+            "scopes": [
+                "users.read"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb",
+            "deploymentRetention": 0
+        },
+        {
+            "$id": "69ebd7ab001fc0e63faf",
+            "name": "create_gumlet_asset",
+            "runtime": "node-25",
+            "path": "functions/create-gumlet-asset",
+            "entrypoint": "src/main.js",
+            "execute": [
+                "users"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "commands": "npm install",
+            "scopes": [
+                "users.read"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb",
+            "deploymentRetention": 0
         }
     ]
 }

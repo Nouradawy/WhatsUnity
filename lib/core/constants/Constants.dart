@@ -34,7 +34,9 @@ Future<List<String>> loadCachedData() async {
 // Removed presetBeforeSignin wrapper as it is now directly part of AuthCubit.
 
 Widget getCompoundPicture(BuildContext context, String compoundId, double size) {
-  final authState = context.watch<AuthCubit>().state;
+  final authState = context
+      .watch<AuthCubit>()
+      .state;
   final categories = authState.categories;
   final compoundsLogos = authState.compoundsLogos;
 
@@ -42,34 +44,51 @@ Widget getCompoundPicture(BuildContext context, String compoundId, double size) 
       .expand((cat) => cat.compounds)
       .firstWhere(
           (comp) => comp.id == compoundId,
-          orElse: () => throw Exception("Compound not found"));
+      orElse: () => throw Exception("Compound not found"));
 
   final assetPath = compoundsLogos.firstWhere((file) {
-    final fileName = file.split('/').last; // "23.png"
-    final nameWithoutExt = fileName.split('.').first; // "23"
-    return nameWithoutExt == compound.id;
+    final fileName = file
+        .split('/')
+        .last; // "23.png"
+    final nameWithoutExt = fileName
+        .split('.')
+        .first; // "23"
+    return nameWithoutExt == compound.id.toString();
   }, orElse: () => 'null');
 
-  if (compound.pictureUrl != null) {
-    return Image.network(
-      compound.pictureUrl.toString(),
-      width: size,
-      fit: BoxFit.cover,
-      errorBuilder: (context, exception, stackTrace) {
-        return const SizedBox.shrink();
-      },
-    );
-  } else if (assetPath != 'null') {
-    return Image.asset(
-      assetPath,
-      width: size,
-      fit: BoxFit.cover,
-    );
-  } else {
-    return const SizedBox.shrink();
-  }
+
+  return assetPath != 'null'
+      ? Image.asset(
+    assetPath,
+    width: 80,
+    fit: BoxFit.cover,
+    errorBuilder: (_, __, ___) =>
+        _compoundFallbackThumb(
+          compound.pictureUrl,
+        ),
+  )
+      : (compound.pictureUrl != null
+      ? Image.network(
+    compound.pictureUrl.toString(),
+    width: 80,
+    fit: BoxFit.cover,
+    errorBuilder: (_, __, ___) =>
+    const SizedBox.shrink(),
+  )
+      : const SizedBox.shrink());
 }
 
+  Widget _compoundFallbackThumb(String? pictureUrl) {
+    if (pictureUrl == null || pictureUrl.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Image.network(
+      pictureUrl,
+      width: 80,
+      height: 80,
+      fit: BoxFit.cover,
+    );
+  }
 class DriveImageMessage extends StatefulWidget {
   final String fileId;
   final GoogleDriveService driveService;
