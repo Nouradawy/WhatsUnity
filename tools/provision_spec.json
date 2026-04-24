@@ -1,0 +1,1013 @@
+{
+  "collections": [
+    {
+      "id": "profiles",
+      "name": "Profiles",
+      "attributes": [
+        [
+          "s",
+          "full_name",
+          256,
+          0
+        ],
+        [
+          "s",
+          "display_name",
+          128,
+          0
+        ],
+        [
+          "s",
+          "avatar_url",
+          2000,
+          0
+        ],
+        [
+          "s",
+          "phone_number",
+          64,
+          0
+        ],
+        [
+          "s",
+          "owner_type",
+          64,
+          0
+        ],
+        [
+          "s",
+          "userState",
+          32,
+          0
+        ],
+        [
+          "s",
+          "actionTakenBy",
+          128,
+          0
+        ],
+        [
+          "s",
+          "verFiles",
+          50000,
+          0
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_profiles_display_name_ft",
+          "t": "ft",
+          "a": [
+            "display_name"
+          ],
+          "len": [
+            100
+          ]
+        },
+        {
+          "key": "idx_profiles_full_name_ft",
+          "t": "ft",
+          "a": [
+            "full_name"
+          ],
+          "len": [
+            100
+          ]
+        },
+        {
+          "key": "idx_profiles_userState",
+          "t": "k",
+          "a": [
+            "userState"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "user_roles",
+      "name": "User roles",
+      "attributes": [
+        [
+          "s",
+          "user_id",
+          36,
+          1
+        ],
+        [
+          "i",
+          "role_id",
+          1,
+          1,
+          null
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_user_roles_user_id",
+          "t": "u",
+          "a": [
+            "user_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "user_apartments",
+      "name": "User apartments",
+      "attributes": [
+        [
+          "s",
+          "user_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "compound_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "building_num",
+          128,
+          1
+        ],
+        [
+          "s",
+          "apartment_num",
+          64,
+          1
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_ua_user_id",
+          "t": "k",
+          "a": [
+            "user_id"
+          ]
+        },
+        {
+          "key": "idx_ua_compound_building_apt",
+          "t": "u",
+          "a": [
+            "compound_id",
+            "building_num",
+            "apartment_num"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "buildings",
+      "name": "Buildings",
+      "attributes": [
+        [
+          "s",
+          "compound_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "building_name",
+          256,
+          1
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_buildings_compound_name",
+          "t": "u",
+          "a": [
+            "compound_id",
+            "building_name"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "channels",
+      "name": "Channels",
+      "attributes": [
+        [
+          "s",
+          "compound_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "building_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "name",
+          256,
+          1
+        ],
+        [
+          "s",
+          "type",
+          64,
+          1
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_channels_compound_building_type",
+          "t": "u",
+          "a": [
+            "compound_id",
+            "building_id",
+            "type"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "compound_categories",
+      "name": "Compound categories",
+      "attributes": [
+        [
+          "s",
+          "name",
+          256,
+          1
+        ],
+        [
+          "s",
+          "slug",
+          128,
+          0
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": []
+    },
+    {
+      "id": "compounds",
+      "name": "Compounds",
+      "attributes": [
+        [
+          "s",
+          "category_id",
+          36,
+          0
+        ],
+        [
+          "s",
+          "name",
+          256,
+          1
+        ],
+        [
+          "s",
+          "developer",
+          256,
+          0
+        ],
+        [
+          "s",
+          "city",
+          128,
+          0
+        ],
+        [
+          "s",
+          "picture_url",
+          2000,
+          0
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_compounds_category",
+          "t": "k",
+          "a": [
+            "category_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "report_user",
+      "name": "User reports",
+      "attributes": [
+        [
+          "s",
+          "authorId",
+          36,
+          1
+        ],
+        [
+          "d",
+          "createdAt",
+          1,
+          1
+        ],
+        [
+          "s",
+          "reportedUserId",
+          36,
+          1
+        ],
+        [
+          "s",
+          "state",
+          64,
+          1
+        ],
+        [
+          "s",
+          "description",
+          2000,
+          1
+        ],
+        [
+          "s",
+          "messageId",
+          64,
+          0
+        ],
+        [
+          "s",
+          "reportedFor",
+          64,
+          0
+        ],
+        [
+          "s",
+          "compoundId",
+          36,
+          0
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_report_user_reported",
+          "t": "k",
+          "a": [
+            "reportedUserId"
+          ]
+        },
+        {
+          "key": "idx_report_user_compound",
+          "t": "k",
+          "a": [
+            "compoundId"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "messages",
+      "name": "Messages",
+      "attributes": [
+        [
+          "s",
+          "author_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "channel_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "text",
+          100000,
+          0
+        ],
+        [
+          "s",
+          "uri",
+          2000,
+          0
+        ],
+        [
+          "s",
+          "type",
+          32,
+          0
+        ],
+        [
+          "d",
+          "sent_at",
+          0,
+          0
+        ],
+        [
+          "s",
+          "metadata",
+          50000,
+          0
+        ],
+        [
+          "s",
+          "reply_to",
+          64,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_msg_channel",
+          "t": "k",
+          "a": [
+            "channel_id"
+          ]
+        },
+        {
+          "key": "idx_msg_channel_created",
+          "t": "k",
+          "a": [
+            "channel_id",
+            "$createdAt"
+          ],
+          "ord": "ad"
+        },
+        {
+          "key": "idx_msg_author",
+          "t": "k",
+          "a": [
+            "author_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "message_receipts",
+      "name": "Message receipts",
+      "attributes": [
+        [
+          "s",
+          "message_id",
+          64,
+          1
+        ],
+        [
+          "s",
+          "user_id",
+          36,
+          1
+        ],
+        [
+          "d",
+          "seen_at",
+          1,
+          1
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_receipts_msg_user",
+          "t": "u",
+          "a": [
+            "message_id",
+            "user_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "maintenance_reports",
+      "name": "Maintenance reports",
+      "attributes": [
+        [
+          "s",
+          "user_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "compound_id",
+          36,
+          0
+        ],
+        [
+          "s",
+          "title",
+          512,
+          1
+        ],
+        [
+          "s",
+          "description",
+          20000,
+          1
+        ],
+        [
+          "s",
+          "category",
+          128,
+          1
+        ],
+        [
+          "s",
+          "type",
+          64,
+          1
+        ],
+        [
+          "s",
+          "status",
+          64,
+          0
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_maint_compound_type",
+          "t": "k",
+          "a": [
+            "compound_id",
+            "type"
+          ]
+        },
+        {
+          "key": "idx_maint_compound_type_status",
+          "t": "k",
+          "a": [
+            "compound_id",
+            "type",
+            "status"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "maintenance_attachments",
+      "name": "Maintenance attachments",
+      "attributes": [
+        [
+          "s",
+          "report_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "compound_id",
+          36,
+          0
+        ],
+        [
+          "s",
+          "type",
+          64,
+          1
+        ],
+        [
+          "s",
+          "source_url",
+          100000,
+          1
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_matt_report",
+          "t": "k",
+          "a": [
+            "report_id"
+          ]
+        },
+        {
+          "key": "idx_matt_compound_type",
+          "t": "k",
+          "a": [
+            "compound_id",
+            "type"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "maintenance_history",
+      "name": "Maintenance history",
+      "attributes": [
+        [
+          "s",
+          "report_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "actor_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "action",
+          20000,
+          1
+        ],
+        [
+          "d",
+          "created_at",
+          1,
+          1
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_mhist_report",
+          "t": "k",
+          "a": [
+            "report_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "posts",
+      "name": "Posts",
+      "attributes": [
+        [
+          "s",
+          "compound_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "author_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "post_head",
+          65536,
+          1
+        ],
+        [
+          "s",
+          "source_url",
+          100000,
+          0
+        ],
+        [
+          "b",
+          "getCalls",
+          0,
+          0,
+          null
+        ],
+        [
+          "s",
+          "Comments",
+          200000,
+          0
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_posts_compound_created",
+          "t": "k",
+          "a": [
+            "compound_id",
+            "$createdAt"
+          ],
+          "ord": "ad"
+        }
+      ]
+    },
+    {
+      "id": "brainstorms",
+      "name": "Brainstorms",
+      "attributes": [
+        [
+          "s",
+          "channel_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "compound_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "author_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "title",
+          2000,
+          1
+        ],
+        [
+          "s",
+          "imageSources",
+          100000,
+          0
+        ],
+        [
+          "s",
+          "options",
+          200000,
+          0
+        ],
+        [
+          "s",
+          "votes",
+          200000,
+          0
+        ],
+        [
+          "s",
+          "comments",
+          200000,
+          0
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_brain_channel_compound_created",
+          "t": "k",
+          "a": [
+            "channel_id",
+            "compound_id",
+            "$createdAt"
+          ],
+          "ord": "aad"
+        }
+      ]
+    },
+    {
+      "id": "presence_sessions",
+      "name": "Presence sessions",
+      "attributes": [
+        [
+          "s",
+          "user_id",
+          36,
+          1
+        ],
+        [
+          "s",
+          "compound_id",
+          36,
+          0
+        ],
+        [
+          "s",
+          "status",
+          32,
+          0
+        ],
+        [
+          "d",
+          "last_seen_at",
+          0,
+          0
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "d",
+          "deleted_at",
+          0,
+          0
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_presence_user",
+          "t": "u",
+          "a": [
+            "user_id"
+          ]
+        },
+        {
+          "key": "idx_presence_compound",
+          "t": "k",
+          "a": [
+            "compound_id"
+          ]
+        },
+        {
+          "key": "idx_presence_last_seen",
+          "t": "k",
+          "a": [
+            "last_seen_at"
+          ]
+        }
+      ]
+    }
+  ]
+}

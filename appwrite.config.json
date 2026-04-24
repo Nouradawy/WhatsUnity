@@ -1,0 +1,27 @@
+{
+    "projectId": "69e96b7d000f7bf9528c",
+    "projectName": "whatsunity",
+    "endpoint": "https://fra.cloud.appwrite.io/v1",
+    "functions": [
+        {
+            "$id": "69ea314200151970e9e8",
+            "name": "on user register",
+            "runtime": "dart-3.11",
+            "path": "functions/on-user-register",
+            "entrypoint": "lib/main.dart",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "commands": "dart pub get",
+            "scopes": [],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb",
+            "deploymentRetention": 0
+        }
+    ]
+}

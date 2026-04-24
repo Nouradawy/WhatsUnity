@@ -1,0 +1,819 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../../../core/config/Enums.dart';
+import '../../../../core/config/supabase.dart' show Users;
+import '../../../../core/constants/Constants.dart';
+import '../../../../core/models/CompoundsList.dart';
+import '../../../../core/network/CacheHelper.dart';
+import '../../../chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import '../../domain/repositories/auth_repository.dart';
+import 'auth_state.dart';
+
+class AuthCubit extends Cubit<AuthState> {
+  final AuthRepository repository;
+
+  // UI state moved from AppCubit
+  bool isPassword = true;
+  IconData suffixIcon = Icons.visibility_off;
+  bool signInToggler = true;
+  OwnerTypes ownerType = OwnerTypes.owner;
+  String? signupGoogleEmail;
+  String? signupGoogleUserName;
+  bool signInGoogle = false;
+  int authSessionNonce = DateTime.now().microsecondsSinceEpoch;
+
+  bool signingIn = false;
+  List<XFile>? verFiles;
+  final List<double> uploadProgress = [];
+  bool apartmentConflict = false;
+
+  List<Category> compoundSuggestions = [];
+
+  /// Prevents re-entrant [loadCompounds] when UI calls it from [build] (infinite AuthLoading loop).
+  bool _loadCompoundsInProgress = false;
+
+  Roles? roleName;
+  String? selectedCompoundId;
+  Map<String, dynamic> myCompounds = {'0': "Add New Community"};
+
+  AuthCubit({required this.repository}) : super(AuthInitial()) {
+    // Listen to the Appwrite-backed auth stream.
+    // Emits AppUser? — non-null means signed in, null means signed out.
+    repository.onAuthStateChange.listen((appUser) {
+      if (appUser != null) {
+        authSessionNonce = DateTime.now().microsecondsSinceEpoch;
+        if (state is Authenticated) {
+          // Preserve all loaded data (chatMembers, compounds, etc.);
+          // only refresh the user object itself.
+          emit((state as Authenticated).copyWith(user: appUser));
+        } else {
+          emit(Authenticated(
+            user: appUser,
+            enabledMultiCompound: enabledMultiCompound,
+            googleUser: googleUser,
+            categories: state.categories,
+            compoundsLogos: state.compoundsLogos,
+          ));
+        }
+      } else {
+        authSessionNonce = DateTime.now().microsecondsSinceEpoch;
+        signInToggler = true;
+        emit(Unauthenticated(
+          categories: state.categories,
+          compoundsLogos: state.compoundsLogos,
+        ));
+      }
+    });
+  }
+
+  bool enabledMultiCompound = false;
+  GoogleSignInAccount? googleUser;
+  Future<void>? _presetBeforeSigninInFlight;
+  bool _isSigningOut = false;
+
+  void togglePasswordVisibility() {
+    isPassword = !isPassword;
+    suffixIcon = isPassword ? Icons.visibility_off : Icons.visibility;
+    if (state is Authenticated) {
+      emit((state as Authenticated).copyWith());
+    } else if (state is Unauthenticated) {
+      emit(Unauthenticated(
+          categories: state.categories,
+          compoundsLogos: state.compoundsLogos));
+    } else {
+      emit(AuthInitial(
+          categories: state.categories, compoundsLogos: state.compoundsLogos));
+    }
+  }
+
+  void toggleSignIn() {
+    signInToggler = !signInToggler;
+    if (state is Authenticated) {
+      emit((state as Authenticated).copyWith());
+    } else if (state is Unauthenticated) {
+      emit(Unauthenticated(
+          categories: state.categories,
+          compoundsLogos: state.compoundsLogos));
+    } else {
+      emit(AuthInitial(
+          categories: state.categories, compoundsLogos: state.compoundsLogos));
+    }
+  }
+
+  void changeRole(Roles? newRole) {
+    roleName = newRole ?? Roles.user;
+    if (state is Authenticated) {
+      emit((state as Authenticated).copyWith(role: roleName));
+    } else {
+      emit(AuthInitial());
+    }
+  }
+
+  void updateMember(ChatMember updatedMember) {
+    if (state is Authenticated) {
+      final s = state as Authenticated;
+      final members = List<ChatMember>.from(s.chatMembers);
+      final index = members.indexWhere((m) => m.id == updatedMember.id);
+      if (index != -1) {
+        members[index] = updatedMember;
+
+        ChatMember? current = s.currentUser;
+        if (current?.id == updatedMember.id) {
+          current = updatedMember;
+        }
+
+        emit(s.copyWith(chatMembers: members, currentUser: current));
+      }
+    }
+  }
+
+  void updateRole(Roles role) {
+    if (state is Authenticated) {
+      emit((state as Authenticated).copyWith(role: role));
+    }
+  }
+
+  void changeOwnerType(OwnerTypes newType) {
+    ownerType = newType;
+    emit(AuthInitial());
+  }
+
+  void signInSwitcher() {
+    signingIn = !signingIn;
+    emit(AuthInitial());
+  }
+
+  Future<void> verFileImport() async {
+    final List<XFile> result = await ImagePicker().pickMultiImage(
+      imageQuality: 70,
+      maxWidth: 1440,
+    );
+
+    if (result.isEmpty) return;
+
+    verFiles = result;
+    emit(AuthInitial());
+  }
+
+  void clearVerFiles() {
+    verFiles = null;
+    emit(AuthInitial());
+  }
+
+  Future<void> verificationFilesUpload() async {
+    if (verFiles == null || verFiles!.isEmpty) return;
+
+    emit(AuthLoading());
+    try {
+      final s = state;
+      // Prefer the Authenticated state's user; fall back to cached repository user.
+      final userId = (s is Authenticated)
+          ? s.user.id
+          : repository.currentUser?.id;
+      if (userId == null) throw Exception("User ID not found");
+
+      await repository.uploadVerificationFiles(
+        files: verFiles!,
+        userId: userId,
+        driveService: driveService,
+        onProgress: (index, progress) {
+          if (uploadProgress.length <= index) {
+            uploadProgress.add(progress);
+          } else {
+            uploadProgress[index] = progress;
+          }
+          emit(AuthInitial());
+        },
+      );
+      emit(AuthInitial());
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> isApartmentTaken({
+    required String compoundId,
+    required String buildingName,
+    required String apartmentNum,
+  }) async {
+    try {
+      final taken = await repository.isApartmentTaken(
+        compoundId: compoundId,
+        buildingName: buildingName,
+        apartmentNum: apartmentNum,
+      );
+      apartmentConflict = taken;
+      emit(ApartmentTakenStatus(isTaken: taken));
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> resetUserData() async {
+    emit(AuthInitial());
+  }
+
+  Future<void> selectCompound({
+    required String compoundId,
+    required String compoundName,
+    required bool atWelcome,
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint(
+          '[AuthCubit] selectCompound: id=$compoundId name="$compoundName" '
+          'atWelcome=$atWelcome state=${state.runtimeType}',
+        );
+      }
+      selectedCompoundId = compoundId;
+      if (atWelcome) {
+        myCompounds = {
+          '0': "Add New Community",
+          compoundId: compoundName,
+        };
+      } else {
+        myCompounds[compoundId] = compoundName;
+      }
+
+      await repository.selectCompound(
+        compoundId: compoundId,
+        compoundName: compoundName,
+        atWelcome: atWelcome,
+      );
+
+      if (state is Authenticated) {
+        emit((state as Authenticated).copyWith(
+          selectedCompoundId: compoundId,
+          myCompounds: Map<String, dynamic>.from(myCompounds),
+        ));
+        if (kDebugMode) {
+          debugPrint(
+            '[AuthCubit] selectCompound: done → Authenticated(selectedCompoundId=$compoundId)',
+          );
+        }
+      } else {
+        emit(CompoundSelected(compoundId));
+        if (kDebugMode) {
+          debugPrint(
+            '[AuthCubit] selectCompound: done → CompoundSelected($compoundId)',
+          );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[AuthCubit] selectCompound: ERROR $e');
+      }
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  /// Restores [selectedCompoundId] from cached JSON (legacy int or Appwrite String).
+  String? _coerceToCompoundId(dynamic value) {
+    if (value == null) return null;
+    if (value is String && value.isNotEmpty) return value;
+    final s = value.toString();
+    if (s.isEmpty || s == 'null') return null;
+    return s;
+  }
+
+  Map<String, dynamic> _parseMyCompoundsMap(dynamic raw) {
+    if (raw == null) return {'0': "Add New Community"};
+    if (raw is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(raw);
+    }
+    if (raw is Map) {
+      return raw.map((k, v) => MapEntry(k.toString(), v));
+    }
+    return {'0': "Add New Community"};
+  }
+
+  /// Snapshots the signed-in user's compound data before sign-out so that
+  /// presetBeforeSignin can restore it on next login without a network round-trip.
+  Future<void> _cacheUserSnapshotOnSignOut() async {
+    // Read identity from the current Authenticated state instead of from
+    // supabase.auth.currentUser — the Appwrite session is authoritative now.
+    if (state is! Authenticated) return;
+    final user = (state as Authenticated).user;
+
+    final Map<String, dynamic> compounds = Map<String, dynamic>.from(
+      (state as Authenticated).myCompounds,
+    );
+    final String? compoundId = (state as Authenticated).selectedCompoundId;
+
+    final payload = <String, dynamic>{
+      'email': user.email ?? '',
+      'selectedCompoundId': compoundId,
+      'myCompounds': compounds,
+    };
+
+    await CacheHelper.saveData(
+      key: CacheHelper.cachedUserDataKey(user.id),
+      value: jsonEncode(payload),
+    );
+  }
+
+  Future<void> presetBeforeSignin() async {
+    final inFlight = _presetBeforeSigninInFlight;
+    if (inFlight != null) return inFlight;
+
+    final future = _presetBeforeSigninImpl();
+    _presetBeforeSigninInFlight = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_presetBeforeSigninInFlight, future)) {
+        _presetBeforeSigninInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _presetBeforeSigninImpl() async {
+    emit(AuthLoading(
+        categories: state.categories, compoundsLogos: state.compoundsLogos));
+    try {
+      List<Category> currentCategories = state.categories;
+      List<String> currentLogos = state.compoundsLogos;
+
+      if (currentCategories.isEmpty) {
+        currentCategories = await repository.loadCompounds();
+      }
+      if (currentLogos.isEmpty) {
+        currentLogos = await AssetHelper.loadCompoundLogos();
+      }
+
+      // Use repository.fetchCurrentUser() so we get the Appwrite session
+      // even when the constructor's _checkExistingSession is still in-flight.
+      final currentUserAuth = await repository.fetchCurrentUser();
+      if (currentUserAuth == null) {
+        emit(Unauthenticated(
+          categories: currentCategories,
+          compoundsLogos: currentLogos,
+        ));
+        return;
+      }
+      final String userId = currentUserAuth.id;
+
+      Map<String, dynamic> localMyCompounds = {'0': "Add New Community"};
+      String? localSelectedCompoundId;
+
+      // 1) Prefer per-user snapshot from last sign-out.
+      final String? cachedRaw = await CacheHelper.getData(
+        key: CacheHelper.cachedUserDataKey(userId),
+        type: "String",
+      ) as String?;
+      if (cachedRaw != null && cachedRaw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(cachedRaw);
+          if (decoded is Map) {
+            final m = Map<String, dynamic>.from(decoded);
+            localSelectedCompoundId = _coerceToCompoundId(m['selectedCompoundId']);
+            final mc = m['myCompounds'];
+            if (mc != null) {
+              localMyCompounds = _parseMyCompoundsMap(mc);
+            }
+          }
+        } catch (e) {
+          debugPrint(
+              'presetBeforeSignin: invalid cached user JSON, using fallback ($e)');
+        }
+      }
+
+      // 2) Fallback: user_apartments in Appwrite (string user_id + compound_id).
+      if (localSelectedCompoundId == null) {
+        localSelectedCompoundId = await repository.getDefaultCompoundId(userId);
+      }
+
+      // 3) Resolve compound label from loaded categories when only default row exists.
+      if (localSelectedCompoundId != null && localMyCompounds.length <= 1) {
+        try {
+          final compound = currentCategories
+              .expand((cat) => cat.compounds)
+              .firstWhere((c) => c.id == localSelectedCompoundId);
+          localMyCompounds = {
+            '0': "Add New Community",
+            localSelectedCompoundId: compound.name.toString(),
+          };
+          await CacheHelper.saveData(
+            key: CacheHelper.cachedUserDataKey(userId),
+            value: jsonEncode({
+              'email': currentUserAuth.email ?? '',
+              'selectedCompoundId': localSelectedCompoundId,
+              'myCompounds': localMyCompounds,
+            }),
+          );
+        } catch (_) {
+          // Compound not found in categories — skip label resolution.
+        }
+      }
+
+      Roles? userRole;
+      final roleId =
+          currentUserAuth.userMetadata?["role_id"];
+      if (roleId != null) {
+        final rid = roleId is int ? roleId : int.tryParse(roleId.toString());
+        if (rid != null && rid > 0 && rid <= Roles.values.length) {
+          userRole = Roles.values[rid - 1];
+        }
+      }
+
+      List<ChatMember> chatMembers = [];
+      List<Users> membersData = [];
+      ChatMember? currentUser;
+
+      if (localSelectedCompoundId != null) {
+        selectedCompoundId = localSelectedCompoundId;
+        myCompounds = localMyCompounds;
+
+        final result = await repository.loadCompoundMembers(
+            localSelectedCompoundId,
+            role: userRole);
+        chatMembers = result.members;
+        membersData = result.membersData;
+
+        final currentUserId = (state is Authenticated)
+            ? (state as Authenticated).user.id
+            : repository.currentUser?.id;
+        if (chatMembers.isEmpty) {
+          currentUser = null;
+        } else {
+          final uid = currentUserId?.trim() ?? '';
+          currentUser = chatMembers.firstWhere(
+            (member) => member.id.trim() == uid,
+            orElse: () => chatMembers.first,
+          );
+        }
+      }
+
+      if (state is Authenticated) {
+        emit((state as Authenticated).copyWith(
+          role: userRole,
+          selectedCompoundId: localSelectedCompoundId,
+          myCompounds: localMyCompounds,
+          chatMembers: chatMembers,
+          membersData: membersData,
+          currentUser: currentUser,
+          enabledMultiCompound: enabledMultiCompound,
+          googleUser: googleUser,
+          categories: currentCategories,
+          compoundsLogos: currentLogos,
+        ));
+      } else {
+        final currentSessionUser = repository.currentUser;
+        if (currentSessionUser != null) {
+          emit(Authenticated(
+            user: currentSessionUser,
+            role: userRole,
+            selectedCompoundId: localSelectedCompoundId,
+            myCompounds: localMyCompounds,
+            chatMembers: chatMembers,
+            membersData: membersData,
+            currentUser: currentUser,
+            enabledMultiCompound: enabledMultiCompound,
+            googleUser: googleUser,
+            categories: currentCategories,
+            compoundsLogos: currentLogos,
+          ));
+        } else {
+          emit(Unauthenticated(
+            categories: currentCategories,
+            compoundsLogos: currentLogos,
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint("Error in presetBeforeSignin: $e");
+      emit(AuthError(e.toString(),
+          categories: state.categories,
+          compoundsLogos: state.compoundsLogos));
+    }
+  }
+
+  Future<void> signInWithPassword({
+    required String email,
+    required String password,
+  }) async {
+    emit(AuthLoading());
+    try {
+      final user =
+          await repository.signInWithPassword(email: email, password: password);
+      if (user != null) {
+        emit(Authenticated(user: user));
+      } else {
+        emit(Unauthenticated());
+      }
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> signUp({
+    required String email,
+    required String password,
+    required Map<String, dynamic> data,
+  }) async {
+    emit(AuthLoading());
+    try {
+      await repository.signUp(email: email, password: password, data: data);
+      emit(SignUpSuccess(email: email));
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> signInWithGoogle({bool isSignin = false}) async {
+    emit(AuthLoading());
+    try {
+      signInGoogle = !isSignin;
+      final user = await repository.signInWithGoogle();
+      if (user != null) {
+        if (isSignin) {
+          signInGoogle = false;
+          emit(Authenticated(user: user));
+        } else {
+          signupGoogleEmail = user.email;
+          signupGoogleUserName =
+              user.userMetadata?['full_name'] ?? user.userMetadata?['name'];
+          emit(GoogleSignupState());
+        }
+      } else {
+        signInGoogle = false;
+        emit(Unauthenticated());
+      }
+    } catch (e) {
+      signInGoogle = false;
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> signOut() async {
+    if (_isSigningOut) return;
+    _isSigningOut = true;
+    emit(AuthLoading(
+        categories: state.categories, compoundsLogos: state.compoundsLogos));
+    try {
+      // Snapshot compound data before the session is destroyed.
+      await _cacheUserSnapshotOnSignOut();
+      await repository.signOut();
+    } catch (e) {
+      emit(AuthError(e.toString(),
+          categories: state.categories,
+          compoundsLogos: state.compoundsLogos));
+    } finally {
+      _isSigningOut = false;
+    }
+  }
+
+  Future<void> cancelPendingGoogleRegistration() async {
+    emit(AuthLoading(
+        categories: state.categories, compoundsLogos: state.compoundsLogos));
+    try {
+      await repository.signOut();
+      signInGoogle = false;
+      signInToggler = true;
+      signupGoogleEmail = null;
+      signupGoogleUserName = null;
+      roleName = Roles.user;
+      selectedCompoundId = null;
+      myCompounds = {'0': "Add New Community"};
+      ownerType = OwnerTypes.owner;
+      apartmentConflict = false;
+      verFiles = null;
+      signingIn = false;
+      emit(Unauthenticated(
+        categories: state.categories,
+        compoundsLogos: state.compoundsLogos,
+      ));
+    } catch (e) {
+      emit(AuthError(e.toString(),
+          categories: state.categories,
+          compoundsLogos: state.compoundsLogos));
+    }
+  }
+
+  Future<void> completeRegistration({
+    required String fullName,
+    required String userName,
+    required OwnerTypes ownerType,
+    required String phoneNumber,
+    required int roleId,
+    required String buildingName,
+    required String apartmentNum,
+    required String compoundId,
+  }) async {
+    final categoriesBefore = state.categories;
+    emit(AuthLoading());
+    try {
+      await repository.completeRegistration(
+        fullName: fullName,
+        userName: userName,
+        ownerType: ownerType,
+        phoneNumber: phoneNumber,
+        roleId: roleId,
+        buildingName: buildingName,
+        apartmentNum: apartmentNum,
+        compoundId: compoundId,
+      );
+
+      roleName = Roles.values[roleId - 1];
+      selectedCompoundId = compoundId;
+      var compoundLabel = compoundId;
+      try {
+        if (categoriesBefore.isNotEmpty) {
+          compoundLabel = categoriesBefore
+              .expand((c) => c.compounds)
+              .firstWhere((co) => co.id == compoundId)
+              .name;
+        }
+      } catch (_) {}
+      myCompounds = {
+        '0': "Add New Community",
+        compoundId: compoundLabel,
+      };
+      await repository.selectCompound(
+        compoundId: compoundId,
+        compoundName: compoundLabel,
+        atWelcome: true,
+      );
+      signInGoogle = false;
+      signupGoogleEmail = null;
+      signupGoogleUserName = null;
+      emit(RegistrationSuccess());
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> updateProfile({
+    required String fullName,
+    required String displayName,
+    required OwnerTypes ownerType,
+    required String phoneNumber,
+  }) async {
+    emit(AuthLoading());
+    try {
+      await repository.updateProfile(
+        fullName: fullName,
+        displayName: displayName,
+        ownerType: ownerType,
+        phoneNumber: phoneNumber,
+      );
+      emit(ProfileUpdated());
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> requestEmailChange(String newEmail,
+      {String? redirectUrl}) async {
+    emit(AuthLoading());
+    try {
+      await repository.requestEmailChange(newEmail, redirectUrl: redirectUrl);
+      emit(EmailChangeRequested());
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> updatePassword(String newPassword) async {
+    emit(AuthLoading());
+    try {
+      await repository.updatePassword(newPassword);
+      emit(PasswordUpdated());
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  void getSuggestions(TextEditingController controller) {
+    if (controller.text.isEmpty) {
+      compoundSuggestions = [];
+    } else {
+      compoundSuggestions = state.categories.where((category) {
+        return category.name
+            .toLowerCase()
+            .contains(controller.text.toLowerCase());
+      }).toList();
+    }
+    if (state is Authenticated) {
+      emit((state as Authenticated).copyWith());
+    } else {
+      emit(AuthInitial(
+          categories: state.categories, compoundsLogos: state.compoundsLogos));
+    }
+  }
+
+  Future<void> loadCompounds() async {
+    if (_loadCompoundsInProgress) {
+      if (kDebugMode) {
+        debugPrint('[AuthCubit] loadCompounds: skipped (already in progress)');
+      }
+      return;
+    }
+    _loadCompoundsInProgress = true;
+    if (kDebugMode) {
+      debugPrint(
+        '[AuthCubit] loadCompounds: start state=${state.runtimeType} '
+        'categories=${state.categories.length} logos=${state.compoundsLogos.length}',
+      );
+    }
+    emit(AuthLoading(
+        categories: state.categories, compoundsLogos: state.compoundsLogos));
+    try {
+      // Load Appwrite category/compound rows and local asset logo paths in parallel
+      // (logos are only ever read from the asset manifest — not from Appwrite).
+      final results = await Future.wait<Object>([
+        repository.loadCompounds(),
+        AssetHelper.loadCompoundLogos(),
+      ]);
+      final fetchedCategories = results[0] as List<Category>;
+      final fetchedLogos = results[1] as List<String>;
+      if (kDebugMode) {
+        final nCompounds = fetchedCategories.fold<int>(
+            0, (s, c) => s + c.compounds.length);
+        debugPrint(
+          '[AuthCubit] loadCompounds: success → ${fetchedCategories.length} category/column(s), '
+          '$nCompounds compound(s), ${fetchedLogos.length} asset logo path(s)',
+        );
+      }
+
+      if (state is Authenticated) {
+        emit((state as Authenticated).copyWith(
+          categories: fetchedCategories,
+          compoundsLogos: fetchedLogos,
+        ));
+      } else {
+        emit(AuthInitial(
+          categories: fetchedCategories,
+          compoundsLogos: fetchedLogos,
+        ));
+      }
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[AuthCubit] loadCompounds: ERROR $e\n$st');
+      }
+      emit(AuthError(e.toString(),
+          categories: state.categories,
+          compoundsLogos: state.compoundsLogos));
+    } finally {
+      _loadCompoundsInProgress = false;
+    }
+  }
+
+  Future<void> loadCompoundMembers(String compoundId) async {
+    emit(AuthLoading());
+    try {
+      final Roles? currentRole =
+          (state is Authenticated) ? (state as Authenticated).role : null;
+      final result = await repository.loadCompoundMembers(compoundId,
+          role: currentRole);
+      final members = result.members;
+      final membersData = result.membersData;
+
+      final currentUserId = (state is Authenticated)
+          ? (state as Authenticated).user.id
+          : repository.currentUser?.id;
+      final currentMember = members.firstWhere(
+        (member) => member.id.trim() == currentUserId,
+        orElse: () => members.isNotEmpty
+            ? members.first
+            : throw Exception("User not found in members"),
+      );
+
+      if (state is Authenticated) {
+        emit((state as Authenticated).copyWith(
+          chatMembers: members,
+          membersData: membersData,
+          currentUser: currentMember,
+        ));
+      } else {
+        emit(CompoundMembersUpdated(
+          compoundId: compoundId,
+          chatMembers: members,
+          membersData: membersData,
+          currentUser: currentMember,
+        ));
+      }
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  void updateChatMembers(List<ChatMember> updatedMembers) {
+    if (state is Authenticated) {
+      final s = state as Authenticated;
+
+      ChatMember? current = s.currentUser;
+      final currentUserId = s.user.id;
+      final newCurrent = updatedMembers.firstWhere(
+        (m) => m.id == currentUserId,
+        orElse: () => current ?? updatedMembers.first,
+      );
+
+      emit(s.copyWith(chatMembers: updatedMembers, currentUser: newCurrent));
+    }
+  }
+}
