@@ -4,8 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_symbols_icons/material_symbols_icons.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
-
 import 'package:url_launcher/url_launcher.dart';
 
 
@@ -17,7 +15,6 @@ import 'package:WhatsUnity/features/chat/presentation/bloc/presence_cubit.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/presence_state.dart';
 
 import 'package:WhatsUnity/core/config/Enums.dart';
-import 'package:WhatsUnity/core/config/supabase.dart';
 import 'package:WhatsUnity/core/utils/url_launcher_helper.dart';
 
 
@@ -124,8 +121,6 @@ class ChatMembersScreen extends StatefulWidget {
 }
 
 class _ChatMembersScreenState extends State<ChatMembersScreen> {
-  final supabase = Supabase.instance.client;
-
   bool _isLoading = true;
 
   @override

@@ -162,18 +162,24 @@ class Maintenance extends StatelessWidget {
                                 runSpacing: 8,
                                 children: attachment.sourceUrl!
                                     .map(
-                                      (item) => SizedBox(
+                                      (item) {
+                                        final uri = (item['uri'] ?? '').toString();
+                                        final resolved = extractDriveFileId(uri) ??
+                                            (uri.startsWith('http') ? uri : null);
+                                        if (resolved == null) {
+                                          return const SizedBox(width: 80, height: 80);
+                                        }
+                                        return SizedBox(
                                         width: 80,
                                         height: 80,
                                         child: DriveImageMessage(
                                           userName:
                                               "${context.loc.report} #${report.reportCode} - ${formatTimeStampToDate(report.createdAt!)}-${formatTimestampToAmPm(report.createdAt!)}",
                                           isMaintenance: true,
-                                          fileId:
-                                              extractDriveFileId(item["uri"])!,
-                                          driveService: driveService,
+                                          fileId: resolved,
                                         ),
-                                      ),
+                                      );
+                                      },
                                     )
                                     .toList(),
                               )
@@ -558,6 +564,7 @@ class _CreateMaintenanceReportDialogState
                         : null;
 
                     await context.read<MaintenanceCubit>().submitReport(
+                        userId: (authState as Authenticated).user.id,
                         title: widget.issueTitle.text,
                         description: widget.issue.text,
                         category: widget.issueCategory.text,

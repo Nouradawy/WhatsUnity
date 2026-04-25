@@ -17,8 +17,9 @@ import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:WhatsUnity/features/chat/data/chat_channel_id_cache.dart';
 import 'package:WhatsUnity/features/chat/data/datasources/chat_local_data_source.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_details_cubit.dart';
-import 'package:WhatsUnity/core/config/supabase.dart';
+import 'package:WhatsUnity/features/chat/domain/repositories/chat_repository.dart';
 import 'package:WhatsUnity/core/config/Enums.dart';
+import 'package:WhatsUnity/core/config/appwrite.dart' show appwriteDatabases;
 import 'package:WhatsUnity/core/constants/Constants.dart';
 import 'package:WhatsUnity/core/media/media_services.dart';
 import 'package:WhatsUnity/core/media/media_upload_exception.dart';
@@ -500,26 +501,13 @@ class _GeneralChatState extends State<GeneralChat>
 
       String? resolvedChannelId;
       try {
-        var channelQuery = supabase
-            .from('channels')
-            .select('id')
-            .eq('compound_id', widget.compoundId.toString())
-            .eq('type', widget.channelName);
-
-        if (widget.channelName != 'COMPOUND_GENERAL' && buildingNumber != null) {
-          final buildingRow = await supabase
-              .from('buildings')
-              .select('id')
-              .eq('building_name', buildingNumber)
-              .eq('compound_id', widget.compoundId.toString())
-              .single();
-          channelQuery = channelQuery.eq('building_id', buildingRow['id']);
-        }
-
-        final channelRow = await channelQuery.single();
+        resolvedChannelId = await context.read<ChatRepository>().resolveChannelDocumentId(
+              compoundId: widget.compoundId.toString(),
+              channelType: widget.channelName,
+              buildingNameForScopedChat:
+                  widget.channelName != 'COMPOUND_GENERAL' ? buildingNumber : null,
+            );
         if (!mounted) return;
-
-        resolvedChannelId = channelRow['id']?.toString();
         if (resolvedChannelId != null && resolvedChannelId.isNotEmpty) {
           await ChatChannelIdCache.write(
             compoundId: widget.compoundId,
@@ -881,21 +869,13 @@ class _GeneralChatState extends State<GeneralChat>
     };
 
     if (_disposed || _tearingDown || _offstage) return;
-    _chatController.insertMessage(types.TextMessage(
-      id: localId,
-      authorId: _currentUserId,
-      createdAt: now,
+    if (_channelId == null) return;
+    await context.read<ChatCubit>().sendPollMessage(
       text: question,
-      metadata: pollMetadata,
-    ));
-
-    await supabase.from('messages').insert({
-      'channel_id': _channelId,
-      'author_id': _currentUserId,
-      'text': question,
-      'metadata': pollMetadata,
-      'created_at': now.toUtc().toIso8601String(),
-    });
+      pollMetadata: pollMetadata,
+      channelId: _channelId!,
+      userId: _currentUserId,
+    );
   }
 
   void _toggleBrainStorming() {
@@ -1301,8 +1281,10 @@ class _GeneralChatState extends State<GeneralChat>
           context,
           MaterialPageRoute(
             builder: (context) => BlocProvider(
-              create: (context) =>
-                  ChatDetailsCubit(authCubit: context.read<AuthCubit>()),
+              create: (context) => ChatDetailsCubit(
+                authCubit: context.read<AuthCubit>(),
+                databases: appwriteDatabases,
+              ),
               child: ChatDetails(compoundId: widget.compoundId),
             ),
           ),

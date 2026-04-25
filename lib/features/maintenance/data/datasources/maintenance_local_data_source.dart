@@ -8,24 +8,25 @@ import '../../../../core/sync/lww_merge.dart';
 import '../../../../core/sync/sync_metadata.dart';
 
 /// Offline-first cache for maintenance (MIGRATION_PLAN §6).
+/// Public methods use the `local_` prefix; Appwrite peers use `remote_`.
 abstract class MaintenanceLocalDataSource {
-  Future<void> upsertReport(Map<String, dynamic> row, {bool force = false});
+  Future<void> local_upsertReport(Map<String, dynamic> row, {bool force = false});
 
-  Future<void> upsertAttachment(Map<String, dynamic> row, {bool force = false});
+  Future<void> local_upsertAttachment(Map<String, dynamic> row, {bool force = false});
 
-  Future<List<Map<String, dynamic>>> getReports({
+  Future<List<Map<String, dynamic>>> local_getReports({
     required String compoundId,
     required String type,
   });
 
-  Future<List<Map<String, dynamic>>> getAttachments({
+  Future<List<Map<String, dynamic>>> local_getAttachments({
     required String compoundId,
     required String type,
   });
 
-  Future<Map<String, dynamic>?> getRawReport(String id);
+  Future<Map<String, dynamic>?> local_getRawReport(String id);
 
-  Future<Map<String, dynamic>?> getRawAttachment(String id);
+  Future<Map<String, dynamic>?> local_getRawAttachment(String id);
 }
 
 class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
@@ -38,12 +39,12 @@ class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
   Future<Database> get _db => _helper.database;
 
   @override
-  Future<void> upsertReport(Map<String, dynamic> row, {bool force = false}) async {
+  Future<void> local_upsertReport(Map<String, dynamic> row, {bool force = false}) async {
     try {
       final id = row['id']?.toString() ?? '';
       if (id.isEmpty) return;
       if (!force) {
-        final local = await getRawReport(id);
+        final local = await local_getRawReport(id);
         if (!shouldApplyRemoteToLocal(localRow: local, remoteRow: row)) {
           return;
         }
@@ -56,18 +57,18 @@ class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } on DatabaseException catch (e, st) {
-      debugPrint('MaintenanceLocalDataSource.upsertReport: $e\n$st');
+      debugPrint('MaintenanceLocalDataSource.local_upsertReport: $e\n$st');
       rethrow;
     }
   }
 
   @override
-  Future<void> upsertAttachment(Map<String, dynamic> row, {bool force = false}) async {
+  Future<void> local_upsertAttachment(Map<String, dynamic> row, {bool force = false}) async {
     try {
       final id = row['id']?.toString() ?? '';
       if (id.isEmpty) return;
       if (!force) {
-        final local = await getRawAttachment(id);
+        final local = await local_getRawAttachment(id);
         if (!shouldApplyRemoteToLocal(localRow: local, remoteRow: row)) {
           return;
         }
@@ -80,13 +81,13 @@ class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } on DatabaseException catch (e, st) {
-      debugPrint('MaintenanceLocalDataSource.upsertAttachment: $e\n$st');
+      debugPrint('MaintenanceLocalDataSource.local_upsertAttachment: $e\n$st');
       rethrow;
     }
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getReports({
+  Future<List<Map<String, dynamic>>> local_getReports({
     required String compoundId,
     required String type,
   }) async {
@@ -100,13 +101,13 @@ class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
       );
       return rows.map(_reportRowToJson).toList();
     } on DatabaseException catch (e, st) {
-      debugPrint('MaintenanceLocalDataSource.getReports: $e\n$st');
+      debugPrint('MaintenanceLocalDataSource.local_getReports: $e\n$st');
       return [];
     }
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getAttachments({
+  Future<List<Map<String, dynamic>>> local_getAttachments({
     required String compoundId,
     required String type,
   }) async {
@@ -120,13 +121,13 @@ class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
       );
       return rows.map(_attachmentRowToJson).toList();
     } on DatabaseException catch (e, st) {
-      debugPrint('MaintenanceLocalDataSource.getAttachments: $e\n$st');
+      debugPrint('MaintenanceLocalDataSource.local_getAttachments: $e\n$st');
       return [];
     }
   }
 
   @override
-  Future<Map<String, dynamic>?> getRawReport(String id) async {
+  Future<Map<String, dynamic>?> local_getRawReport(String id) async {
     final db = await _db;
     final rows = await db.query(_reports, where: 'id = ?', whereArgs: [id], limit: 1);
     if (rows.isEmpty) return null;
@@ -134,7 +135,7 @@ class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
   }
 
   @override
-  Future<Map<String, dynamic>?> getRawAttachment(String id) async {
+  Future<Map<String, dynamic>?> local_getRawAttachment(String id) async {
     final db = await _db;
     final rows = await db.query(_attachments, where: 'id = ?', whereArgs: [id], limit: 1);
     if (rows.isEmpty) return null;

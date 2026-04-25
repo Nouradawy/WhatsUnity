@@ -8,7 +8,7 @@ class DeleteMessage {
 
   DeleteMessage(this.repository);
 
-  Future<void> call(types.Message message) {
-    return repository.deleteMessage(message);
+  Future<void> call(types.Message message, String currentUserId) {
+    return repository.deleteMessage(message, currentUserId);
   }
 }

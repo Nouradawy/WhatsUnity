@@ -461,6 +461,21 @@ Future<dynamic> main(final context) async {
         if (compoundPicture != null) {
           log('on_user_register: compound picture_url=$compoundPicture (not stored on channel per schema)');
         }
+        await db.createDocument(
+          databaseId: databaseId,
+          collectionId: _kColChannels,
+          documentId: ID.unique(),
+          data: {
+            'compound_id': compound,
+            'building_id': "",
+            'name': channelName,
+            'type': 'COMPOUND_GENERAL',
+            'version': 0,
+          },
+        );
+        if (compoundPicture != null) {
+          log('on_user_register: compound picture_url=$compoundPicture (not stored on channel per schema)');
+        }
       }
     } catch (e, st) {
       log('channels: $e\n$st');

@@ -14,7 +14,6 @@ import 'package:WhatsUnity/Layout/Cubit/states.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:WhatsUnity/core/config/Enums.dart';
-import 'package:WhatsUnity/core/config/supabase.dart';
 import 'package:WhatsUnity/core/media/media_services.dart';
 import 'package:WhatsUnity/core/media/recorder_upload_bridge.dart';
 import 'package:WhatsUnity/features/social/presentation/pages/Social.dart';
@@ -369,7 +368,7 @@ class HomePage extends StatelessWidget {
         if (currentSelectedCompoundId != null) {
           final uid = authState is Authenticated
               ? authState.user.id
-              : (supabase.auth.currentUser?.id ?? '');
+              : '';
           if (uid.isEmpty) {
             return homeScaffold;
           }

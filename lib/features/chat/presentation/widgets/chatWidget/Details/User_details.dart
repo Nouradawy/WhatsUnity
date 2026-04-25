@@ -6,7 +6,6 @@ import '../../../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../../../auth/presentation/bloc/auth_state.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../../../../core/config/Enums.dart';
-import '../../../../../../core/config/supabase.dart';
 import 'ChatMember.dart';
 
 

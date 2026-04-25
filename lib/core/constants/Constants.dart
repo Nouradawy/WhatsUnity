@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:flutter/foundation.dart';
@@ -10,7 +9,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hexcolor/hexcolor.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io';
+
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 import '../../features/auth/presentation/bloc/auth_cubit.dart';
 import '../../features/auth/presentation/bloc/auth_state.dart';
@@ -18,14 +20,44 @@ import '../../features/chat/presentation/widgets/chatWidget/Details/ChatMember.d
 import '../../features/chat/presentation/widgets/chatWidget/MessageWidget.dart';
 import '../../features/social/domain/entities/brainstorm.dart';
 import '../../features/social/presentation/bloc/social_cubit.dart';
-import '../services/DriveImageWidget.dart';
-import '../services/GoogleDriveService.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 
 import '../config/Enums.dart';
 
-final GoogleDriveService driveService = GoogleDriveService();
 List<Map<String,dynamic>> prevSignIn = [];
+
+Future<Uint8List?> getCachedOrDownloadImage(
+  String fileId,
+  Future<Uint8List?> Function() downloadFn,
+) async {
+  final dir = await getTemporaryDirectory();
+  final safeKey = fileId.hashCode.toString();
+  final file = File('${dir.path}/img_$safeKey.cache');
+  if (await file.exists()) {
+    return file.readAsBytes();
+  }
+  final data = await downloadFn();
+  if (data != null) {
+    await file.writeAsBytes(data);
+  }
+  return data;
+}
+
+Future<Uint8List?> _downloadChatImageBytes(String fileIdOrUrl) async {
+  final t = fileIdOrUrl.trim();
+  if (t.startsWith('http://') || t.startsWith('https://')) {
+    final r = await http.get(Uri.parse(t));
+    return r.statusCode == 200 ? r.bodyBytes : null;
+  }
+  final u = Uri.parse(
+    'https://drive.google.com/thumbnail?id=${Uri.encodeComponent(t)}&sz=w1000',
+  );
+  final r = await http.get(u);
+  if (r.statusCode != 200) return null;
+  final ct = r.headers['content-type'] ?? '';
+  if (!ct.contains('image')) return null;
+  return r.bodyBytes;
+}
 
 Future<List<String>> loadCachedData() async {
   return await AssetHelper.loadCompoundLogos();
@@ -91,7 +123,6 @@ Widget getCompoundPicture(BuildContext context, String compoundId, double size) 
   }
 class DriveImageMessage extends StatefulWidget {
   final String fileId;
-  final GoogleDriveService driveService;
   final types.Message? message;
   final String? userName;
   final bool isRounded;
@@ -101,7 +132,6 @@ class DriveImageMessage extends StatefulWidget {
   const DriveImageMessage({
     super.key,
     required this.fileId,
-    required this.driveService,
     this.message,
     this.userName,
     this.isRounded = true ,
@@ -121,13 +151,9 @@ class _DriveImageMessageState extends State<DriveImageMessage> {
   @override
   void initState() {
     super.initState();
-    // getCachedOrDownloadImage checks the temp-dir disk cache first, then
-    // falls back to driveService.downloadFile() (which has its own in-memory
-    // cache + a 15 s timeout).  This means even after a hot-restart the image
-    // loads from disk instead of hitting the network again.
     _downloadFuture = getCachedOrDownloadImage(
       widget.fileId,
-      () => widget.driveService.downloadFile(widget.fileId),
+      () => _downloadChatImageBytes(widget.fileId),
     );
   }
 
@@ -204,7 +230,7 @@ Future fullScreenImageViewer ({required dynamic imageData, required BuildContext
                           children: [
                             Text(userName!, style: GoogleFonts.plusJakartaSans(color: Colors.white70 , fontWeight: FontWeight.w700 , fontSize: 15),),
                             if(message !=null)
-                              Text("${formatMessageDate(message!.createdAt!)} , ${formatTimestampToAmPm(message.createdAt!)}" , style: GoogleFonts.plusJakartaSans(color: Colors.white70 , fontWeight: FontWeight.w600 , fontSize: 10),),
+                              Text("${formatMessageDate(message.createdAt!)} , ${formatTimestampToAmPm(message.createdAt!)}" , style: GoogleFonts.plusJakartaSans(color: Colors.white70 , fontWeight: FontWeight.w600 , fontSize: 10),),
                             if(isVerf)
                               Text(imageData["name"], style: GoogleFonts.plusJakartaSans(color: Colors.white70 , fontWeight: FontWeight.w600 , fontSize: 10),)
                           ],),
@@ -345,12 +371,12 @@ class _PostCarouselState extends State<PostCarousel> {
           CarouselSlider(
             items: items.map<Widget>((item) {
               final uri = (item['uri'] ?? '').toString();
-              final fileId = extractDriveFileId(uri);
-              if (fileId == null) return const SizedBox.shrink();
+              final resolved =
+                  extractDriveFileId(uri) ?? (uri.startsWith('http') ? uri : null);
+              if (resolved == null) return const SizedBox.shrink();
               return DriveImageMessage(
-                key: ValueKey('post_${widget.userName}_${fileId}'),
-                fileId: fileId,
-                driveService: driveService,
+                key: ValueKey('post_${widget.userName}_$resolved'),
+                fileId: resolved,
                 isRounded: false,
                 userName: widget.userName ,
                 isPost: true,

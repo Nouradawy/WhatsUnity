@@ -1,31 +1,53 @@
 import 'dart:convert';
 
 import 'package:appwrite/appwrite.dart';
+import 'package:appwrite/models.dart' as aw_models;
 import 'package:WhatsUnity/core/config/appwrite.dart';
 
 // APPWRITE_SCHEMA.md §2.14 / §2.15 — provision collection ids (tools/provision_spec.json)
 const String _collectionPosts = 'posts';
 const String _collectionBrainstorms = 'brainstorms';
 
+Map<String, dynamic> _mergedDocumentJson(aw_models.Document d) => {
+      r'$id': d.$id,
+      r'$createdAt': d.$createdAt,
+      r'$updatedAt': d.$updatedAt,
+      ...d.data,
+    };
+
+String _jsonAttr(dynamic value) => jsonEncode(value);
+
+/// Appwrite social collections. All methods use the `remote_` prefix (local SQLite peers use `local_`).
 abstract class SocialRemoteDataSource {
-  Future<List<Map<String, dynamic>>> getPosts(String compoundId);
-  Future<void> createPost({
+  /// Lists `posts` for [compoundId] (`compound_id` equals the compound document `\$id`).
+  Future<List<Map<String, dynamic>>> remote_getPosts(String compoundId);
+
+  Future<void> remote_createPost({
     required String postHead,
     required bool getCalls,
     required String compoundId,
     required String authorId,
     required List<Map<String, dynamic>> imageSources,
   });
-  Future<void> updatePostComments({
+
+  Future<void> remote_updatePostComments({
     required String postId,
     required List<Map<String, dynamic>> comments,
   });
 
-  Future<List<Map<String, dynamic>>> getBrainStorms(
+  /// Soft-delete: sets `deleted_at` when [postId] belongs to [authorId].
+  Future<void> remote_softDeletePostByAuthorAndId({
+    required String authorId,
+    required String postId,
+  });
+
+  Future<List<Map<String, dynamic>>> remote_getBrainStorms(
     String channelId,
     String compoundId,
   );
-  Future<void> createBrainStorm({
+
+  /// [id] becomes the brainstorm document `\$id` via `ID.custom`.
+  Future<void> remote_createBrainStorm({
     required String id,
     required String title,
     required String authorId,
@@ -35,86 +57,17 @@ abstract class SocialRemoteDataSource {
     required List<Map<String, dynamic>> imageSources,
     required dynamic options,
   });
-  Future<void> updateBrainStormVote({
+
+  Future<void> remote_updateBrainStormVote({
     required String pollId,
     required Map<String, Map<String, bool>> votes,
     required List<Map<String, dynamic>> options,
   });
-  Future<void> updateBrainStormComments({
+
+  Future<void> remote_updateBrainStormComments({
     required String pollId,
     required List<Map<String, dynamic>> comments,
   });
-}
-
-List<Map<String, dynamic>> _decodeMapList(dynamic value) {
-  if (value == null) return [];
-  if (value is String) {
-    if (value.isEmpty) return [];
-    final decoded = jsonDecode(value);
-    if (decoded is! List) return [];
-    return decoded
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-  }
-  if (value is List) {
-    return value
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-  }
-  return [];
-}
-
-Map<String, dynamic>? _decodeObjectMap(dynamic value) {
-  if (value == null) return null;
-  if (value is String) {
-    if (value.isEmpty) return null;
-    final decoded = jsonDecode(value);
-    if (decoded is! Map) return null;
-    return Map<String, dynamic>.from(decoded);
-  }
-  if (value is Map) {
-    return Map<String, dynamic>.from(value);
-  }
-  return null;
-}
-
-String _jsonAttr(dynamic value) => jsonEncode(value);
-
-Map<String, dynamic> _postDocumentToRow(
-  String id,
-  String createdAt,
-  Map<String, dynamic> data,
-) {
-  return {
-    'id': id,
-    'compound_id': data['compound_id']?.toString() ?? '',
-    'author_id': data['author_id']?.toString() ?? '',
-    'post_head': data['post_head'] as String? ?? '',
-    'source_url': _decodeMapList(data['source_url']),
-    'getCalls': data['getCalls'] as bool? ?? false,
-    'Comments': _decodeMapList(data['Comments']),
-    'created_at': createdAt,
-  };
-}
-
-Map<String, dynamic> _brainstormDocumentToRow(
-  String id,
-  String createdAt,
-  Map<String, dynamic> data,
-) {
-  final votes = _decodeObjectMap(data['votes']);
-  return {
-    'id': id,
-    'author_id': data['author_id']?.toString() ?? '',
-    'created_at': createdAt,
-    'compound_id': data['compound_id']?.toString() ?? '',
-    'channel_id': data['channel_id']?.toString() ?? '',
-    'title': data['title'] as String? ?? '',
-    'imageSources': _decodeMapList(data['imageSources']),
-    'options': _decodeMapList(data['options']),
-    'comments': _decodeMapList(data['comments']),
-    'votes': votes,
-  };
 }
 
 class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
@@ -124,7 +77,7 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
   final Databases _databases;
 
   @override
-  Future<List<Map<String, dynamic>>> getPosts(String compoundId) async {
+  Future<List<Map<String, dynamic>>> remote_getPosts(String compoundId) async {
     final list = await _databases.listDocuments(
       databaseId: appwriteDatabaseId,
       collectionId: _collectionPosts,
@@ -135,19 +88,11 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
         Query.limit(2000),
       ],
     );
-    return list.documents
-        .map(
-          (d) => _postDocumentToRow(
-            d.$id,
-            d.$createdAt,
-            d.data,
-          ),
-        )
-        .toList();
+    return list.documents.map(_mergedDocumentJson).toList();
   }
 
   @override
-  Future<void> createPost({
+  Future<void> remote_createPost({
     required String postHead,
     required bool getCalls,
     required String compoundId,
@@ -171,7 +116,7 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
   }
 
   @override
-  Future<void> updatePostComments({
+  Future<void> remote_updatePostComments({
     required String postId,
     required List<Map<String, dynamic>> comments,
   }) async {
@@ -186,7 +131,30 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getBrainStorms(
+  Future<void> remote_softDeletePostByAuthorAndId({
+    required String authorId,
+    required String postId,
+  }) async {
+    final doc = await _databases.getDocument(
+      databaseId: appwriteDatabaseId,
+      collectionId: _collectionPosts,
+      documentId: postId,
+    );
+    if (doc.data['author_id']?.toString() != authorId) return;
+    final v = int.tryParse(doc.data['version']?.toString() ?? '') ?? 0;
+    await _databases.updateDocument(
+      databaseId: appwriteDatabaseId,
+      collectionId: _collectionPosts,
+      documentId: postId,
+      data: {
+        'deleted_at': DateTime.now().toUtc().toIso8601String(),
+        'version': v + 1,
+      },
+    );
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> remote_getBrainStorms(
     String channelId,
     String compoundId,
   ) async {
@@ -201,19 +169,11 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
         Query.limit(2000),
       ],
     );
-    return list.documents
-        .map(
-          (d) => _brainstormDocumentToRow(
-            d.$id,
-            d.$createdAt,
-            d.data,
-          ),
-        )
-        .toList();
+    return list.documents.map(_mergedDocumentJson).toList();
   }
 
   @override
-  Future<void> createBrainStorm({
+  Future<void> remote_createBrainStorm({
     required String id,
     required String title,
     required String authorId,
@@ -226,7 +186,6 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
     await _databases.createDocument(
       databaseId: appwriteDatabaseId,
       collectionId: _collectionBrainstorms,
-      // Schema: $id = client UUID (APPWRITE_SCHEMA.md §2.15)
       documentId: ID.custom(id),
       data: {
         'channel_id': channelId,
@@ -243,7 +202,7 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
   }
 
   @override
-  Future<void> updateBrainStormVote({
+  Future<void> remote_updateBrainStormVote({
     required String pollId,
     required Map<String, Map<String, bool>> votes,
     required List<Map<String, dynamic>> options,
@@ -260,7 +219,7 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
   }
 
   @override
-  Future<void> updateBrainStormComments({
+  Future<void> remote_updateBrainStormComments({
     required String pollId,
     required List<Map<String, dynamic>> comments,
   }) async {

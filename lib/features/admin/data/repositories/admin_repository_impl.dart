@@ -12,22 +12,22 @@ class AdminRepositoryImpl implements AdminRepository {
 
   @override
   Future<List<AdminUser>> getCompoundMembers(String compoundId) async {
-    return await remoteDataSource.getCompoundMembers(compoundId);
+    return await remoteDataSource.remote_getCompoundMembers(compoundId);
   }
 
   @override
   Future<void> updateUserStatus(String userId, String status) async {
-    await remoteDataSource.updateUserStatus(userId, status);
+    await remoteDataSource.remote_updateUserStatus(userId, status);
   }
 
   @override
   Future<List<UserReport>> getUserReports({String? status}) async {
-    return await remoteDataSource.getUserReports(status: status);
+    return await remoteDataSource.remote_getUserReports(status: status);
   }
 
   @override
   Future<void> updateReportStatus(String reportId, String status) async {
-    await remoteDataSource.updateReportStatus(reportId, status);
+    await remoteDataSource.remote_updateReportStatus(reportId, status);
   }
 
   @override
@@ -41,7 +41,8 @@ class AdminRepositoryImpl implements AdminRepository {
       description: report.description,
       messageId: report.messageId,
       reportedFor: report.reportedFor,
+      compoundId: report.compoundId,
     );
-    await remoteDataSource.createReport(model);
+    await remoteDataSource.remote_createReport(model);
   }
 }

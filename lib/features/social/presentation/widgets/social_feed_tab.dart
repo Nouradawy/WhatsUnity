@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:WhatsUnity/core/config/supabase.dart';
 import 'package:WhatsUnity/core/constants/Constants.dart';
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
@@ -200,13 +199,12 @@ class _PostCard extends StatelessWidget {
               child: PopupMenuButton<String>(
                 tooltip: '',
                 onSelected: (_) async {
-                  await supabase
-                      .from('Posts')
-                      .delete()
-                      .eq('author_id', post.authorId)
-                      .eq('id', post.id);
+                  await context.read<SocialCubit>().deleteMyPost(
+                        compoundId: selectedCompoundId,
+                        authorId: post.authorId,
+                        postId: post.id,
+                      );
                   if (!context.mounted) return;
-                  context.read<SocialCubit>().getPosts(selectedCompoundId);
                 },
                 itemBuilder: (ctx) => const [
                   PopupMenuItem<String>(value: 'Delete', child: Text('Delete'))

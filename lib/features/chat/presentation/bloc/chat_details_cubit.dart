@@ -1,7 +1,9 @@
+import 'package:appwrite/appwrite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
 import '../../../../core/config/Enums.dart';
-import '../../../../core/config/supabase.dart';
+import '../../../../core/config/appwrite.dart' show appwriteDatabaseId;
 import '../../../../core/models/ReportAUser.dart';
 import '../../../admin/presentation/bloc/admin_cubit.dart';
 import '../widgets/chatWidget/Details/ChatMember.dart';
@@ -12,7 +14,13 @@ import '../../../../features/auth/presentation/bloc/auth_state.dart';
 
 class ChatDetailsCubit extends Cubit<ChatDetailsStates> {
   final AuthCubit authCubit;
-  ChatDetailsCubit({required this.authCubit}) : super(ChatInitialState());
+  final Databases _databases;
+
+  ChatDetailsCubit({
+    required this.authCubit,
+    required Databases databases,
+  })  : _databases = databases,
+        super(ChatInitialState());
   
   static ChatDetailsCubit get(context) => BlocProvider.of(context);
 
@@ -62,7 +70,12 @@ class ChatDetailsCubit extends Cubit<ChatDetailsStates> {
   }
 
   Future<void> banUser(String userid, UserState banType) async {
-    await supabase.from('profiles').update({"userState": banType.name}).eq('id', userid);
+    await _databases.updateDocument(
+      databaseId: appwriteDatabaseId,
+      collectionId: 'profiles',
+      documentId: userid,
+      data: {'userState': banType.name},
+    );
     final currentState = authCubit.state;
     if (currentState is Authenticated) {
       final updatedMembers = currentState.chatMembers.map((m) {

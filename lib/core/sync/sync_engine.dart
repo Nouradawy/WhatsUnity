@@ -151,10 +151,17 @@ class SyncEngine {
   Future<void> _handleCreateMessage(SyncJobRecord job) async {
     final p = jsonDecode(job.payloadJson) as Map<String, dynamic>;
     final kind = p['kind']?.toString() ?? 'text';
-    if (kind != 'text') {
+    if (kind != 'text' && kind != 'poll') {
       throw UnsupportedError('Sync CREATE kind=$kind');
     }
     final documentId = p['document_id'] as String;
+    Map<String, dynamic>? metaOverride;
+    final mj = p['metadata_json'];
+    if (mj is String && mj.trim().isNotEmpty) {
+      try {
+        metaOverride = Map<String, dynamic>.from(jsonDecode(mj) as Map);
+      } catch (_) {}
+    }
     await _remote.createTextMessageWithDocumentId(
       documentId: documentId,
       text: p['text'] as String,
@@ -164,6 +171,7 @@ class SyncEngine {
       nowMs: (p['now_ms'] as num).toInt(),
       repliedMessageId: p['replied_message_id'] as String?,
       version: (p['version'] as num?)?.toInt() ?? 0,
+      metadataOverride: metaOverride,
     );
     final row = await _remote.fetchMessageRow(documentId);
     final v = int.tryParse(row['version']?.toString() ?? '') ?? 0;
@@ -173,7 +181,7 @@ class SyncEngine {
     row['remote_updated_at'] =
         row['remote_updated_at']?.toString() ?? row['updated_at']?.toString();
     row['last_sync_error'] = null;
-    await _local.insertMessage(row);
+    await _local.local_insertMessage(row);
   }
 
   Future<void> _handleCreateMaintenanceReport(SyncJobRecord job) async {
@@ -197,7 +205,7 @@ class SyncEngine {
     row['remote_updated_at'] =
         row['remote_updated_at']?.toString() ?? row['updated_at']?.toString();
     row['last_sync_error'] = null;
-    await _maintenanceLocal.upsertReport(row, force: true);
+    await _maintenanceLocal.local_upsertReport(row, force: true);
   }
 
   Future<void> _handleCreateMaintenanceAttachment(SyncJobRecord job) async {
@@ -219,7 +227,7 @@ class SyncEngine {
     row['remote_updated_at'] =
         row['remote_updated_at']?.toString() ?? row['updated_at']?.toString();
     row['last_sync_error'] = null;
-    await _maintenanceLocal.upsertAttachment(row, force: true);
+    await _maintenanceLocal.local_upsertAttachment(row, force: true);
   }
 
   Future<void> _handleUploadMedia(SyncJobRecord job) async {
@@ -274,7 +282,7 @@ class SyncEngine {
         fresh['remote_updated_at']?.toString() ??
             fresh['updated_at']?.toString();
     fresh['last_sync_error'] = null;
-    await _local.insertMessage(fresh);
+    await _local.local_insertMessage(fresh);
     try {
       await file.delete();
     } catch (_) {}
@@ -320,7 +328,7 @@ class SyncEngine {
         fresh['remote_updated_at']?.toString() ??
             fresh['updated_at']?.toString();
     fresh['last_sync_error'] = null;
-    await _maintenanceLocal.upsertAttachment(fresh, force: true);
+    await _maintenanceLocal.local_upsertAttachment(fresh, force: true);
     try {
       await file.delete();
     } catch (_) {}

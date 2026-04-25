@@ -4,14 +4,12 @@ import 'dart:convert';
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter/foundation.dart' show compute, debugPrint, kDebugMode;
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
-
+import '../../../../core/config/app_directory_types.dart';
 import '../../../../core/config/Enums.dart';
-import '../../../../core/config/appwrite.dart' show appwriteDatabaseId;
-import '../../../../core/config/supabase.dart';
+import '../../../../core/config/appwrite.dart'
+    show appwriteDatabaseId, appwriteDatabases;
 import '../../../../core/models/CompoundsList.dart';
 import '../../../../core/network/CacheHelper.dart';
-import '../../../../core/services/GoogleDriveService.dart';
 import '../../domain/entities/app_user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_data_source.dart';
@@ -22,38 +20,42 @@ const String _kColUserApartments = 'user_apartments';
 const String _kColCompoundCategories = 'compound_categories';
 const String _kColCompounds = 'compounds';
 const String _kColProfiles = 'profiles';
+const String _kColBuildings = 'buildings';
+const String _kColChannels = 'channels';
+const String _kColUserRoles = 'user_roles';
 const int _kListLimit = 2000;
 
-/// Phase-2 implementation: auth operations go through Appwrite [Account];
-/// database operations (buildings, channels, user_apartments, profiles,
-/// user_roles) still use the [SupabaseClient] until Phase-3 DB migration.
-///
-/// ┌─ Important ID-mapping note ──────────────────────────────────────────────┐
-/// │ Appwrite generates its own user IDs. Until Phase-3 migrates every DB     │
-/// │ table away from Supabase, the Supabase DB rows written during            │
-/// │ completeRegistration / updateProfile will reference the *Appwrite* user  │
-/// │ ID. A DB migration script must be run when cutting over to production.   │
-/// └──────────────────────────────────────────────────────────────────────────┘
+/// Auth uses Appwrite [Account]; profile and registration side-effects use
+/// [Databases] / [TablesDB] against APPWRITE_SCHEMA collections (string ids).
 class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
     required this.remoteDataSource,
-    required this.supabaseClient,
-    required this.googleDriveService,
     required Account appwriteAccount,
     required TablesDB appwriteTables,
-  }) : _appwriteAccount = appwriteAccount,
-       _tables = appwriteTables {
+  })  : _appwriteAccount = appwriteAccount,
+        _tables = appwriteTables {
     _checkExistingSession();
   }
 
   final AuthRemoteDataSource remoteDataSource;
 
-  /// Kept for Phase-2 DB operations only. Remove when Phase-3 is complete.
-  final SupabaseClient supabaseClient;
-
-  final GoogleDriveService googleDriveService;
   final Account _appwriteAccount;
   final TablesDB _tables;
+
+  /// Returns the authoritative authenticated user id from Appwrite [Account],
+  /// falling back to the cached [_currentUser] when the account endpoint is unavailable.
+  Future<String?> _resolveAuthenticatedUserId() async {
+    try {
+      final user = await _appwriteAccount.get();
+      final id = user.$id.trim();
+      if (id.isNotEmpty) return id;
+    } catch (_) {
+      // Fallback below.
+    }
+    final cached = _currentUser?.id.trim();
+    if (cached == null || cached.isEmpty) return null;
+    return cached;
+  }
 
   // ── Auth state stream ─────────────────────────────────────────────────────
   final _authController = StreamController<AppUser?>.broadcast();
@@ -111,9 +113,7 @@ class AuthRepositoryImpl implements AuthRepository {
     return user;
   }
 
-  /// Google auth now goes through Appwrite's native OAuth2 flow.
-  /// [googleDriveService] is no longer used for auth; it is called lazily
-  /// from upload flows when Drive access is required.
+  /// Google auth goes through Appwrite's native OAuth2 flow.
   @override
   Future<AppUser?> signInWithGoogle() async {
     final user = await remoteDataSource.signInWithGoogle();
@@ -138,7 +138,6 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> signOut() async {
     await remoteDataSource.signOut();
-    await googleDriveService.signOut();
     await CacheHelper.removeData(CacheHelper.compoundCurrentIndexKey);
     await CacheHelper.removeData(CacheHelper.lastActiveUserIdKey);
     await CacheHelper.removeData("MyCompounds");
@@ -154,26 +153,41 @@ class AuthRepositoryImpl implements AuthRepository {
     required OwnerTypes ownerType,
     required String phoneNumber,
   }) async {
-    final userId = _currentUser?.id;
+    final userId = await _resolveAuthenticatedUserId();
     if (userId == null) return;
 
     // Update the display name on the Appwrite account.
     await _appwriteAccount.updateName(name: displayName);
 
-    // TODO(Phase-3): replace with Appwrite TablesDB updateRow on 'profiles'.
-    await supabaseClient.from('profiles').upsert({
-      'id': userId,
+    final payload = <String, dynamic>{
       'full_name': fullName,
       'display_name': displayName,
       'owner_type': ownerType.name,
       'phone_number': phoneNumber,
-    }, onConflict: 'id');
-  }
-
-  /// Supabase `compound_id` may still be integer; Appwrite will use string $ids.
-  Object _compoundIdParam(String compoundId) {
-    final n = int.tryParse(compoundId);
-    return n ?? compoundId;
+    };
+    try {
+      await appwriteDatabases.updateDocument(
+        databaseId: appwriteDatabaseId,
+        collectionId: _kColProfiles,
+        documentId: userId,
+        data: payload,
+      );
+    } on AppwriteException catch (e) {
+      if (e.code == 404) {
+        // Google OAuth first-login can race profile provisioning; create it with `$id=userId`.
+        await appwriteDatabases.createDocument(
+          databaseId: appwriteDatabaseId,
+          collectionId: _kColProfiles,
+          documentId: userId,
+          data: <String, dynamic>{
+            ...payload,
+            'version': 0,
+          },
+        );
+      } else {
+        rethrow;
+      }
+    }
   }
 
   /// Prefs keys consumed by [functions/on_user_register] (users.*.update.prefs).
@@ -270,7 +284,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String apartmentNum,
     required String compoundId,
   }) async {
-    final userId = _currentUser?.id;
+    final userId = await _resolveAuthenticatedUserId();
     if (userId == null) return;
 
     // 0. Appwrite: same prefs event as email sign-up (Google registers here).
@@ -294,57 +308,137 @@ class AuthRepositoryImpl implements AuthRepository {
       rethrow;
     }
 
-    // 1. Update profile.
-    // TODO(Phase-3): replace with Appwrite TablesDB.
-    await supabaseClient.from('profiles').upsert({
-      'id': userId,
+    final profilePayload = <String, dynamic>{
       'full_name': fullName,
       'display_name': userName,
       'owner_type': ownerType.name,
       'phone_number': phoneNumber,
-    }, onConflict: 'id');
-
-    // 2. Update role when not the default user role.
-    if (roleId != 1) {
-      // TODO(Phase-3): replace with Appwrite TablesDB on 'user_roles'.
-      await supabaseClient.from('user_roles').upsert({
-        'user_id': userId,
-        'role_id': roleId,
-      }, onConflict: 'user_id');
+    };
+    try {
+      await appwriteDatabases.updateDocument(
+        databaseId: appwriteDatabaseId,
+        collectionId: _kColProfiles,
+        documentId: userId,
+        data: profilePayload,
+      );
+    } on AppwriteException catch (e) {
+      if (e.code == 404) {
+        // Ensure profile exists for Google/OAuth path where provisioning function is delayed.
+        await appwriteDatabases.createDocument(
+          databaseId: appwriteDatabaseId,
+          collectionId: _kColProfiles,
+          documentId: userId,
+          data: <String, dynamic>{
+            ...profilePayload,
+            'version': 0,
+          },
+        );
+      } else {
+        rethrow;
+      }
     }
 
-    // 3. Handle building.
-    // TODO(Phase-3): replace with Appwrite TablesDB on 'buildings'.
-    final buildingRow =
-        await supabaseClient
-            .from('buildings')
-            .upsert({
-              'building_name': buildingName,
-              'compound_id': _compoundIdParam(compoundId),
-            }, onConflict: 'compound_id , building_name')
-            .select('id')
-            .maybeSingle();
+    if (roleId != 1) {
+      try {
+        await appwriteDatabases.updateDocument(
+          databaseId: appwriteDatabaseId,
+          collectionId: _kColUserRoles,
+          documentId: userId,
+          data: {'user_id': userId, 'role_id': roleId},
+        );
+      } on AppwriteException catch (e) {
+        if (e.code == 404) {
+          await appwriteDatabases.createDocument(
+            databaseId: appwriteDatabaseId,
+            collectionId: _kColUserRoles,
+            documentId: userId,
+            data: {'user_id': userId, 'role_id': roleId, 'version': 0},
+          );
+        } else {
+          rethrow;
+        }
+      }
+    }
 
-    if (buildingRow != null) {
-      final int buildingId = buildingRow['id'] as int;
+    final buildings = await appwriteDatabases.listDocuments(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kColBuildings,
+      queries: [
+        Query.equal('compound_id', compoundId),
+        Query.equal('building_name', buildingName),
+        Query.isNull('deleted_at'),
+        Query.limit(1),
+      ],
+    );
 
-      // 4. Handle channel.
-      // TODO(Phase-3): replace with Appwrite TablesDB on 'channels'.
-      await supabaseClient.from('channels').upsert({
-        'name': 'Building $buildingName Chat',
-        'type': 'BUILDING_CHAT',
-        'compound_id': _compoundIdParam(compoundId),
-        'building_id': buildingId,
-      }, onConflict: 'compound_id , building_id , type');
+    late final String buildingDocId;
+    if (buildings.documents.isEmpty) {
+      final created = await appwriteDatabases.createDocument(
+        databaseId: appwriteDatabaseId,
+        collectionId: _kColBuildings,
+        documentId: ID.unique(),
+        data: {
+          'compound_id': compoundId,
+          'building_name': buildingName,
+          'version': 0,
+        },
+      );
+      buildingDocId = created.$id;
+    } else {
+      buildingDocId = buildings.documents.first.$id;
+    }
 
-      // 5. Handle apartment.
-      // TODO(Phase-3): replace with Appwrite TablesDB on 'user_apartments'.
-      await supabaseClient.from('user_apartments').insert({
-        'user_id': userId,
-        'compound_id': _compoundIdParam(compoundId),
-        'building_num': buildingName,
-        'apartment_num': apartmentNum,
-      });
+    final channels = await appwriteDatabases.listDocuments(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kColChannels,
+      queries: [
+        Query.equal('compound_id', compoundId),
+        Query.equal('building_id', buildingDocId),
+        Query.equal('type', 'BUILDING_CHAT'),
+        Query.isNull('deleted_at'),
+        Query.limit(1),
+      ],
+    );
+    if (channels.documents.isEmpty) {
+      await appwriteDatabases.createDocument(
+        databaseId: appwriteDatabaseId,
+        collectionId: _kColChannels,
+        documentId: ID.unique(),
+        data: {
+          'compound_id': compoundId,
+          'building_id': buildingDocId,
+          'name': 'Building $buildingName Chat',
+          'type': 'BUILDING_CHAT',
+          'version': 0,
+        },
+      );
+    }
+
+    final existingMine = await appwriteDatabases.listDocuments(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kColUserApartments,
+      queries: [
+        Query.equal('user_id', userId),
+        Query.equal('compound_id', compoundId),
+        Query.equal('building_num', buildingName),
+        Query.equal('apartment_num', apartmentNum),
+        Query.isNull('deleted_at'),
+        Query.limit(1),
+      ],
+    );
+    if (existingMine.documents.isEmpty) {
+      await appwriteDatabases.createDocument(
+        databaseId: appwriteDatabaseId,
+        collectionId: _kColUserApartments,
+        documentId: ID.unique(),
+        data: {
+          'user_id': userId,
+          'compound_id': compoundId,
+          'building_num': buildingName,
+          'apartment_num': apartmentNum,
+          'version': 0,
+        },
+      );
     }
   }
 
@@ -352,13 +446,11 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> uploadVerificationFiles({
     required List<XFile> files,
     required String userId,
-    required GoogleDriveService driveService,
     required void Function(int index, double progress) onProgress,
   }) async {
     await remoteDataSource.uploadVerificationFiles(
       files: files,
       userId: userId,
-      driveService: driveService,
       onProgress: onProgress,
     );
   }
@@ -369,16 +461,18 @@ class AuthRepositoryImpl implements AuthRepository {
     required String buildingName,
     required String apartmentNum,
   }) async {
-    // TODO(Phase-3): replace with Appwrite TablesDB query on 'user_apartments'.
-    final result =
-        await supabaseClient
-            .from('user_apartments')
-            .select('id')
-            .eq('compound_id', _compoundIdParam(compoundId))
-            .eq('building_num', buildingName)
-            .eq('apartment_num', apartmentNum)
-            .maybeSingle();
-    return result != null;
+    final res = await appwriteDatabases.listDocuments(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kColUserApartments,
+      queries: [
+        Query.equal('compound_id', compoundId),
+        Query.equal('building_num', buildingName),
+        Query.equal('apartment_num', apartmentNum),
+        Query.isNull('deleted_at'),
+        Query.limit(1),
+      ],
+    );
+    return res.documents.isNotEmpty;
   }
 
   @override

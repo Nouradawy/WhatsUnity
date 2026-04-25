@@ -11,6 +11,9 @@ class UserReport extends Equatable {
   final String messageId;
   final String reportedFor;
 
+  /// Optional Appwrite `compoundId` attribute for admin scoping (APPWRITE_SCHEMA.md §2.8).
+  final String? compoundId;
+
   const UserReport({
     this.id,
     required this.authorId,
@@ -20,6 +23,7 @@ class UserReport extends Equatable {
     required this.description,
     required this.messageId,
     required this.reportedFor,
+    this.compoundId,
   });
 
   @override
@@ -32,5 +36,6 @@ class UserReport extends Equatable {
     description,
     messageId,
     reportedFor,
+    compoundId,
   ];
 }

@@ -7,7 +7,6 @@ import 'package:hexcolor/hexcolor.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../Layout/Cubit/cubit.dart';
 import '../../../../core/config/Enums.dart';
-import '../../../../core/config/supabase.dart';
 import '../../../../core/constants/Constants.dart';
 import '../../../../core/services/PolicyDialog.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';

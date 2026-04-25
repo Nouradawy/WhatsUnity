@@ -8,33 +8,37 @@ import '../utils/chat_message_map_codec.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 
 /// Local persistence for chat messages (offline-first, pagination).
+/// Public methods use the `local_` prefix; Appwrite peers use `remote_`.
 abstract class ChatLocalDataSource {
-  Future<void> insertMessage(Map<String, dynamic> row);
+  /// Persists one normalized message row keyed by Appwrite document `\$id` in [row]['id'].
+  Future<void> local_insertMessage(Map<String, dynamic> row);
 
-  Future<void> insertMessages(List<Map<String, dynamic>> rows);
+  Future<void> local_insertMessages(List<Map<String, dynamic>> rows);
 
   /// Newest-first page matching remote pagination windows (offset = page * limit).
-  Future<List<Map<String, dynamic>>> getMessagesByChannelWithPagination({
+  Future<List<Map<String, dynamic>>> local_getMessagesByChannelWithPagination({
     required String channelId,
     required int limit,
     required int offset,
   });
 
-  Future<void> clearChannelMessages(String channelId);
+  Future<void> local_clearChannelMessages(String channelId);
 
   /// Upsert messages built from UI [types.Message] (e.g. on dispose).
-  Future<void> insertMessagesFromTypes(String channelId, List<types.Message> messages);
+  Future<void> local_insertMessagesFromTypes(
+      String channelId, List<types.Message> messages);
 
-  Future<void> deleteMessageById(String messageId);
+  Future<void> local_deleteMessageById(String messageId);
 
   /// All messages for a channel, oldest first (for UI hydration).
-  Future<List<Map<String, dynamic>>> getAllMessagesForChannelAscending(String channelId);
+  Future<List<Map<String, dynamic>>> local_getAllMessagesForChannelAscending(
+      String channelId);
 
   /// Full `messages` table row (for LWW + sync worker), or null.
-  Future<Map<String, dynamic>?> getRawMessageRow(String messageId);
+  Future<Map<String, dynamic>?> local_getRawMessageRow(String messageId);
 
   /// After a successful outbound sync, align local metadata with the server.
-  Future<void> markMessageSyncClean({
+  Future<void> local_markMessageSyncClean({
     required String messageId,
     required int entityVersion,
     String? remoteUpdatedAt,
@@ -51,7 +55,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<Database> get _db => _dbHelper.database;
 
   @override
-  Future<void> insertMessage(Map<String, dynamic> row) async {
+  Future<void> local_insertMessage(Map<String, dynamic> row) async {
     try {
       final db = await _db;
       final record = _normalizeRow(row);
@@ -61,13 +65,13 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.insertMessage: $e\n$st');
+      debugPrint('ChatLocalDataSource.local_insertMessage: $e\n$st');
       rethrow;
     }
   }
 
   @override
-  Future<void> insertMessages(List<Map<String, dynamic>> rows) async {
+  Future<void> local_insertMessages(List<Map<String, dynamic>> rows) async {
     if (rows.isEmpty) return;
     try {
       final db = await _db;
@@ -81,13 +85,13 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       }
       await batch.commit(noResult: true);
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.insertMessages: $e\n$st');
+      debugPrint('ChatLocalDataSource.local_insertMessages: $e\n$st');
       rethrow;
     }
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getMessagesByChannelWithPagination({
+  Future<List<Map<String, dynamic>>> local_getMessagesByChannelWithPagination({
     required String channelId,
     required int limit,
     required int offset,
@@ -117,13 +121,14 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       // Remote/UI lists are chronological ascending; this page was fetched DESC.
       return out.reversed.toList();
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.getMessagesByChannelWithPagination: $e\n$st');
+      debugPrint(
+          'ChatLocalDataSource.local_getMessagesByChannelWithPagination: $e\n$st');
       return [];
     }
   }
 
   @override
-  Future<void> clearChannelMessages(String channelId) async {
+  Future<void> local_clearChannelMessages(String channelId) async {
     try {
       final db = await _db;
       await db.delete(
@@ -132,13 +137,14 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         whereArgs: [channelId],
       );
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.clearChannelMessages: $e\n$st');
+      debugPrint('ChatLocalDataSource.local_clearChannelMessages: $e\n$st');
       rethrow;
     }
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getAllMessagesForChannelAscending(String channelId) async {
+  Future<List<Map<String, dynamic>>> local_getAllMessagesForChannelAscending(
+      String channelId) async {
     try {
       final db = await _db;
       final rows = await db.query(
@@ -159,24 +165,26 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       }
       return out;
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.getAllMessagesForChannelAscending: $e\n$st');
+      debugPrint(
+          'ChatLocalDataSource.local_getAllMessagesForChannelAscending: $e\n$st');
       return [];
     }
   }
 
   @override
-  Future<void> deleteMessageById(String messageId) async {
+  Future<void> local_deleteMessageById(String messageId) async {
     if (messageId.isEmpty) return;
     try {
       final db = await _db;
       await db.delete(_table, where: 'id = ?', whereArgs: [messageId]);
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.deleteMessageById: $e\n$st');
+      debugPrint('ChatLocalDataSource.local_deleteMessageById: $e\n$st');
     }
   }
 
   @override
-  Future<void> insertMessagesFromTypes(String channelId, List<types.Message> messages) async {
+  Future<void> local_insertMessagesFromTypes(
+      String channelId, List<types.Message> messages) async {
     if (messages.isEmpty) return;
     final rows = <Map<String, dynamic>>[];
     final seen = <String>{};
@@ -186,7 +194,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       map['channel_id'] = channelId;
       rows.add(map);
     }
-    await insertMessages(rows);
+    await local_insertMessages(rows);
   }
 
   Map<String, dynamic> _normalizeRow(Map<String, dynamic> raw) {
@@ -253,7 +261,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   }
 
   @override
-  Future<Map<String, dynamic>?> getRawMessageRow(String messageId) async {
+  Future<Map<String, dynamic>?> local_getRawMessageRow(String messageId) async {
     if (messageId.isEmpty) return null;
     try {
       final db = await _db;
@@ -266,13 +274,13 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       if (rows.isEmpty) return null;
       return Map<String, dynamic>.from(rows.first);
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.getRawMessageRow: $e\n$st');
+      debugPrint('ChatLocalDataSource.local_getRawMessageRow: $e\n$st');
       return null;
     }
   }
 
   @override
-  Future<void> markMessageSyncClean({
+  Future<void> local_markMessageSyncClean({
     required String messageId,
     required int entityVersion,
     String? remoteUpdatedAt,
@@ -293,7 +301,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         whereArgs: [messageId],
       );
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.markMessageSyncClean: $e\n$st');
+      debugPrint('ChatLocalDataSource.local_markMessageSyncClean: $e\n$st');
     }
   }
 }

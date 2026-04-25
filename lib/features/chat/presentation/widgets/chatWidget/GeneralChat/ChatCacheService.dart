@@ -11,11 +11,11 @@ class ChatCacheService {
   final ChatLocalDataSource _local;
 
   Future<void> saveMessages(String channelId, List<types.Message> messages) async {
-    await _local.insertMessagesFromTypes(channelId, messages);
+    await _local.local_insertMessagesFromTypes(channelId, messages);
   }
 
   Future<List<types.Message>> loadMessages(String channelId) async {
-    final maps = await _local.getAllMessagesForChannelAscending(channelId);
+    final maps = await _local.local_getAllMessagesForChannelAscending(channelId);
     final unique = <String, types.Message>{};
     for (final map in maps) {
       final msg = MessageModel.fromMap(map);

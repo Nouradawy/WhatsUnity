@@ -46,6 +46,7 @@ class ChatScope extends StatelessWidget {
     return BlocProvider<ChatCubit>(
       key: ValueKey('chat_${userId}_${compoundId}_$channelScopeId'),
       create: (_) => ChatCubit(
+        currentUserId: userId,
         fetchMessagesUsecase: FetchMessages(repo),
         sendTextMessageUsecase: SendTextMessage(repo),
         sendFileMessageUsecase: SendFileMessage(repo),

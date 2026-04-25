@@ -78,6 +78,7 @@ class MaintenanceCubit extends Cubit<MaintenanceState> {
   }
 
   Future<void> submitReport({
+    required String userId,
     required String title,
     required String description,
     required String category,
@@ -88,6 +89,7 @@ class MaintenanceCubit extends Cubit<MaintenanceState> {
     emit(MaintenanceSubmitting());
     try {
       await repository.submitReport(
+        userId: userId,
         title: title,
         description: description,
         category: category,

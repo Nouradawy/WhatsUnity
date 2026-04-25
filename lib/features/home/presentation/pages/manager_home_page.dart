@@ -12,7 +12,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../features/maintenance/presentation/bloc/manager_cubit.dart';
 import '../../../../features/maintenance/presentation/bloc/manager_state.dart';
 import '../../../../core/config/Enums.dart';
-import '../../../../core/config/supabase.dart';
 import '../../../../core/constants/Constants.dart';
 import '../../../../core/models/MaintenanceReport.dart';
 import '../../../../core/utils/url_launcher_helper.dart';
@@ -676,17 +675,24 @@ class MaintenanceReportHeaderTile extends StatelessWidget {
                 runSpacing: 8,
                 children: attachmentUrl!.sourceUrl!
                     .map(
-                      (item) => SizedBox(
+                      (item) {
+                        final uri = (item['uri'] ?? '').toString();
+                        final resolved = extractDriveFileId(uri) ??
+                            (uri.startsWith('http') ? uri : null);
+                        if (resolved == null) {
+                          return const SizedBox(width: 80, height: 80);
+                        }
+                        return SizedBox(
                         width: 80,
                         height: 80,
                         child: DriveImageMessage(
                           userName:
                               "${context.loc.report} #${report.reportCode} - ${formatTimeStampToDate(report.createdAt!)}-${formatTimestampToAmPm(report.createdAt!)}",
                           isMaintenance: true,
-                          fileId: extractDriveFileId(item["uri"])!,
-                          driveService: driveService,
+                          fileId: resolved,
                         ),
-                      ),
+                      );
+                      },
                     )
                     .toList(),
               ),

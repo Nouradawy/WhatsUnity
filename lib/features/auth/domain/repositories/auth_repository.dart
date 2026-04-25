@@ -1,9 +1,8 @@
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/config/Enums.dart';
-import '../../../../core/config/supabase.dart' show CompoundMembersResult;
+import '../../../../core/config/app_directory_types.dart' show CompoundMembersResult;
 import '../../../../core/models/CompoundsList.dart';
-import '../../../../core/services/GoogleDriveService.dart';
 import '../entities/app_user.dart';
 
 abstract class AuthRepository {
@@ -33,7 +32,6 @@ abstract class AuthRepository {
   Future<void> uploadVerificationFiles({
     required List<XFile> files,
     required String userId,
-    required GoogleDriveService driveService,
     required void Function(int index, double progress) onProgress,
   });
   Future<bool> isApartmentTaken({
@@ -51,10 +49,9 @@ abstract class AuthRepository {
 
   /// Resolves the compound ID that was last assigned to [userId] in
   /// user_apartments.  Used as a fallback inside presetBeforeSignin.
-  /// TODO(Phase-3): replace Supabase query with Appwrite TablesDB.
   Future<String?> getDefaultCompoundId(String userId);
 
-  // ── Auth state stream (Appwrite-based; replaces supabase.auth.onAuthStateChange) ─
+  // ── Auth state stream (Appwrite-backed) ─
   /// Emits the current [AppUser] when signed in, or `null` when signed out.
   /// Both [AuthManager] and the [AuthCubit] constructor listen to this stream.
   Stream<AppUser?> get onAuthStateChange;

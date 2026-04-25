@@ -1,70 +1,27 @@
-import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../core/config/supabase.dart';
+
 import 'presence_state.dart';
 
+/// Presence is a **non-critical** UX signal. Supabase Realtime was removed; this
+/// cubit keeps the same surface so member lists render with "offline" until
+/// [MIGRATION_PLAN.md] Phase-3 wires `presence_sessions` + Appwrite Realtime.
 class PresenceCubit extends Cubit<PresenceState> {
   PresenceCubit() : super(PresenceInitial());
 
-  RealtimeChannel? _presenceChannel;
-
-  // FIX: Updated to expect a List of SinglePresenceState instead of a Map
   List<SinglePresenceState> currentPresence = [];
 
   void initializePresence() {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-
-    // FIX: Wipe existing channel to prevent duplicate "ghost" subscriptions
-    if (_presenceChannel != null) {
-      disconnectPresence();
-    }
-
-    _presenceChannel = supabase.channel('online-users', opts: const RealtimeChannelConfig(self: true));
-
-    _presenceChannel!
-        .onPresenceSync((payload) {
-      currentPresence = _presenceChannel!.presenceState();
-      emit(PresenceUpdated(currentPresence));
-    })
-        .onPresenceJoin((payload) {
-      currentPresence = _presenceChannel!.presenceState();
-      emit(PresenceUpdated(currentPresence));
-    })
-        .onPresenceLeave((payload) {
-      currentPresence = _presenceChannel!.presenceState();
-      emit(PresenceUpdated(currentPresence));
-    })
-        .subscribe((status, [error]) async {
-      if (status == RealtimeSubscribeStatus.subscribed) {
-        await _presenceChannel!.track({
-          'user_id': userId,
-          'status': 'online',
-          'online_at': DateTime.now().toIso8601String(),
-        });
-      }
-    });
+    currentPresence = [];
+    emit(PresenceUpdated(currentPresence));
   }
 
-  Future<void> updatePresenceStatus(String status) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null || _presenceChannel == null) return;
+  Future<void> updatePresenceStatus(String status) async {}
 
-    await _presenceChannel!.track({
-      'user_id': userId,
-      'status': status,
-      'online_at': DateTime.now().toIso8601String(),
-    });
-  }
-
-  Future<void> untrackPresence() async {
-    await _presenceChannel?.untrack();
-  }
+  Future<void> untrackPresence() async {}
 
   void disconnectPresence() {
-    _presenceChannel?.unsubscribe();
-    _presenceChannel = null;
+    currentPresence = [];
+    emit(PresenceUpdated(currentPresence));
   }
 
   @override

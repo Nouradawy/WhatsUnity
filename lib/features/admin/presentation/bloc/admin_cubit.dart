@@ -28,11 +28,11 @@ class AdminCubit extends Cubit<AdminState> {
     emit(VerFilesDropToggled(showVerFiles));
   }
 
-  Future<void> loadCompoundMembers(Object compoundId) async {
+  /// [compoundId] is the Appwrite `compounds` document `\$id` (string FK everywhere).
+  Future<void> loadCompoundMembers(String compoundId) async {
     emit(AdminLoading());
     try {
-      allMembers =
-          await adminRepository.getCompoundMembers(compoundId.toString());
+      allMembers = await adminRepository.getCompoundMembers(compoundId);
       _filterMembers();
     } catch (e) {
       emit(AdminError(e.toString()));
@@ -55,7 +55,7 @@ class AdminCubit extends Cubit<AdminState> {
   }
 
   Future<void> updateUserStatus(
-      String userId, UserState status, Object compoundId) async {
+      String userId, UserState status, String compoundId) async {
     try {
       await adminRepository.updateUserStatus(userId, status.name);
       emit(AdminActionSuccess('User status updated to ${status.name}'));
@@ -75,9 +75,10 @@ class AdminCubit extends Cubit<AdminState> {
     }
   }
 
-  Future<void> updateReportStatus(Object reportId, String status) async {
+  /// [reportId] is the `report_user` document `\$id`.
+  Future<void> updateReportStatus(String reportId, String status) async {
     try {
-      await adminRepository.updateReportStatus(reportId.toString(), status);
+      await adminRepository.updateReportStatus(reportId, status);
       emit(AdminActionSuccess('Report status updated to $status'));
       await loadUserReports();
     } catch (e) {

@@ -1,9 +1,10 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mime/mime.dart';
 import 'package:uuid/uuid.dart';
-import '../../../../core/services/GoogleDriveService.dart';
+
+import '../../../../core/media/media_services.dart';
+import '../../../../core/media/media_upload_metadata.dart';
 import '../../domain/entities/brainstorm.dart';
 import '../../domain/entities/post.dart';
 import '../../domain/repositories/social_repository.dart';
@@ -12,18 +13,35 @@ import '../models/brainstorm_model.dart';
 import '../models/post_model.dart';
 
 class SocialRepositoryImpl implements SocialRepository {
-  final SocialRemoteDataSource remoteDataSource;
-  final GoogleDriveService driveService;
+  SocialRepositoryImpl({required this.remoteDataSource});
 
-  SocialRepositoryImpl({
-    required this.remoteDataSource,
-    required this.driveService,
-  });
+  final SocialRemoteDataSource remoteDataSource;
+
+  Future<String?> _uploadImageToR2(XFile xfile) async {
+    final meta = await mediaUploadService.uploadFromLocalPath(
+      localFilePath: xfile.path,
+      filenameOverride: xfile.name,
+      mimeType: lookupMimeType(xfile.path),
+    );
+    return meta[MediaUploadMetadataKeys.url] as String? ??
+        meta[MediaUploadMetadataKeys.playbackUrl] as String?;
+  }
 
   @override
   Future<List<Post>> getPosts(String compoundId) async {
-    final results = await remoteDataSource.getPosts(compoundId);
-    return results.map((json) => PostModel.fromJson(json)).toList();
+    final results = await remoteDataSource.remote_getPosts(compoundId);
+    return results.map(PostModel.fromAppwriteJson).toList();
+  }
+
+  @override
+  Future<void> deleteMyPost({
+    required String authorId,
+    required String postId,
+  }) {
+    return remoteDataSource.remote_softDeletePostByAuthorAndId(
+      authorId: authorId,
+      postId: postId,
+    );
   }
 
   @override
@@ -42,18 +60,13 @@ class SocialRepositoryImpl implements SocialRepository {
         // Since we are in repository, we might not have access to UI-related decodeImageFromList easily without context or flutter/foundation
         // But the original code used it. We'll use it here as well.
         final image = await decodeImageFromList(bytes);
-        final file = File(xfile.path);
         final fileName = xfile.name;
 
-        final driveLink = await driveService.uploadFile(
-          file,
-          fileName,
-          'image',
-        );
+        final publicUrl = await _uploadImageToR2(xfile);
 
-        if (driveLink != null) {
+        if (publicUrl != null && publicUrl.isNotEmpty) {
           imageSources.add({
-            'uri': driveLink,
+            'uri': publicUrl,
             'name': fileName,
             'size': bytes.length.toString(),
             'height': image.height.toString(),
@@ -63,7 +76,7 @@ class SocialRepositoryImpl implements SocialRepository {
       }
     }
 
-    await remoteDataSource.createPost(
+    await remoteDataSource.remote_createPost(
       postHead: postHead,
       getCalls: getCalls,
       compoundId: compoundId,
@@ -86,7 +99,7 @@ class SocialRepositoryImpl implements SocialRepository {
       'comment': commentText,
     });
 
-    await remoteDataSource.updatePostComments(
+    await remoteDataSource.remote_updatePostComments(
       postId: postId,
       comments: newComments,
     );
@@ -95,8 +108,9 @@ class SocialRepositoryImpl implements SocialRepository {
   @override
   Future<List<BrainStorm>> getBrainStorms(
       String channelId, String compoundId) async {
-    final results = await remoteDataSource.getBrainStorms(channelId, compoundId);
-    return results.map((json) => BrainStormModel.fromJson(json)).toList();
+    final results =
+        await remoteDataSource.remote_getBrainStorms(channelId, compoundId);
+    return results.map(BrainStormModel.fromAppwriteJson).toList();
   }
 
   @override
@@ -114,18 +128,13 @@ class SocialRepositoryImpl implements SocialRepository {
       for (final xfile in images) {
         final bytes = await xfile.readAsBytes();
         final image = await decodeImageFromList(bytes);
-        final file = File(xfile.path);
         final fileName = xfile.name;
 
-        final driveLink = await driveService.uploadFile(
-          file,
-          fileName,
-          'image',
-        );
+        final publicUrl = await _uploadImageToR2(xfile);
 
-        if (driveLink != null) {
+        if (publicUrl != null && publicUrl.isNotEmpty) {
           imageSources.add({
-            'uri': driveLink,
+            'uri': publicUrl,
             'name': fileName,
             'size': bytes.length.toString(),
             'height': image.height.toString(),
@@ -138,7 +147,7 @@ class SocialRepositoryImpl implements SocialRepository {
     final id = const Uuid().v4();
     final now = DateTime.now().toUtc().toIso8601String();
 
-    await remoteDataSource.createBrainStorm(
+    await remoteDataSource.remote_createBrainStorm(
       id: id,
       title: title,
       authorId: authorId,
@@ -194,7 +203,7 @@ class SocialRepositoryImpl implements SocialRepository {
       o['votes'] = votes[idStr]?.length ?? 0;
     }
 
-    await remoteDataSource.updateBrainStormVote(
+    await remoteDataSource.remote_updateBrainStormVote(
       pollId: pollId,
       votes: votes,
       options: options,
@@ -216,7 +225,7 @@ class SocialRepositoryImpl implements SocialRepository {
       'comment': commentText,
     });
 
-    await remoteDataSource.updateBrainStormComments(
+    await remoteDataSource.remote_updateBrainStormComments(
       pollId: pollId,
       comments: newComments,
     );

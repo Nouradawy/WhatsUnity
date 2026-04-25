@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../../../../core/config/Enums.dart';
 import '../../../../core/models/MaintenanceReport.dart';
 import '../../domain/repositories/maintenance_repository.dart';
@@ -15,16 +13,15 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
     required this.remoteDataSource,
     required this.localDataSource,
     required this.syncRepository,
-    required this.supabaseClient,
   });
 
   final MaintenanceRemoteDataSource remoteDataSource;
   final MaintenanceLocalDataSource localDataSource;
   final MaintenanceSyncRepository syncRepository;
-  final SupabaseClient supabaseClient;
 
   @override
   Future<void> submitReport({
+    required String userId,
     required String title,
     required String description,
     required String category,
@@ -32,9 +29,6 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
     required MaintenanceReportType type,
     required String? compoundId,
   }) async {
-    final userId = supabaseClient.auth.currentUser?.id;
-    if (userId == null) return;
-
     await syncRepository.submitReportOfflineFirst(
       userId: userId,
       title: title,
@@ -53,7 +47,7 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
         type: type,
       );
       for (final r in remote) {
-        await localDataSource.upsertReport(r);
+        await localDataSource.local_upsertReport(r);
       }
     } catch (_) {}
   }
@@ -65,7 +59,7 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
         type: type,
       );
       for (final a in remote) {
-        await localDataSource.upsertAttachment(a);
+        await localDataSource.local_upsertAttachment(a);
       }
     } catch (_) {}
   }
@@ -75,13 +69,13 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
     required String compoundId,
     required MaintenanceReportType type,
   }) async {
-    var local = await localDataSource.getReports(
+    var local = await localDataSource.local_getReports(
       compoundId: compoundId,
       type: type.name,
     );
     if (local.isEmpty) {
       await _mergeRemoteReports(compoundId, type.name);
-      local = await localDataSource.getReports(
+      local = await localDataSource.local_getReports(
         compoundId: compoundId,
         type: type.name,
       );
@@ -96,13 +90,13 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
     required String compoundId,
     required MaintenanceReportType type,
   }) async {
-    var local = await localDataSource.getAttachments(
+    var local = await localDataSource.local_getAttachments(
       compoundId: compoundId,
       type: type.name,
     );
     if (local.isEmpty) {
       await _mergeRemoteAttachments(compoundId, type.name);
-      local = await localDataSource.getAttachments(
+      local = await localDataSource.local_getAttachments(
         compoundId: compoundId,
         type: type.name,
       );
@@ -153,7 +147,7 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
       row['local_updated_at'] = DateTime.now().toUtc().toIso8601String();
       row['remote_updated_at'] =
           row['remote_updated_at']?.toString() ?? row['updated_at']?.toString();
-      await localDataSource.upsertReport(row, force: true);
+      await localDataSource.local_upsertReport(row, force: true);
     } catch (_) {}
   }
 }

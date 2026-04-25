@@ -5,7 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/config/Enums.dart';
-import '../../../../core/config/supabase.dart' show Users;
+import '../../../../core/config/app_directory_types.dart' show Users;
 import '../../../../core/constants/Constants.dart';
 import '../../../../core/models/CompoundsList.dart';
 import '../../../../core/network/CacheHelper.dart';
@@ -180,7 +180,6 @@ class AuthCubit extends Cubit<AuthState> {
       await repository.uploadVerificationFiles(
         files: verFiles!,
         userId: userId,
-        driveService: driveService,
         onProgress: (index, progress) {
           if (uploadProgress.length <= index) {
             uploadProgress.add(progress);

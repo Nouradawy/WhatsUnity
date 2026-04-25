@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 
 import '../../../core/config/Enums.dart';
-import '../../../core/config/supabase.dart' show CompoundMembersResult, Users;
+import '../../../core/config/app_directory_types.dart' show CompoundMembersResult, Users;
 import '../../../core/models/CompoundsList.dart';
 import '../../chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
 

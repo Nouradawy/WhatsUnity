@@ -3,7 +3,7 @@ import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 import 'package:WhatsUnity/features/chat/data/datasources/chat_realtime_handle.dart';
 
 abstract class ChatRepository {
-  /// Offline-first: completes quickly with SQLite page; [onRemoteSynced] runs after Supabase merge.
+  /// Offline-first: completes quickly with SQLite page; [onRemoteSynced] merges Appwrite rows.
   Future<List<types.Message>> fetchMessages({
     required String channelId,
     required String currentUserId,
@@ -39,7 +39,7 @@ abstract class ChatRepository {
 
   Future<bool> markMessageAsSeen(String messageId, String userId);
 
-  Future<void> deleteMessage(types.Message message);
+  Future<void> deleteMessage(types.Message message, String currentUserId);
 
   /// Writes [message.metadata] to Appwrite and replaces the local SQLite row.
   Future<void> updateMessageMetadata({
@@ -57,5 +57,12 @@ abstract class ChatRepository {
     required void Function(types.Message message) onInsert,
     required void Function(types.Message message) onUpdate,
     void Function(types.Message message)? onDelete,
+  });
+
+  /// Maps compound + channel type (+ optional building name) to Appwrite `channels.$id`.
+  Future<String?> resolveChannelDocumentId({
+    required String compoundId,
+    required String channelType,
+    String? buildingNameForScopedChat,
   });
 }

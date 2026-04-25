@@ -1,6 +1,6 @@
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:WhatsUnity/core/config/Enums.dart';
-import 'package:WhatsUnity/core/config/supabase.dart' show Users;
+import 'package:WhatsUnity/core/config/app_directory_types.dart' show Users;
 import 'package:WhatsUnity/core/models/CompoundsList.dart';
 import 'package:WhatsUnity/features/auth/domain/entities/app_user.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';

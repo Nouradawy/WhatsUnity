@@ -10,7 +10,6 @@ import 'package:social_media_recorder/audio_encoder_type.dart';
 import 'package:social_media_recorder/screen/social_media_recorder.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:WhatsUnity/core/constants/Constants.dart';
 import 'package:WhatsUnity/core/config/appwrite.dart';
 import 'package:WhatsUnity/core/media/media_services.dart';
 import 'package:WhatsUnity/core/media/recorder_upload_bridge.dart';
@@ -61,7 +60,6 @@ class BuildingChat extends StatelessWidget {
                   remoteDataSource: SocialRemoteDataSourceImpl(
                     databases: appwriteDatabases,
                   ),
-                  driveService: driveService,
                 ),
               ),
               child: GeneralChat(

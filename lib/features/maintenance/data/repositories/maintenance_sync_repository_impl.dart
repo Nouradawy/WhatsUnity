@@ -74,7 +74,7 @@ class MaintenanceSyncRepositoryImpl implements MaintenanceSyncRepository {
       'sync_state': 'dirty',
       'local_updated_at': nowIso,
     };
-    await _local.upsertReport(reportMap, force: true);
+    await _local.local_upsertReport(reportMap, force: true);
 
     await _jobs.enqueue(
       entityType: SyncEntityTypes.maintenanceReports,
@@ -108,7 +108,7 @@ class MaintenanceSyncRepositoryImpl implements MaintenanceSyncRepository {
         'sync_state': 'dirty',
         'local_updated_at': nowIso,
       };
-      await _local.upsertAttachment(attMap, force: true);
+      await _local.local_upsertAttachment(attMap, force: true);
 
       await _jobs.enqueue(
         entityType: SyncEntityTypes.maintenanceAttachments,

@@ -10,6 +10,8 @@ import 'package:uuid/uuid.dart';
 const String _kMessagesCollectionId = 'messages';
 const String _kMessageReceiptsCollectionId = 'message_receipts';
 const String _kProfilesCollectionId = 'profiles';
+const String _kBuildingsCollectionId = 'buildings';
+const String _kChannelsCollectionId = 'channels';
 
 String _jsonEncodeMap(Map<String, dynamic> m) => jsonEncode(m);
 
@@ -174,7 +176,22 @@ abstract class ChatRemoteDataSource {
     required int nowMs,
     String? repliedMessageId,
     int version = 0,
+    /// When set, replaces the default `{type: text, ...}` metadata (e.g. polls).
+    Map<String, dynamic>? metadataOverride,
   });
+
+  /// Resolves the Appwrite `channels` document id used as `channel_id` on messages.
+  Future<String?> resolveChannelDocumentId({
+    required String compoundId,
+    required String channelType,
+    String? buildingNameForScopedChat,
+  });
+
+  /// Returns `userId` → `avatar_url` (or `"null"` when missing) for avatar rings.
+  Future<Map<String, String>> fetchProfileAvatarUrls(List<String> userIds);
+
+  /// Receipt rows with a non-null `seen_at` for the poll "seen" list.
+  Future<List<Map<String, dynamic>>> listSeenReceiptsForMessage(String messageId);
 
   /// After offline media upload — sets [uri] and replaces `metadata` JSON.
   Future<void> updateMessageUriAndMetadata({
@@ -260,12 +277,14 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     required int nowMs,
     String? repliedMessageId,
     int version = 0,
+    Map<String, dynamic>? metadataOverride,
   }) async {
-    final metadata = <String, dynamic>{
-      'type': 'text',
-      'createdAtMs': nowMs,
-      if (repliedMessageId != null) 'reply_to': repliedMessageId,
-    };
+    final metadata = metadataOverride ??
+        <String, dynamic>{
+          'type': 'text',
+          'createdAtMs': nowMs,
+          if (repliedMessageId != null) 'reply_to': repliedMessageId,
+        };
     try {
       await _databases.createDocument(
         databaseId: appwriteDatabaseId,
@@ -471,6 +490,102 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         },
       );
     }
+  }
+
+  @override
+  Future<String?> resolveChannelDocumentId({
+    required String compoundId,
+    required String channelType,
+    String? buildingNameForScopedChat,
+  }) async {
+    if (channelType == 'COMPOUND_GENERAL') {
+      final list = await _databases.listDocuments(
+        databaseId: appwriteDatabaseId,
+        collectionId: _kChannelsCollectionId,
+        queries: [
+          Query.equal('compound_id', compoundId),
+          Query.equal('type', channelType),
+          Query.isNull('deleted_at'),
+          Query.limit(1),
+        ],
+      );
+      return list.documents.isEmpty ? null : list.documents.first.$id;
+    }
+    final bn = buildingNameForScopedChat?.trim();
+    if (bn == null || bn.isEmpty) return null;
+    final buildings = await _databases.listDocuments(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kBuildingsCollectionId,
+      queries: [
+        Query.equal('compound_id', compoundId),
+        Query.equal('building_name', bn),
+        Query.isNull('deleted_at'),
+        Query.limit(1),
+      ],
+    );
+    if (buildings.documents.isEmpty) return null;
+    final buildingDocId = buildings.documents.first.$id;
+    final ch = await _databases.listDocuments(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kChannelsCollectionId,
+      queries: [
+        Query.equal('compound_id', compoundId),
+        Query.equal('building_id', buildingDocId),
+        Query.equal('type', channelType),
+        Query.isNull('deleted_at'),
+        Query.limit(1),
+      ],
+    );
+    return ch.documents.isEmpty ? null : ch.documents.first.$id;
+  }
+
+  @override
+  Future<Map<String, String>> fetchProfileAvatarUrls(List<String> userIds) async {
+    if (userIds.isEmpty) return {};
+    final uniq = userIds.toSet().toList();
+    final list = await _databases.listDocuments(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kProfilesCollectionId,
+      queries: [
+        Query.equal(r'$id', uniq),
+        Query.isNull('deleted_at'),
+        Query.limit(500),
+      ],
+    );
+    final out = <String, String>{};
+    for (final d in list.documents) {
+      final id = d.$id;
+      final url = d.data['avatar_url']?.toString();
+      if (url != null && url.isNotEmpty) {
+        out[id] = url;
+      } else {
+        out[id] = 'null';
+      }
+    }
+    return out;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listSeenReceiptsForMessage(
+    String messageId,
+  ) async {
+    final list = await _databases.listDocuments(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kMessageReceiptsCollectionId,
+      queries: [
+        Query.equal('message_id', messageId),
+        Query.isNotNull('seen_at'),
+        Query.limit(500),
+      ],
+    );
+    return list.documents
+        .map(
+          (d) => {
+            'user_id': d.data['user_id']?.toString(),
+            'seen_at': d.data['seen_at'],
+          },
+        )
+        .toList();
   }
 
   @override

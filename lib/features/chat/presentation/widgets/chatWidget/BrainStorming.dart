@@ -16,7 +16,7 @@ import '../../../../social/presentation/bloc/social_cubit.dart';
 import '../../../../social/presentation/bloc/social_state.dart';
 import '../../../../social/domain/entities/brainstorm.dart';
 
-import '../../../../../core/config/supabase.dart';
+import 'package:WhatsUnity/features/chat/data/datasources/chat_remote_data_source.dart';
 import '../../../../../Layout/Cubit/cubit.dart';
 import '../../../../../core/constants/Constants.dart';
 import 'MessageWidget.dart';
@@ -172,16 +172,16 @@ class _BrainStormingState extends State<BrainStorming> with WidgetsBindingObserv
                                           final List<Widget> imageWidgets = [];
                                           for (var image in item.image) {
                                             final uri = image['uri']?.toString() ?? '';
-                                            final fid = extractDriveFileId(uri);
-                                            if (fid != null) {
+                                            final resolved = extractDriveFileId(uri) ??
+                                                (uri.startsWith('http') ? uri : null);
+                                            if (resolved != null) {
                                               imageWidgets.add(
                                                 SizedBox(
                                                   width: MediaQuery.sizeOf(context).width,
                                                   height: 250,
                                                   child: DriveImageMessage(
-                                                    key: ValueKey('poll-image-${item.id}-$fid'),
-                                                    fileId: fid,
-                                                    driveService: driveService,
+                                                    key: ValueKey('poll-image-${item.id}-$resolved'),
+                                                    fileId: resolved,
                                                     isRounded: false,
                                                   ),
                                                 ),
@@ -368,22 +368,9 @@ Future<Map<String, String>> fetchAvatarsForUserIds(BuildContext context, List<Br
 
   if (userIds.isEmpty) return {};
   try {
-    final rows = await supabase
-        .from('profiles')
-        .select('id, avatar_url')
-        .inFilter('id', userIds.toList());
-
-    final Map<String, String> map = {};
-    for (final r in (rows as List)) {
-      final id = r['id']?.toString();
-      final url = r['avatar_url']?.toString();
-      if (id != null && url != null && url.isNotEmpty) {
-        map[id] = url;
-      } else if (id != null && url == null) {
-        map[id] = "null";
-      }
-    }
-    return map;
+    return await context.read<ChatRemoteDataSource>().fetchProfileAvatarUrls(
+          userIds.toList(),
+        );
   } catch (_) {
     return {};
   }

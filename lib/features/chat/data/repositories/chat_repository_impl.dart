@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/sync/lww_merge.dart';
 import '../../../../core/time/trusted_utc_now.dart';
@@ -16,12 +15,10 @@ class ChatRepositoryImpl implements ChatRepository {
   ChatRepositoryImpl({
     required this.remoteDataSource,
     required this.localDataSource,
-    required SupabaseClient supabase,
-  }) : _supabase = supabase;
+  });
 
   final ChatRemoteDataSource remoteDataSource;
   final ChatLocalDataSource localDataSource;
-  final SupabaseClient _supabase;
 
   @override
   Future<List<types.Message>> fetchMessages({
@@ -33,7 +30,7 @@ class ChatRepositoryImpl implements ChatRepository {
   }) async {
     var cached = <types.Message>[];
     try {
-      final rows = await localDataSource.getMessagesByChannelWithPagination(
+      final rows = await localDataSource.local_getMessagesByChannelWithPagination(
         channelId: channelId,
         limit: pageSize,
         offset: pageNum * pageSize,
@@ -68,9 +65,9 @@ class ChatRepositoryImpl implements ChatRepository {
         pageSize: pageSize,
         pageNum: pageNum,
       );
-      await localDataSource.insertMessages(raw);
+      await localDataSource.local_insertMessages(raw);
       if (onRemoteSynced != null) {
-        final rows = await localDataSource.getMessagesByChannelWithPagination(
+        final rows = await localDataSource.local_getMessagesByChannelWithPagination(
           channelId: channelId,
           limit: pageSize,
           offset: pageNum * pageSize,
@@ -159,9 +156,8 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<void> deleteMessage(types.Message message) async {
+  Future<void> deleteMessage(types.Message message, String currentUserId) async {
     final now = await trustedUtcNow();
-    final currentUserId = _supabase.auth.currentUser?.id ?? '';
     await remoteDataSource.deleteMessage(message.id, message.authorId, currentUserId, now.toIso8601String());
   }
 
@@ -174,7 +170,7 @@ class ChatRepositoryImpl implements ChatRepository {
     if (meta == null) return;
     await remoteDataSource.updateMessageMetadata(message.id, Map<String, dynamic>.from(meta));
     try {
-      await localDataSource.insertMessagesFromTypes(channelId, [message]);
+      await localDataSource.local_insertMessagesFromTypes(channelId, [message]);
     } catch (e, st) {
       debugPrint(
         'updateMessageMetadata: local SQLite persist failed after remote save '
@@ -192,7 +188,7 @@ class ChatRepositoryImpl implements ChatRepository {
       try {
         final ch = MessageModel.channelIdFromRow(row);
         if (ch.isNotEmpty) {
-          await localDataSource.insertMessagesFromTypes(ch, [msg]);
+          await localDataSource.local_insertMessagesFromTypes(ch, [msg]);
         }
       } catch (e, st) {
         debugPrint('fetchMessageById local persist: $e\n$st');
@@ -245,7 +241,7 @@ class ChatRepositoryImpl implements ChatRepository {
               final map = Map<String, dynamic>.from(payload);
               final id = map['id']?.toString();
               if (id != null) {
-                unawaited(localDataSource.deleteMessageById(id));
+                unawaited(localDataSource.local_deleteMessageById(id));
               }
               try {
                 onDelete(MessageModel.fromMap(map));
@@ -265,16 +261,29 @@ class ChatRepositoryImpl implements ChatRepository {
     );
   }
 
+  @override
+  Future<String?> resolveChannelDocumentId({
+    required String compoundId,
+    required String channelType,
+    String? buildingNameForScopedChat,
+  }) {
+    return remoteDataSource.resolveChannelDocumentId(
+      compoundId: compoundId,
+      channelType: channelType,
+      buildingNameForScopedChat: buildingNameForScopedChat,
+    );
+  }
+
   Future<void> _persistLocal(Map<String, dynamic> map, String reason) async {
     try {
       final id = map['id']?.toString();
       if (id != null && id.isNotEmpty) {
-        final local = await localDataSource.getRawMessageRow(id);
+        final local = await localDataSource.local_getRawMessageRow(id);
         if (!shouldApplyRemoteToLocal(localRow: local, remoteRow: map)) {
           return;
         }
       }
-      await localDataSource.insertMessage(map);
+      await localDataSource.local_insertMessage(map);
     } catch (e, st) {
       debugPrint('local persist ($reason): $e\n$st');
     }

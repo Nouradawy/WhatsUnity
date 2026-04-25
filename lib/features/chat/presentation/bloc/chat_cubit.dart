@@ -30,8 +30,10 @@ class ChatCubit extends Cubit<ChatState> {
   final UpdateMessageMetadata updateMessageMetadataUsecase;
   final FetchMessageById fetchMessageByIdUsecase;
   final ChatSyncRepository? chatSyncRepository;
+  final String currentUserId;
 
   ChatCubit({
+    required this.currentUserId,
     required this.fetchMessagesUsecase,
     required this.sendTextMessageUsecase,
     required this.sendFileMessageUsecase,
@@ -298,6 +300,24 @@ class ChatCubit extends Cubit<ChatState> {
     );
   }
 
+  /// Creates a poll row locally and enqueues remote create (same pipeline as text).
+  Future<void> sendPollMessage({
+    required String text,
+    required Map<String, dynamic> pollMetadata,
+    required String channelId,
+    required String userId,
+  }) async {
+    final sync = chatSyncRepository;
+    if (sync == null) return;
+    final m = await sync.sendPollMessageOfflineFirst(
+      text: text,
+      pollMetadata: pollMetadata,
+      channelId: channelId,
+      userId: userId,
+    );
+    _addOrUpdateMessage(m);
+  }
+
   Future<void> sendFileMessage({
     required String uri,
     required String name,
@@ -339,7 +359,7 @@ class ChatCubit extends Cubit<ChatState> {
   }
 
   Future<void> deleteMessage(types.Message message) async {
-    await deleteMessageUsecase(message);
+    await deleteMessageUsecase(message, currentUserId);
   }
 
   Future<void> updateMessageMetadata({

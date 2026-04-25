@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/enums.dart';
 import 'package:appwrite/models.dart' as aw_models;
 import 'package:image_picker/image_picker.dart';
+import 'package:mime/mime.dart';
 
-import '../../../../core/services/GoogleDriveService.dart';
+import '../../../../core/media/media_services.dart';
 import '../../domain/entities/app_user.dart';
 
 // ── Abstract contract ──────────────────────────────────────────────────────────
@@ -40,12 +39,10 @@ abstract class AuthRemoteDataSource {
 
   Future<void> signOut();
 
-  /// Uploads [files] to Google Drive (unchanged; Cloudflare R2 replaces this
-  /// in Phase-4 Storage of the migration plan).
+  /// Uploads verification images via [mediaUploadService] (R2 presign).
   Future<void> uploadVerificationFiles({
     required List<XFile> files,
     required String userId,
-    required GoogleDriveService driveService,
     required void Function(int index, double progress) onProgress,
   });
 }
@@ -164,15 +161,22 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<void> uploadVerificationFiles({
     required List<XFile> files,
     required String userId,
-    required GoogleDriveService driveService,
     required void Function(int index, double progress) onProgress,
   }) async {
     for (int i = 0; i < files.length; i++) {
       final xfile = files[i];
-      final file = File(xfile.path);
-      // TODO(Phase-4 Storage): replace with a signed Cloudflare R2 upload.
-      await driveService.uploadFile(file, xfile.name, 'image');
+      // MIGRATION_PLAN §5 — verification images via R2 (Appwrite Function presign).
+      await _uploadVerificationToR2(xfile);
       onProgress(i, 1.0);
     }
+  }
+
+  Future<void> _uploadVerificationToR2(XFile xfile) async {
+    final mime = lookupMimeType(xfile.path);
+    await mediaUploadService.uploadFromLocalPath(
+      localFilePath: xfile.path,
+      filenameOverride: xfile.name,
+      mimeType: mime,
+    );
   }
 }

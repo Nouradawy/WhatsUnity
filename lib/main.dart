@@ -4,19 +4,11 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-// ── Supabase is kept initialised for Phase-2 compatibility ──────────────────
-// Non-auth features (Chat, Social, Maintenance, Presence) still talk directly
-// to Supabase until their own migration phases complete. Remove once every data
-// source is on Appwrite.
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
-
 import 'core/services/database_helper.dart';
 import 'core/sync/sync_engine.dart';
 import 'core/sync/sync_job_local_data_source.dart';
 import 'core/utils/BlocObserver.dart';
-import 'core/constants/Constants.dart';
 import 'core/config/Enums.dart';
-import 'core/config/supabase.dart';
 import 'core/config/appwrite.dart';
 import 'core/media/media_services.dart';
 import 'core/theme/lightTheme.dart';
@@ -46,13 +38,13 @@ import 'features/social/presentation/bloc/social_cubit.dart';
 import 'features/profile/presentation/bloc/profile_cubit.dart';
 import 'features/chat/presentation/bloc/chat_details_cubit.dart';
 import 'features/chat/presentation/bloc/message_receipts_cubit.dart';
-import 'core/services/GoogleDriveService.dart';
 
 import 'Layout/Cubit/cubit.dart';
 import 'features/admin/presentation/bloc/report_cubit.dart';
 
 import 'features/admin/data/datasources/admin_remote_data_source.dart';
 import 'features/admin/data/repositories/admin_repository_impl.dart';
+import 'features/admin/domain/repositories/admin_repository.dart';
 import 'features/admin/presentation/bloc/admin_cubit.dart';
 import 'features/auth/presentation/pages/signup_page.dart';
 import 'features/auth/data/auth_ready_gate.dart';
@@ -70,13 +62,6 @@ void main() async {
   // ── Appwrite (auth primary backend) ───────────────────────────────────────
   await initAppwrite();
   initMediaUploadService();
-
-  // ── Supabase (kept for non-auth features until full migration) ────────────
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-  );
-  supabase = Supabase.instance.client;
 
   runApp(const MyApp());
 }
@@ -132,17 +117,23 @@ class MyApp extends StatelessWidget {
                           jobStore: ctx.read<SyncJobLocalDataSource>(),
                           engine: ctx.read<SyncEngine>(),
                         ),
-                    child: RepositoryProvider<ChatRepository>(
+                    child: RepositoryProvider<AdminRepository>(
                       create:
-                          (context) => ChatRepositoryImpl(
-                            remoteDataSource:
-                                context.read<ChatRemoteDataSource>(),
-                            localDataSource:
-                                context.read<ChatLocalDataSource>(),
-                            supabase: supabase,
+                          (_) => AdminRepositoryImpl(
+                            remoteDataSource: AppwriteAdminRemoteDataSourceImpl(
+                              databases: appwriteDatabases,
+                            ),
                           ),
-                      child: MultiBlocProvider(
-                        providers: [
+                      child: RepositoryProvider<ChatRepository>(
+                        create:
+                            (context) => ChatRepositoryImpl(
+                              remoteDataSource:
+                                  context.read<ChatRemoteDataSource>(),
+                              localDataSource:
+                                  context.read<ChatLocalDataSource>(),
+                            ),
+                        child: MultiBlocProvider(
+                          providers: [
                           BlocProvider(
                             create: (context) {
                               final authCubit = AuthCubit(
@@ -157,8 +148,6 @@ class MyApp extends StatelessWidget {
                                             dotenv
                                                 .env['APPWRITE_OAUTH_FAILURE'],
                                       ),
-                                  supabaseClient: supabase,
-                                  googleDriveService: driveService,
                                   appwriteAccount: appwriteAccount,
                                   appwriteTables: appwriteTables,
                                 ),
@@ -169,17 +158,19 @@ class MyApp extends StatelessWidget {
                             },
                           ),
                           BlocProvider(create: (context) => AppCubit()),
-                          BlocProvider(create: (context) => ReportCubit()),
+                          BlocProvider(
+                            create:
+                                (context) => ReportCubit(
+                                  adminRepository:
+                                      context.read<AdminRepository>(),
+                                ),
+                          ),
                           BlocProvider(create: (context) => PresenceCubit()),
                           BlocProvider(
                             create:
                                 (context) => AdminCubit(
-                                  adminRepository: AdminRepositoryImpl(
-                                    remoteDataSource:
-                                        AppwriteAdminRemoteDataSourceImpl(
-                                          databases: appwriteDatabases,
-                                        ),
-                                  ),
+                                  adminRepository:
+                                      context.read<AdminRepository>(),
                                 ),
                           ),
                           BlocProvider(create: (context) => ManagerCubit()),
@@ -187,6 +178,7 @@ class MyApp extends StatelessWidget {
                             create:
                                 (context) => ChatDetailsCubit(
                                   authCubit: context.read<AuthCubit>(),
+                                  databases: appwriteDatabases,
                                 ),
                           ),
                           BlocProvider(
@@ -197,7 +189,7 @@ class MyApp extends StatelessWidget {
                                       ? authState.chatMembers
                                       : <ChatMember>[];
                               return MessageReceiptsCubit(
-                                supabase,
+                                context.read<ChatRemoteDataSource>(),
                                 chatMembers: members,
                               );
                             },
@@ -217,7 +209,6 @@ class MyApp extends StatelessWidget {
                                     syncRepository:
                                         context
                                             .read<MaintenanceSyncRepository>(),
-                                    supabaseClient: supabase,
                                   ),
                                 ),
                           ),
@@ -229,7 +220,6 @@ class MyApp extends StatelessWidget {
                                         SocialRemoteDataSourceImpl(
                                           databases: appwriteDatabases,
                                         ),
-                                    driveService: GoogleDriveService(),
                                   ),
                                 ),
                           ),
@@ -325,6 +315,7 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

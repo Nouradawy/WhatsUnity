@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 import 'package:uuid/uuid.dart';
 
@@ -53,7 +55,7 @@ class ChatSyncRepositoryImpl implements ChatSyncRepository {
       'version': 0,
       'is_synced': 0,
     };
-    await _local.insertMessage(map);
+    await _local.local_insertMessage(map);
     await _jobs.enqueue(
       entityType: SyncEntityTypes.messages,
       entityId: docId,
@@ -67,6 +69,54 @@ class ChatSyncRepositoryImpl implements ChatSyncRepository {
         'now_iso': now.toIso8601String(),
         'now_ms': ms,
         'replied_message_id': repliedMessageId,
+        'version': 0,
+      },
+    );
+    _engine.kick();
+    return MessageModel.fromMap(map);
+  }
+
+  @override
+  Future<types.Message> sendPollMessageOfflineFirst({
+    required String text,
+    required Map<String, dynamic> pollMetadata,
+    required String channelId,
+    required String userId,
+  }) async {
+    final now = await trustedUtcNow();
+    final docId = const Uuid().v4();
+    final ms = now.millisecondsSinceEpoch;
+    final meta = Map<String, dynamic>.from(pollMetadata);
+    final map = <String, dynamic>{
+      'id': docId,
+      'author_id': userId,
+      'channel_id': channelId,
+      'text': text,
+      'created_at': now.toIso8601String(),
+      'created_at_ms': ms,
+      'metadata': meta,
+      'sent_at': now.toIso8601String(),
+      'reply_to': null,
+      'entity_version': 0,
+      'sync_state': 'dirty',
+      'local_updated_at': now.toIso8601String(),
+      'version': 0,
+      'is_synced': 0,
+    };
+    await _local.local_insertMessage(map);
+    await _jobs.enqueue(
+      entityType: SyncEntityTypes.messages,
+      entityId: docId,
+      opType: SyncOpType.create,
+      payload: {
+        'kind': 'poll',
+        'document_id': docId,
+        'text': text,
+        'channel_id': channelId,
+        'user_id': userId,
+        'now_iso': now.toIso8601String(),
+        'now_ms': ms,
+        'metadata_json': jsonEncode(meta),
         'version': 0,
       },
     );

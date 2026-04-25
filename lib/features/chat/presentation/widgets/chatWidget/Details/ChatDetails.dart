@@ -11,7 +11,6 @@ import '../../../../presentation/bloc/chat_details_cubit.dart';
 import '../../../../presentation/bloc/chat_details_state.dart';
 
 
-import '../../../../../../core/config/supabase.dart';
 import '../../../../../../core/constants/Constants.dart';
 
 import 'ChatMember.dart';

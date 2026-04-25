@@ -10,10 +10,7 @@ class SocialCubit extends Cubit<SocialState> {
 
   SocialCubit({required this.repository}) : super(SocialInitial());
 
-  static SocialCubit get(context) =>  BlocProvider.of<SocialCubit>(context);
-
-  /// Maps legacy [int] call sites and new [String] ids to repository [String] ids.
-  static String _compoundIdStr(Object compoundId) => compoundId.toString();
+  static SocialCubit get(context) => BlocProvider.of<SocialCubit>(context);
 
   List<Post> posts = [];
   List<BrainStorm> brainStorms = [];
@@ -24,12 +21,25 @@ class SocialCubit extends Cubit<SocialState> {
     emit(CarouselIndexChanged(index));
   }
 
-  Future<void> getPosts(Object compoundId) async {
+  /// Loads posts for [compoundId] (Appwrite `compounds` document `\$id`).
+  Future<void> getPosts(String compoundId) async {
     emit(SocialLoading());
     try {
-      final id = _compoundIdStr(compoundId);
-      posts = await repository.getPosts(id);
+      posts = await repository.getPosts(compoundId);
       emit(PostsLoaded(List.from(posts)));
+    } catch (e) {
+      emit(SocialError(e.toString()));
+    }
+  }
+
+  Future<void> deleteMyPost({
+    required String compoundId,
+    required String authorId,
+    required String postId,
+  }) async {
+    try {
+      await repository.deleteMyPost(authorId: authorId, postId: postId);
+      await getPosts(compoundId);
     } catch (e) {
       emit(SocialError(e.toString()));
     }
@@ -38,17 +48,16 @@ class SocialCubit extends Cubit<SocialState> {
   Future<void> createPost({
     required String postHead,
     required bool getCalls,
-    required Object compoundId,
+    required String compoundId,
     required String authorId,
     List<XFile>? files,
   }) async {
     emit(SocialLoading());
     try {
-      final id = _compoundIdStr(compoundId);
       await repository.createPost(
         postHead: postHead,
         getCalls: getCalls,
-        compoundId: id,
+        compoundId: compoundId,
         authorId: authorId,
         files: files,
       );
@@ -60,16 +69,15 @@ class SocialCubit extends Cubit<SocialState> {
   }
 
   Future<void> addComment({
-    required Object compoundId,
+    required String compoundId,
     required String postId,
     required String commentText,
     required String authorId,
     required List<Map<String, dynamic>> currentComments,
   }) async {
     try {
-      final id = _compoundIdStr(compoundId);
       await repository.addComment(
-        compoundId: id,
+        compoundId: compoundId,
         postId: postId,
         commentText: commentText,
         authorId: authorId,
@@ -82,12 +90,11 @@ class SocialCubit extends Cubit<SocialState> {
     }
   }
 
-  Future<void> getBrainStorms(Object channelId, Object compoundId) async {
+  /// [channelId] is the Appwrite `channels` document `\$id` stored on messages as `channel_id`.
+  Future<void> getBrainStorms(String channelId, String compoundId) async {
     emit(SocialLoading());
     try {
-      final ch = _compoundIdStr(channelId);
-      final co = _compoundIdStr(compoundId);
-      brainStorms = await repository.getBrainStorms(ch, co);
+      brainStorms = await repository.getBrainStorms(channelId, compoundId);
       emit(BrainStormsLoaded(List.from(brainStorms)));
     } catch (e) {
       emit(SocialError(e.toString()));
@@ -98,20 +105,18 @@ class SocialCubit extends Cubit<SocialState> {
     required String title,
     required List<XFile>? images,
     required dynamic options,
-    required Object channelId,
-    required Object compoundId,
+    required String channelId,
+    required String compoundId,
     required String authorId,
   }) async {
     emit(SocialLoading());
     try {
-      final ch = _compoundIdStr(channelId);
-      final co = _compoundIdStr(compoundId);
       await repository.createBrainStorm(
         title: title,
         images: images,
         options: options,
-        channelId: ch,
-        compoundId: co,
+        channelId: channelId,
+        compoundId: compoundId,
         authorId: authorId,
       );
       emit(BrainStormCreated());
@@ -127,8 +132,8 @@ class SocialCubit extends Cubit<SocialState> {
     required String userId,
     required List<Map<String, dynamic>> currentOptions,
     required Map<String, dynamic>? currentVotes,
-    required Object channelId,
-    required Object compoundId,
+    required String channelId,
+    required String compoundId,
   }) async {
     try {
       await repository.voteBrainStorm(
@@ -139,7 +144,6 @@ class SocialCubit extends Cubit<SocialState> {
         currentVotes: currentVotes,
       );
       emit(BrainStormVoteUpdated());
-      // Refresh to get updated votes
       await getBrainStorms(channelId, compoundId);
     } catch (e) {
       emit(SocialError(e.toString()));
@@ -147,19 +151,17 @@ class SocialCubit extends Cubit<SocialState> {
   }
 
   Future<void> addBrainStormComment({
-    required Object channelId,
-    required Object compoundId,
+    required String channelId,
+    required String compoundId,
     required String pollId,
     required String commentText,
     required String authorId,
     required List<Map<String, dynamic>> currentComments,
   }) async {
     try {
-      final ch = _compoundIdStr(channelId);
-      final co = _compoundIdStr(compoundId);
       await repository.addBrainStormComment(
-        channelId: ch,
-        compoundId: co,
+        channelId: channelId,
+        compoundId: compoundId,
         pollId: pollId,
         commentText: commentText,
         authorId: authorId,
@@ -171,5 +173,4 @@ class SocialCubit extends Cubit<SocialState> {
       emit(SocialError(e.toString()));
     }
   }
-
 }

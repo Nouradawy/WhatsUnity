@@ -4,6 +4,7 @@ import '../../../../core/models/MaintenanceReport.dart';
 
 abstract class MaintenanceRepository {
   Future<void> submitReport({
+    required String userId,
     required String title,
     required String description,
     required String category,

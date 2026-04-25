@@ -1,5 +1,5 @@
-/// Category and [Compound] document ids (category id / compound id). All [String] for Appwrite.
-/// JSON may send [int] (legacy Supabase) or [String] (Appwrite $id) — both normalize to [String].
+/// Category and [Compound] document ids (`compound_categories` / `compounds` document `\$id`).
+/// Values are normalized to non-null [String] for UI and repository calls.
 String _idFromJson(Object? v) {
   if (v == null) return '';
   if (v is String) return v;

@@ -4,6 +4,9 @@ import '../entities/brainstorm.dart';
 
 abstract class SocialRepository {
   Future<List<Post>> getPosts(String compoundId);
+
+  /// Soft-deletes a post document when it belongs to [authorId].
+  Future<void> deleteMyPost({required String authorId, required String postId});
   Future<void> createPost({
     required String postHead,
     required bool getCalls,

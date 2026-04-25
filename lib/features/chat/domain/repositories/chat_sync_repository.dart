@@ -10,6 +10,14 @@ abstract class ChatSyncRepository {
     String? repliedMessageId,
   });
 
+  /// Persists a poll message locally (`metadata.type == poll`) and enqueues sync.
+  Future<types.Message> sendPollMessageOfflineFirst({
+    required String text,
+    required Map<String, dynamic> pollMetadata,
+    required String channelId,
+    required String userId,
+  });
+
   /// Queue an offline media upload after the message document exists remotely.
   Future<void> enqueueUploadMediaJob({
     required String messageId,

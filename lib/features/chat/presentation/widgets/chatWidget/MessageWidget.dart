@@ -10,7 +10,8 @@ import 'package:flutter_chat_reactions/flutter_chat_reactions.dart';
 import 'package:flutter_polls/flutter_polls.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../../core/config/Enums.dart';
-import '../../../../../core/config/supabase.dart';
+import 'package:WhatsUnity/features/chat/data/datasources/chat_remote_data_source.dart';
+import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
 import '../../../../../core/constants/Constants.dart';
 import '../../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../../auth/presentation/bloc/auth_state.dart';
@@ -18,7 +19,6 @@ import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 import 'package:audioplayers/audioplayers.dart';
 import 'AudioWaveformPainter.dart';
 import 'Details/ChatMember.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:WhatsUnity/features/chat/presentation/utils/audio_message_playable.dart';
 
 
@@ -368,7 +368,6 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
     final imageWidget = DriveImageMessage(
       key: ValueKey('msg_${message.id}_$effectiveFileId'),
       fileId: effectiveFileId,
-      driveService: driveService,
       message: message,
       userName: userName,
     );
@@ -571,8 +570,13 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
       final idx = localMessages.indexWhere((m) => m.id == message.id);
       if (idx != -1) localMessages[idx] = updatedMessage;
 
-      // Persist to Supabase (votes/options in metadata)
-      await supabase.from('messages').update({'metadata': updatedMeta}).eq('id', message.id);
+      final chId = context.read<ChatCubit>().channelId;
+      if (chId != null) {
+        await context.read<ChatCubit>().updateMessageMetadata(
+              channelId: chId,
+              message: updatedMessage,
+            );
+      }
     } catch (e) {
       // Rollback local change on any error
       try {
@@ -601,25 +605,15 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
     }
   }
 
-  Future<Map<String, String>> _fetchAvatarsForUserIds(Set<String> userIds) async {
+  Future<Map<String, String>> _fetchAvatarsForUserIds(
+    BuildContext context,
+    Set<String> userIds,
+  ) async {
     if (userIds.isEmpty) return {};
     try {
-      final rows = await supabase
-          .from('profiles')
-          .select('id, avatar_url')
-          .inFilter('id', userIds.toList());
-
-      final Map<String, String> map = {};
-      for (final r in (rows as List)) {
-        final id = r['id']?.toString();
-        final url = r['avatar_url']?.toString();
-        if (id != null && url != null && url.isNotEmpty) {
-          map[id] = url;
-        }else if(id !=null && url ==null){
-          map[id] = "null";
-        }
-      }
-      return map;
+      return await context.read<ChatRemoteDataSource>().fetchProfileAvatarUrls(
+            userIds.toList(),
+          );
     } catch (_) {
       return {};
     }
@@ -698,7 +692,7 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
     optionVoterIds.values.expand((e) => e).toSet();
 
     return FutureBuilder<Map<String,String>>(
-      future:_fetchAvatarsForUserIds(allUserIds),
+      future: _fetchAvatarsForUserIds(context, allUserIds),
       builder: (context , snapshot){
         final idToAvatar = snapshot.data ?? const  <String  , String>{};
         // Build poll options (use index as fallback id). Limit title overflow.
@@ -995,42 +989,14 @@ class PollWithAvatars extends StatefulWidget {
 
 
 class _PollWithAvatarsState extends State<PollWithAvatars> {
-  late Future<Map<String, String>> _avatarsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    // Create the future only once when the widget is first built
-    _avatarsFuture = _fetchAvatarsForUserIds(widget.allUserIds);
-  }
-
-  // Helper moved from MessageWidget class to here (or keep it global)
-  Future<Map<String, String>> _fetchAvatarsForUserIds(Set<String> userIds) async {
-    if (userIds.isEmpty) return {};
-    try {
-      final rows = await supabase
-          .from('profiles')
-          .select('id, avatar_url')
-          .inFilter('id', userIds.toList());
-
-      final Map<String, String> map = {};
-      for (final r in (rows as List)) {
-        final id = r['id']?.toString();
-        final url = r['avatar_url']?.toString();
-        if (id != null && url != null && url.isNotEmpty) {
-          map[id] = url;
-        } else if (id != null && url == null) {
-          map[id] = "null";
-        }
-      }
-      return map;
-    } catch (_) {
-      return {};
-    }
-  }
+  Future<Map<String, String>>? _avatarsFuture;
 
   @override
   Widget build(BuildContext context) {
+    _avatarsFuture ??=
+        context.read<ChatRemoteDataSource>().fetchProfileAvatarUrls(
+              widget.allUserIds.toList(),
+            );
     final authState = context.read<AuthCubit>().state;
     final currentUserId = (authState is Authenticated) ? authState.user.id : null;
     final question = widget.meta['question']?.toString() ?? '';
@@ -1054,7 +1020,7 @@ class _PollWithAvatarsState extends State<PollWithAvatars> {
 
 
     return FutureBuilder<Map<String, String>>(
-      future: _avatarsFuture, // Use the cached future
+      future: _avatarsFuture,
       builder: (context, snapshot) {
         final idToAvatar = snapshot.data ?? const <String, String>{};
 
