@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 
 import '../../domain/repositories/chat_repository.dart';
+import '../../domain/repositories/chat_sync_repository.dart';
 import '../../domain/usecases/delete_message.dart';
 import '../../domain/usecases/fetch_messages.dart';
 import '../../domain/usecases/mark_message_seen.dart';
@@ -41,6 +42,7 @@ class ChatScope extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repo = context.read<ChatRepository>();
+    final chatSync = context.read<ChatSyncRepository>();
     return BlocProvider<ChatCubit>(
       key: ValueKey('chat_${userId}_${compoundId}_$channelScopeId'),
       create: (_) => ChatCubit(
@@ -54,6 +56,7 @@ class ChatScope extends StatelessWidget {
         subscribeToChannelUsecase: SubscribeToChannel(repo),
         updateMessageMetadataUsecase: UpdateMessageMetadata(repo),
         fetchMessageByIdUsecase: FetchMessageById(repo),
+        chatSyncRepository: chatSync,
       ),
       child: child,
     );

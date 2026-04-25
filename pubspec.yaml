@@ -98,6 +98,7 @@ dependencies:
       ref: flutter_polls
   url_launcher: ^6.3.2
   flutter_dotenv: ^6.0.0
+  connectivity_plus: ^6.1.4
 
 dependency_overrides:
    record_linux: ^1.1.1

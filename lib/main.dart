@@ -11,6 +11,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import 'core/services/database_helper.dart';
+import 'core/sync/sync_engine.dart';
+import 'core/sync/sync_job_local_data_source.dart';
 import 'core/utils/BlocObserver.dart';
 import 'core/constants/Constants.dart';
 import 'core/config/Enums.dart';
@@ -27,10 +29,15 @@ import 'features/auth/presentation/bloc/auth_cubit.dart';
 import 'features/chat/data/datasources/chat_local_data_source.dart';
 import 'features/chat/data/datasources/chat_remote_data_source.dart';
 import 'features/chat/data/repositories/chat_repository_impl.dart';
+import 'features/chat/data/repositories/chat_sync_repository_impl.dart';
 import 'features/chat/domain/repositories/chat_repository.dart';
+import 'features/chat/domain/repositories/chat_sync_repository.dart';
 import 'features/chat/presentation/bloc/presence_cubit.dart';
+import 'features/maintenance/data/datasources/maintenance_local_data_source.dart';
 import 'features/maintenance/data/datasources/maintenance_remote_data_source.dart';
 import 'features/maintenance/data/repositories/maintenance_repository_impl.dart';
+import 'features/maintenance/data/repositories/maintenance_sync_repository_impl.dart';
+import 'features/maintenance/domain/repositories/maintenance_sync_repository.dart';
 import 'features/maintenance/presentation/bloc/maintenance_cubit.dart';
 import 'features/maintenance/presentation/bloc/manager_cubit.dart';
 import 'features/social/data/datasources/social_remote_data_source.dart';
@@ -81,152 +88,239 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepositoryProvider<ChatLocalDataSource>(
       create: (_) => ChatLocalDataSourceImpl(DatabaseHelper.instance),
-      child: RepositoryProvider<ChatRepository>(
-        create: (context) => ChatRepositoryImpl(
-          remoteDataSource: ChatRemoteDataSourceImpl(
-            databases: appwriteDatabases,
-            realtime: appwriteRealtime,
-          ),
-          localDataSource: context.read<ChatLocalDataSource>(),
-          supabase: supabase,
-        ),
-        child: MultiBlocProvider(
-          providers: [
-            BlocProvider(
-              create: (context) {
-                final authCubit = AuthCubit(
-                  repository: AuthRepositoryImpl(
-                    remoteDataSource: AppwriteAuthRemoteDataSourceImpl(
-                      account: appwriteAccount,
-                      oauthSuccessUrl:
-                          dotenv.env['APPWRITE_OAUTH_SUCCESS'],
-                      oauthFailureUrl:
-                          dotenv.env['APPWRITE_OAUTH_FAILURE'],
-                    ),
-                    supabaseClient: supabase,
-                    googleDriveService: driveService,
-                    appwriteAccount: appwriteAccount,
-                    appwriteTables: appwriteTables,
-                  ),
-                );
-                // Preserved teardown-safe bootstrap — see MIGRATION_PLAN.md §2.3.
-                authCubit.presetBeforeSignin();
-                return authCubit;
-              },
-            ),
-            BlocProvider(create: (context) => AppCubit()),
-            BlocProvider(create: (context) => ReportCubit()),
-            BlocProvider(create: (context) => PresenceCubit()),
-            BlocProvider(
-              create: (context) => AdminCubit(
-                adminRepository: AdminRepositoryImpl(
-                  remoteDataSource: AppwriteAdminRemoteDataSourceImpl(
+      child: RepositoryProvider<SyncJobLocalDataSource>(
+        create: (_) => SyncJobLocalDataSourceImpl(DatabaseHelper.instance),
+        child: RepositoryProvider<MaintenanceLocalDataSource>(
+          create:
+              (_) => MaintenanceLocalDataSourceImpl(DatabaseHelper.instance),
+          child: RepositoryProvider<ChatRemoteDataSource>(
+            create:
+                (_) => ChatRemoteDataSourceImpl(
+                  databases: appwriteDatabases,
+                  realtime: appwriteRealtime,
+                ),
+            child: RepositoryProvider<MaintenanceRemoteDataSource>(
+              create:
+                  (_) => AppwriteMaintenanceRemoteDataSourceImpl(
                     databases: appwriteDatabases,
                   ),
-                ),
-              ),
-            ),
-            BlocProvider(create: (context) => ManagerCubit()),
-            BlocProvider(
-              create: (context) => ChatDetailsCubit(
-                authCubit: context.read<AuthCubit>(),
-              ),
-            ),
-            BlocProvider(
-              create: (context) {
-                final authState = context.read<AuthCubit>().state;
-                final members = (authState is Authenticated)
-                    ? authState.chatMembers
-                    : <ChatMember>[];
-                return MessageReceiptsCubit(supabase, chatMembers: members);
-              },
-            ),
-            BlocProvider(
-              create: (context) => MaintenanceCubit(
-                repository: MaintenanceRepositoryImpl(
-                  remoteDataSource: AppwriteMaintenanceRemoteDataSourceImpl(
-                    databases: appwriteDatabases,
-                  ),
-                  driveService: GoogleDriveService(),
-                  supabaseClient: supabase,
-                ),
-              ),
-            ),
-            BlocProvider(
-              create: (context) => SocialCubit(
-                repository: SocialRepositoryImpl(
-                  remoteDataSource: SocialRemoteDataSourceImpl(
-                    databases: appwriteDatabases,
-                  ),
-                  driveService: GoogleDriveService(),
-                ),
-              ),
-            ),
-            BlocProvider(create: (context) => ProfileCubit()),
-          ],
-          child: ChangeNotifierProvider(
-            create: (context) => AuthManager(
-              // AuthRepositoryImpl is the same instance held by AuthCubit.
-              authRepository: context.read<AuthCubit>().repository,
-            ),
-            child: MaterialApp(
-              title: 'WhatsUnity',
-              debugShowCheckedModeBanner: false,
-              theme: myLightTheme(),
-              supportedLocales: L10n.all,
-              localeResolutionCallback: (deviceLocale, supportedLocales) {
-                if (deviceLocale != null &&
-                    supportedLocales.any(
-                        (l) => l.languageCode == deviceLocale.languageCode)) {
-                  return deviceLocale;
-                }
-                return supportedLocales.first;
-              },
-              localizationsDelegates: const [
-                AppLocalizations.delegate,
-                GlobalMaterialLocalizations.delegate,
-                GlobalWidgetsLocalizations.delegate,
-                GlobalCupertinoLocalizations.delegate,
-              ],
-              builder: (context, child) {
-                final mq = MediaQuery.of(context);
-                return MediaQuery(
-                  data: mq.copyWith(
-                    textScaler: mq.textScaler
-                        .clamp(minScaleFactor: 0.8, maxScaleFactor: 1.0),
-                  ),
-                  child: Directionality(
-                    textDirection: TextDirection.ltr,
-                    child: child ?? const SizedBox.shrink(),
-                  ),
-                );
-              },
-              home: BlocBuilder<AuthCubit, AuthState>(
-                buildWhen: (previous, current) =>
-                    previous.runtimeType != current.runtimeType,
-                builder: (context, state) {
-                  final authManager = context.watch<AuthManager>();
-                  final authCubit = context.read<AuthCubit>();
-
-                  if (authManager.status == AuthStatus.unknown) {
-                    return const Scaffold(
-                      body: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-
-                  if (authManager.status == AuthStatus.authenticated &&
-                      authCubit.signupGoogleEmail == null &&
-                      authCubit.signInGoogle == false) {
-                    // ValueKey(authSessionNonce) guarantees a fresh widget
-                    // subtree on every new login session — preserves teardown
-                    // safety for MainScreen / GeneralChat / Social.
-                    return AuthReadyGate(
-                      key: ValueKey(authCubit.authSessionNonce),
-                    );
-                  }
-
-                  return SignUp();
+              child: Provider<SyncEngine>(
+                create: (ctx) {
+                  final engine = SyncEngine(
+                    jobStore: ctx.read<SyncJobLocalDataSource>(),
+                    remote: ctx.read<ChatRemoteDataSource>(),
+                    local: ctx.read<ChatLocalDataSource>(),
+                    maintenanceRemote: ctx.read<MaintenanceRemoteDataSource>(),
+                    maintenanceLocal: ctx.read<MaintenanceLocalDataSource>(),
+                    mediaUpload: mediaUploadService,
+                  );
+                  engine.start();
+                  return engine;
                 },
+                dispose: (_, e) => e.dispose(),
+                child: RepositoryProvider<ChatSyncRepository>(
+                  create:
+                      (ctx) => ChatSyncRepositoryImpl(
+                        local: ctx.read<ChatLocalDataSource>(),
+                        jobStore: ctx.read<SyncJobLocalDataSource>(),
+                        engine: ctx.read<SyncEngine>(),
+                      ),
+                  child: RepositoryProvider<MaintenanceSyncRepository>(
+                    create:
+                        (ctx) => MaintenanceSyncRepositoryImpl(
+                          local: ctx.read<MaintenanceLocalDataSource>(),
+                          jobStore: ctx.read<SyncJobLocalDataSource>(),
+                          engine: ctx.read<SyncEngine>(),
+                        ),
+                    child: RepositoryProvider<ChatRepository>(
+                      create:
+                          (context) => ChatRepositoryImpl(
+                            remoteDataSource:
+                                context.read<ChatRemoteDataSource>(),
+                            localDataSource:
+                                context.read<ChatLocalDataSource>(),
+                            supabase: supabase,
+                          ),
+                      child: MultiBlocProvider(
+                        providers: [
+                          BlocProvider(
+                            create: (context) {
+                              final authCubit = AuthCubit(
+                                repository: AuthRepositoryImpl(
+                                  remoteDataSource:
+                                      AppwriteAuthRemoteDataSourceImpl(
+                                        account: appwriteAccount,
+                                        oauthSuccessUrl:
+                                            dotenv
+                                                .env['APPWRITE_OAUTH_SUCCESS'],
+                                        oauthFailureUrl:
+                                            dotenv
+                                                .env['APPWRITE_OAUTH_FAILURE'],
+                                      ),
+                                  supabaseClient: supabase,
+                                  googleDriveService: driveService,
+                                  appwriteAccount: appwriteAccount,
+                                  appwriteTables: appwriteTables,
+                                ),
+                              );
+                              // Preserved teardown-safe bootstrap — see MIGRATION_PLAN.md §2.3.
+                              authCubit.presetBeforeSignin();
+                              return authCubit;
+                            },
+                          ),
+                          BlocProvider(create: (context) => AppCubit()),
+                          BlocProvider(create: (context) => ReportCubit()),
+                          BlocProvider(create: (context) => PresenceCubit()),
+                          BlocProvider(
+                            create:
+                                (context) => AdminCubit(
+                                  adminRepository: AdminRepositoryImpl(
+                                    remoteDataSource:
+                                        AppwriteAdminRemoteDataSourceImpl(
+                                          databases: appwriteDatabases,
+                                        ),
+                                  ),
+                                ),
+                          ),
+                          BlocProvider(create: (context) => ManagerCubit()),
+                          BlocProvider(
+                            create:
+                                (context) => ChatDetailsCubit(
+                                  authCubit: context.read<AuthCubit>(),
+                                ),
+                          ),
+                          BlocProvider(
+                            create: (context) {
+                              final authState = context.read<AuthCubit>().state;
+                              final members =
+                                  (authState is Authenticated)
+                                      ? authState.chatMembers
+                                      : <ChatMember>[];
+                              return MessageReceiptsCubit(
+                                supabase,
+                                chatMembers: members,
+                              );
+                            },
+                          ),
+                          BlocProvider(
+                            create:
+                                (context) => MaintenanceCubit(
+                                  repository: MaintenanceRepositoryImpl(
+                                    remoteDataSource:
+                                        context
+                                            .read<
+                                              MaintenanceRemoteDataSource
+                                            >(),
+                                    localDataSource:
+                                        context
+                                            .read<MaintenanceLocalDataSource>(),
+                                    syncRepository:
+                                        context
+                                            .read<MaintenanceSyncRepository>(),
+                                    supabaseClient: supabase,
+                                  ),
+                                ),
+                          ),
+                          BlocProvider(
+                            create:
+                                (context) => SocialCubit(
+                                  repository: SocialRepositoryImpl(
+                                    remoteDataSource:
+                                        SocialRemoteDataSourceImpl(
+                                          databases: appwriteDatabases,
+                                        ),
+                                    driveService: GoogleDriveService(),
+                                  ),
+                                ),
+                          ),
+                          BlocProvider(create: (context) => ProfileCubit()),
+                        ],
+                        child: ChangeNotifierProvider(
+                          create:
+                              (context) => AuthManager(
+                                // AuthRepositoryImpl is the same instance held by AuthCubit.
+                                authRepository:
+                                    context.read<AuthCubit>().repository,
+                              ),
+                          child: MaterialApp(
+                            title: 'WhatsUnity',
+                            debugShowCheckedModeBanner: false,
+                            theme: myLightTheme(),
+                            supportedLocales: L10n.all,
+                            localeResolutionCallback: (
+                              deviceLocale,
+                              supportedLocales,
+                            ) {
+                              if (deviceLocale != null &&
+                                  supportedLocales.any(
+                                    (l) =>
+                                        l.languageCode ==
+                                        deviceLocale.languageCode,
+                                  )) {
+                                return deviceLocale;
+                              }
+                              return supportedLocales.first;
+                            },
+                            localizationsDelegates: const [
+                              AppLocalizations.delegate,
+                              GlobalMaterialLocalizations.delegate,
+                              GlobalWidgetsLocalizations.delegate,
+                              GlobalCupertinoLocalizations.delegate,
+                            ],
+                            builder: (context, child) {
+                              final mq = MediaQuery.of(context);
+                              return MediaQuery(
+                                data: mq.copyWith(
+                                  textScaler: mq.textScaler.clamp(
+                                    minScaleFactor: 0.8,
+                                    maxScaleFactor: 1.0,
+                                  ),
+                                ),
+                                child: Directionality(
+                                  textDirection: TextDirection.ltr,
+                                  child: child ?? const SizedBox.shrink(),
+                                ),
+                              );
+                            },
+                            home: BlocBuilder<AuthCubit, AuthState>(
+                              buildWhen:
+                                  (previous, current) =>
+                                      previous.runtimeType !=
+                                      current.runtimeType,
+                              builder: (context, state) {
+                                final authManager =
+                                    context.watch<AuthManager>();
+                                final authCubit = context.read<AuthCubit>();
+
+                                if (authManager.status == AuthStatus.unknown) {
+                                  return const Scaffold(
+                                    body: Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  );
+                                }
+
+                                if (authManager.status ==
+                                        AuthStatus.authenticated &&
+                                    authCubit.signupGoogleEmail == null &&
+                                    authCubit.signInGoogle == false) {
+                                  // ValueKey(authSessionNonce) guarantees a fresh widget
+                                  // subtree on every new login session — preserves teardown
+                                  // safety for MainScreen / GeneralChat / Social.
+                                  return AuthReadyGate(
+                                    key: ValueKey(authCubit.authSessionNonce),
+                                  );
+                                }
+
+                                return SignUp();
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -255,9 +349,10 @@ class AuthManager extends ChangeNotifier {
     // events (including the async resolution of _checkExistingSession) are
     // reflected without a hot-restart.
     _sub = authRepository.onAuthStateChange.listen((appUser) {
-      final next = appUser != null
-          ? AuthStatus.authenticated
-          : AuthStatus.unauthenticated;
+      final next =
+          appUser != null
+              ? AuthStatus.authenticated
+              : AuthStatus.unauthenticated;
       if (status != next) {
         status = next;
         notifyListeners();

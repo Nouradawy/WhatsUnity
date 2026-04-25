@@ -61,6 +61,9 @@ class AuthRepositoryImpl implements AuthRepository {
 
   void _notify(AppUser? user) {
     _currentUser = user;
+    if (user != null) {
+      unawaited(CacheHelper.saveLastActiveUserId(user.id));
+    }
     _authController.add(user);
   }
 
@@ -81,7 +84,16 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<AppUser?> fetchCurrentUser() async {
     final user = await remoteDataSource.getCurrentUser();
     _currentUser = user;
+    if (user != null) {
+      unawaited(CacheHelper.saveLastActiveUserId(user.id));
+    }
     return user;
+  }
+
+  @override
+  void primeCurrentUser(AppUser user) {
+    _currentUser = user;
+    unawaited(CacheHelper.saveLastActiveUserId(user.id));
   }
 
   // ── Auth operations ────────────────────────────────────────────────────────
@@ -128,6 +140,7 @@ class AuthRepositoryImpl implements AuthRepository {
     await remoteDataSource.signOut();
     await googleDriveService.signOut();
     await CacheHelper.removeData(CacheHelper.compoundCurrentIndexKey);
+    await CacheHelper.removeData(CacheHelper.lastActiveUserIdKey);
     await CacheHelper.removeData("MyCompounds");
     _notify(null);
   }

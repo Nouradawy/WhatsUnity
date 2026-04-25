@@ -11,6 +11,10 @@ class CacheHelper {
   /// Last selected compound document id (Appwrite $id or legacy numeric string).
   static const String compoundCurrentIndexKey = 'compoundCurrentIndex';
 
+  /// Last signed-in Appwrite user id — used with [cachedUserDataKey] when
+  /// [Account.get] fails offline so cold boot can still restore shell state.
+  static const String lastActiveUserIdKey = 'lastActiveUserId';
+
   static init() async {
     sharedPreferences = await SharedPreferences.getInstance();
   }
@@ -21,6 +25,15 @@ class CacheHelper {
 
   static Future<String?> getCompoundCurrentIndex() async {
     return asyncPrefs.getString(compoundCurrentIndexKey);
+  }
+
+  static Future<void> saveLastActiveUserId(String userId) async {
+    if (userId.isEmpty) return;
+    await asyncPrefs.setString(lastActiveUserIdKey, userId);
+  }
+
+  static Future<String?> getLastActiveUserId() async {
+    return asyncPrefs.getString(lastActiveUserIdKey);
   }
 
   /// Per-user snapshot written on sign-out (email, compound id, compounds map).

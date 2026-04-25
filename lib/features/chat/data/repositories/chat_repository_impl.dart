@@ -2,9 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
-import 'package:ntp/ntp.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/sync/lww_merge.dart';
+import '../../../../core/time/trusted_utc_now.dart';
 import '../../domain/repositories/chat_repository.dart';
 import '../datasources/chat_local_data_source.dart';
 import '../datasources/chat_realtime_handle.dart';
@@ -91,7 +92,7 @@ class ChatRepositoryImpl implements ChatRepository {
     required String userId,
     types.Message? repliedMessage,
   }) async {
-    final now = (await NTP.now()).toUtc();
+    final now = await trustedUtcNow();
     await remoteDataSource.sendTextMessage(
       text: text,
       channelId: channelId,
@@ -112,7 +113,7 @@ class ChatRepositoryImpl implements ChatRepository {
     required String type,
     Map<String, dynamic>? additionalMetadata,
   }) async {
-    final now = (await NTP.now()).toUtc();
+    final now = await trustedUtcNow();
     await remoteDataSource.sendFileMessage(
       uri: uri,
       name: name,
@@ -134,7 +135,7 @@ class ChatRepositoryImpl implements ChatRepository {
     required String channelId,
     required String userId,
   }) async {
-    final now = (await NTP.now()).toUtc();
+    final now = await trustedUtcNow();
     await remoteDataSource.sendVoiceNote(
       uri: uri,
       duration: duration,
@@ -149,7 +150,7 @@ class ChatRepositoryImpl implements ChatRepository {
   @override
   Future<bool> markMessageAsSeen(String messageId, String userId) async {
     try {
-      final now = (await NTP.now()).toUtc();
+      final now = await trustedUtcNow();
       await remoteDataSource.markMessageAsSeen(messageId, userId, now.toIso8601String());
       return true;
     } catch (_) {
@@ -159,7 +160,7 @@ class ChatRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> deleteMessage(types.Message message) async {
-    final now = (await NTP.now()).toUtc();
+    final now = await trustedUtcNow();
     final currentUserId = _supabase.auth.currentUser?.id ?? '';
     await remoteDataSource.deleteMessage(message.id, message.authorId, currentUserId, now.toIso8601String());
   }
@@ -266,6 +267,13 @@ class ChatRepositoryImpl implements ChatRepository {
 
   Future<void> _persistLocal(Map<String, dynamic> map, String reason) async {
     try {
+      final id = map['id']?.toString();
+      if (id != null && id.isNotEmpty) {
+        final local = await localDataSource.getRawMessageRow(id);
+        if (!shouldApplyRemoteToLocal(localRow: local, remoteRow: map)) {
+          return;
+        }
+      }
       await localDataSource.insertMessage(map);
     } catch (e, st) {
       debugPrint('local persist ($reason): $e\n$st');

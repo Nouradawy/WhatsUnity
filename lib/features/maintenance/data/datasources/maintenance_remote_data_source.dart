@@ -31,6 +31,7 @@ List<dynamic> _decodeSourceUrl(dynamic v) {
 
 Map<String, dynamic> _reportDocumentToRow(aw_models.Document doc) {
   final d = doc.data;
+  final v = int.tryParse(d['version']?.toString() ?? '') ?? 0;
   return {
     'id': doc.$id,
     'user_id': d['user_id']?.toString() ?? '',
@@ -43,11 +44,14 @@ Map<String, dynamic> _reportDocumentToRow(aw_models.Document doc) {
     'compound_id': d['compound_id']?.toString(),
     'created_at': doc.$createdAt,
     'updated_at': doc.$updatedAt,
+    'version': v,
+    'remote_updated_at': doc.$updatedAt,
   };
 }
 
 Map<String, dynamic> _attachmentDocumentToRow(aw_models.Document doc) {
   final d = doc.data;
+  final v = int.tryParse(d['version']?.toString() ?? '') ?? 0;
   return {
     'id': doc.$id,
     'report_id': d['report_id']?.toString(),
@@ -55,6 +59,8 @@ Map<String, dynamic> _attachmentDocumentToRow(aw_models.Document doc) {
     'compound_id': d['compound_id']?.toString(),
     'type': d['type']?.toString(),
     'created_at': doc.$createdAt,
+    'version': v,
+    'remote_updated_at': doc.$updatedAt,
   };
 }
 
@@ -112,6 +118,37 @@ abstract class MaintenanceRemoteDataSource {
     required String compoundId,
     required String type,
   });
+
+  /// Idempotent create with client-chosen [documentId] (offline-first).
+  Future<void> createReportWithDocumentId({
+    required String documentId,
+    required String userId,
+    required String title,
+    required String description,
+    required String category,
+    required String type,
+    required String? compoundId,
+    int version = 0,
+  });
+
+  Future<void> createAttachmentWithDocumentId({
+    required String documentId,
+    required String reportId,
+    required String sourceUrlJson,
+    required String type,
+    required String? compoundId,
+    int version = 0,
+  });
+
+  Future<Map<String, dynamic>> fetchReportRow(String reportId);
+
+  Future<Map<String, dynamic>> fetchAttachmentRow(String attachmentId);
+
+  /// Append one file map to `source_url` JSON array and bump `version`.
+  Future<void> appendAttachmentSourceEntry({
+    required String attachmentId,
+    required Map<String, String> entry,
+  });
 }
 
 /// Appwrite-backed implementation (replaces Supabase).
@@ -130,21 +167,134 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     required String type,
     required String? compoundId,
   }) async {
-    final doc = await _databases.createDocument(
+    final id = ID.unique();
+    await createReportWithDocumentId(
+      documentId: id,
+      userId: userId,
+      title: title,
+      description: description,
+      category: category,
+      type: type,
+      compoundId: compoundId,
+      version: 0,
+    );
+    return {'id': id};
+  }
+
+  @override
+  Future<void> createReportWithDocumentId({
+    required String documentId,
+    required String userId,
+    required String title,
+    required String description,
+    required String category,
+    required String type,
+    required String? compoundId,
+    int version = 0,
+  }) async {
+    try {
+      await _databases.createDocument(
+        databaseId: appwriteDatabaseId,
+        collectionId: _kReports,
+        documentId: documentId,
+        data: {
+          'user_id': userId,
+          'title': title,
+          'description': description,
+          'category': category,
+          'type': type,
+          'status': 'New',
+          if (compoundId != null) 'compound_id': compoundId,
+          'version': version,
+        },
+      );
+    } on AppwriteException catch (e) {
+      if (e.code == 409 ||
+          '${e.message}'.toLowerCase().contains('already exists')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> createAttachmentWithDocumentId({
+    required String documentId,
+    required String reportId,
+    required String sourceUrlJson,
+    required String type,
+    required String? compoundId,
+    int version = 0,
+  }) async {
+    try {
+      await _databases.createDocument(
+        databaseId: appwriteDatabaseId,
+        collectionId: _kAttachments,
+        documentId: documentId,
+        data: {
+          'report_id': reportId,
+          'source_url': sourceUrlJson,
+          'type': type,
+          if (compoundId != null) 'compound_id': compoundId,
+          'version': version,
+        },
+      );
+    } on AppwriteException catch (e) {
+      if (e.code == 409 ||
+          '${e.message}'.toLowerCase().contains('already exists')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchReportRow(String reportId) async {
+    final doc = await _databases.getDocument(
       databaseId: appwriteDatabaseId,
       collectionId: _kReports,
-      documentId: ID.unique(),
+      documentId: reportId,
+    );
+    return _reportDocumentToRow(doc);
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchAttachmentRow(String attachmentId) async {
+    final doc = await _databases.getDocument(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kAttachments,
+      documentId: attachmentId,
+    );
+    return _attachmentDocumentToRow(doc);
+  }
+
+  @override
+  Future<void> appendAttachmentSourceEntry({
+    required String attachmentId,
+    required Map<String, String> entry,
+  }) async {
+    final existing = await _databases.getDocument(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kAttachments,
+      documentId: attachmentId,
+    );
+    final d = existing.data;
+    final list = _decodeSourceUrl(d['source_url']);
+    final merged = <Map<String, dynamic>>[];
+    for (final e in list) {
+      if (e is Map) merged.add(Map<String, dynamic>.from(e));
+    }
+    merged.add(Map<String, dynamic>.from(entry));
+    final v = int.tryParse(d['version']?.toString() ?? '') ?? 0;
+    await _databases.updateDocument(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kAttachments,
+      documentId: attachmentId,
       data: {
-        'user_id': userId,
-        'title': title,
-        'description': description,
-        'category': category,
-        'type': type,
-        if (compoundId != null) 'compound_id': compoundId,
-        'version': 0,
+        'source_url': jsonEncode(merged),
+        'version': v + 1,
       },
     );
-    return {'id': doc.$id};
   }
 
   @override
@@ -154,17 +304,14 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     required String? compoundId,
     required String type,
   }) async {
-    await _databases.createDocument(
-      databaseId: appwriteDatabaseId,
-      collectionId: _kAttachments,
-      documentId: ID.unique(),
-      data: {
-        'report_id': reportId,
-        'source_url': _jsonEncodeSourceUrl(imageSources),
-        'type': type,
-        if (compoundId != null) 'compound_id': compoundId,
-        'version': 0,
-      },
+    final id = ID.unique();
+    await createAttachmentWithDocumentId(
+      documentId: id,
+      reportId: reportId,
+      sourceUrlJson: _jsonEncodeSourceUrl(imageSources),
+      type: type,
+      compoundId: compoundId,
+      version: 0,
     );
   }
 
@@ -261,11 +408,15 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
         'maintenance_reports: document $reportId does not match compound/type',
       );
     }
+    final v = int.tryParse(existing.data['version']?.toString() ?? '') ?? 0;
     await _databases.updateDocument(
       databaseId: appwriteDatabaseId,
       collectionId: _kReports,
       documentId: reportId,
-      data: {'status': status},
+      data: {
+        'status': status,
+        'version': v + 1,
+      },
     );
   }
 }

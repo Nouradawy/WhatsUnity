@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
+import 'package:WhatsUnity/features/chat/data/chat_channel_id_cache.dart';
 import 'package:WhatsUnity/features/chat/data/datasources/chat_local_data_source.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_details_cubit.dart';
 import 'package:WhatsUnity/core/config/supabase.dart';
@@ -30,8 +31,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:mime/mime.dart';
 
 import 'package:uuid/uuid.dart';
-import 'package:ntp/ntp.dart';
 
+import 'package:WhatsUnity/core/time/trusted_utc_now.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/BrainStorming.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatDetails.dart';
@@ -491,26 +492,63 @@ class _GeneralChatState extends State<GeneralChat>
       final buildingNumber = currentMember?.building;
       debugPrint('Building number: $buildingNumber');
 
-      var channelQuery = supabase
-          .from('channels')
-          .select('id')
-          .eq('compound_id', widget.compoundId.toString())
-          .eq('type', widget.channelName);
+      final cacheBuildingSegment = widget.channelName == 'COMPOUND_GENERAL'
+          ? '__general__'
+          : (buildingNumber?.trim().isNotEmpty == true
+              ? buildingNumber!.trim()
+              : '__building_unknown__');
 
-      if (widget.channelName != 'COMPOUND_GENERAL' && buildingNumber != null) {
-        final buildingRow = await supabase
-            .from('buildings')
+      String? resolvedChannelId;
+      try {
+        var channelQuery = supabase
+            .from('channels')
             .select('id')
-            .eq('building_name', buildingNumber)
             .eq('compound_id', widget.compoundId.toString())
-            .single();
-        channelQuery = channelQuery.eq('building_id', buildingRow['id']);
+            .eq('type', widget.channelName);
+
+        if (widget.channelName != 'COMPOUND_GENERAL' && buildingNumber != null) {
+          final buildingRow = await supabase
+              .from('buildings')
+              .select('id')
+              .eq('building_name', buildingNumber)
+              .eq('compound_id', widget.compoundId.toString())
+              .single();
+          channelQuery = channelQuery.eq('building_id', buildingRow['id']);
+        }
+
+        final channelRow = await channelQuery.single();
+        if (!mounted) return;
+
+        resolvedChannelId = channelRow['id']?.toString();
+        if (resolvedChannelId != null && resolvedChannelId.isNotEmpty) {
+          await ChatChannelIdCache.write(
+            compoundId: widget.compoundId,
+            channelName: widget.channelName,
+            buildingSegment: cacheBuildingSegment,
+            channelId: resolvedChannelId,
+          );
+        }
+      } catch (error, st) {
+        debugPrint('_initializeChat network resolve: $error\n$st');
       }
 
-      final channelRow = await channelQuery.single();
+      if (resolvedChannelId == null || resolvedChannelId.isEmpty) {
+        resolvedChannelId = await ChatChannelIdCache.read(
+          compoundId: widget.compoundId,
+          channelName: widget.channelName,
+          buildingSegment: cacheBuildingSegment,
+        );
+        if (resolvedChannelId != null) {
+          debugPrint(
+            'Using cached channel id (offline or empty resolve): '
+            '${widget.channelName} → $resolvedChannelId',
+          );
+        }
+      }
+
       if (!mounted) return;
 
-      _channelId = channelRow['id']?.toString();
+      _channelId = resolvedChannelId;
 
       if (_channelId != null) {
         final chatCubit = context.read<ChatCubit>();
@@ -644,7 +682,7 @@ class _GeneralChatState extends State<GeneralChat>
     final placeholder = types.CustomMessage(
       id: localId,
       authorId: _currentUserId,
-      createdAt: await NTP.now(),
+      createdAt: await trustedUtcNow(),
       metadata: {
         'type': 'image',
         'localId': localId,
@@ -804,7 +842,7 @@ class _GeneralChatState extends State<GeneralChat>
 
                 Navigator.pop(context);
                 final expiresAt =
-                    (await NTP.now()).toUtc().add(Duration(days: durationDays));
+                    (await trustedUtcNow()).add(Duration(days: durationDays));
                 final optionMaps = [
                   for (var i = 0; i < options.length; i++)
                     {'id': i, 'title': options[i], 'votes': 0},
@@ -830,7 +868,7 @@ class _GeneralChatState extends State<GeneralChat>
     DateTime expiresAt,
   ) async {
     final localId = const Uuid().v4();
-    final now = await NTP.now();
+    final now = await trustedUtcNow();
 
     final pollMetadata = {
       'type': 'poll',

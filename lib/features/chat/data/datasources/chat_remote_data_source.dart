@@ -29,6 +29,7 @@ Map<String, dynamic> _metadataFromField(dynamic v) {
 
 Map<String, dynamic> _documentToMessageRow(aw_models.Document doc) {
   final d = doc.data;
+  final v = int.tryParse(d['version']?.toString() ?? '') ?? 0;
   return {
     'id': doc.$id,
     'author_id': d['author_id']?.toString() ?? '',
@@ -41,6 +42,8 @@ Map<String, dynamic> _documentToMessageRow(aw_models.Document doc) {
     'created_at': doc.$createdAt,
     'sent_at': d['sent_at']?.toString(),
     'deleted_at': d['deleted_at']?.toString(),
+    'version': v,
+    'remote_updated_at': doc.$updatedAt,
   };
 }
 
@@ -55,6 +58,7 @@ Map<String, dynamic> _mapPayloadToMessageRow(Map<String, dynamic> raw) {
   // Plain data map
   if (raw.containsKey(r'$id') && (raw['data'] as Map?) != null) {
     final data = Map<String, dynamic>.from(raw['data'] as Map);
+    final dv = int.tryParse(data['version']?.toString() ?? '') ?? 0;
     return {
       'id': raw[r'$id']?.toString() ?? '',
       'author_id': data['author_id']?.toString() ?? '',
@@ -67,6 +71,8 @@ Map<String, dynamic> _mapPayloadToMessageRow(Map<String, dynamic> raw) {
       'created_at': raw[r'$createdAt']?.toString(),
       'sent_at': data['sent_at']?.toString(),
       'deleted_at': data['deleted_at']?.toString(),
+      'version': dv,
+      'remote_updated_at': raw[r'$updatedAt']?.toString(),
     };
   }
   // Only $id (delete tombstone) or flat data
@@ -82,6 +88,8 @@ Map<String, dynamic> _mapPayloadToMessageRow(Map<String, dynamic> raw) {
   m['created_at'] = raw[r'$createdAt']?.toString() ?? raw['created_at']?.toString();
   m['sent_at'] = raw['sent_at']?.toString();
   m['deleted_at'] = raw['deleted_at']?.toString();
+  m['version'] = int.tryParse(raw['version']?.toString() ?? '') ?? 0;
+  m['remote_updated_at'] = raw[r'$updatedAt']?.toString();
   return m;
 }
 
@@ -156,6 +164,25 @@ abstract class ChatRemoteDataSource {
   /// Single message row (same shape as [fetchMessages]) for metadata refresh.
   Future<Map<String, dynamic>> fetchMessageRow(String messageId);
 
+  /// Idempotent create: uses [documentId] so retries do not duplicate rows.
+  Future<void> createTextMessageWithDocumentId({
+    required String documentId,
+    required String text,
+    required String channelId,
+    required String userId,
+    required String nowIso,
+    required int nowMs,
+    String? repliedMessageId,
+    int version = 0,
+  });
+
+  /// After offline media upload — sets [uri] and replaces `metadata` JSON.
+  Future<void> updateMessageUriAndMetadata({
+    required String messageId,
+    required String uri,
+    required Map<String, dynamic> metadata,
+  });
+
   Future<Map<String, dynamic>> resolveUser(String id);
 
   ChatRealtimeHandle subscribeToChannel({
@@ -210,24 +237,80 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     required int nowMs,
     String? repliedMessageId,
   }) async {
+    final docId = ID.unique();
+    await createTextMessageWithDocumentId(
+      documentId: docId,
+      text: text,
+      channelId: channelId,
+      userId: userId,
+      nowIso: nowIso,
+      nowMs: nowMs,
+      repliedMessageId: repliedMessageId,
+      version: 0,
+    );
+  }
+
+  @override
+  Future<void> createTextMessageWithDocumentId({
+    required String documentId,
+    required String text,
+    required String channelId,
+    required String userId,
+    required String nowIso,
+    required int nowMs,
+    String? repliedMessageId,
+    int version = 0,
+  }) async {
     final metadata = <String, dynamic>{
       'type': 'text',
       'createdAtMs': nowMs,
       if (repliedMessageId != null) 'reply_to': repliedMessageId,
     };
-    final docId = ID.unique();
-    await _databases.createDocument(
+    try {
+      await _databases.createDocument(
+        databaseId: appwriteDatabaseId,
+        collectionId: _kMessagesCollectionId,
+        documentId: documentId,
+        data: {
+          'author_id': userId,
+          'channel_id': channelId,
+          'text': text,
+          'sent_at': nowIso,
+          'metadata': _jsonEncodeMap(metadata),
+          'reply_to': repliedMessageId,
+          'version': version,
+        },
+      );
+    } on AppwriteException catch (e) {
+      final code = e.code;
+      if (code == 409 ||
+          '${e.message}'.toLowerCase().contains('already exists')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> updateMessageUriAndMetadata({
+    required String messageId,
+    required String uri,
+    required Map<String, dynamic> metadata,
+  }) async {
+    final doc = await _databases.getDocument(
       databaseId: appwriteDatabaseId,
       collectionId: _kMessagesCollectionId,
-      documentId: docId,
+      documentId: messageId,
+    );
+    final v = int.tryParse(doc.data['version']?.toString() ?? '') ?? 0;
+    await _databases.updateDocument(
+      databaseId: appwriteDatabaseId,
+      collectionId: _kMessagesCollectionId,
+      documentId: messageId,
       data: {
-        'author_id': userId,
-        'channel_id': channelId,
-        'text': text,
-        'sent_at': nowIso,
+        'uri': uri,
         'metadata': _jsonEncodeMap(metadata),
-        'reply_to': repliedMessageId,
-        'version': 0,
+        'version': v + 1,
       },
     );
   }

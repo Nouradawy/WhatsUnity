@@ -10,6 +10,7 @@ import '../../../../core/constants/Constants.dart';
 import '../../../../core/models/CompoundsList.dart';
 import '../../../../core/network/CacheHelper.dart';
 import '../../../chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import '../../domain/entities/app_user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import 'auth_state.dart';
 
@@ -308,6 +309,8 @@ class AuthCubit extends Cubit<AuthState> {
       'email': user.email ?? '',
       'selectedCompoundId': compoundId,
       'myCompounds': compounds,
+      if (user.userMetadata?['role_id'] != null)
+        'role_id': user.userMetadata!['role_id'],
     };
 
     await CacheHelper.saveData(
@@ -339,7 +342,14 @@ class AuthCubit extends Cubit<AuthState> {
       List<String> currentLogos = state.compoundsLogos;
 
       if (currentCategories.isEmpty) {
-        currentCategories = await repository.loadCompounds();
+        try {
+          currentCategories = await repository.loadCompounds();
+        } catch (e, st) {
+          debugPrint(
+            '[AuthCubit] presetBeforeSignin: loadCompounds failed (offline?): $e\n$st',
+          );
+          currentCategories = state.categories;
+        }
       }
       if (currentLogos.isEmpty) {
         currentLogos = await AssetHelper.loadCompoundLogos();
@@ -347,7 +357,48 @@ class AuthCubit extends Cubit<AuthState> {
 
       // Use repository.fetchCurrentUser() so we get the Appwrite session
       // even when the constructor's _checkExistingSession is still in-flight.
-      final currentUserAuth = await repository.fetchCurrentUser();
+      AppUser? currentUserAuth;
+      try {
+        currentUserAuth = await repository.fetchCurrentUser();
+      } catch (e, st) {
+        debugPrint(
+          '[AuthCubit] presetBeforeSignin: fetchCurrentUser failed (offline?): $e\n$st',
+        );
+        currentUserAuth = null;
+      }
+
+      if (currentUserAuth == null) {
+        final lastUserId = await CacheHelper.getLastActiveUserId();
+        if (lastUserId != null && lastUserId.isNotEmpty) {
+          final String? cachedRaw = await CacheHelper.getData(
+            key: CacheHelper.cachedUserDataKey(lastUserId),
+            type: "String",
+          ) as String?;
+          if (cachedRaw != null && cachedRaw.isNotEmpty) {
+            try {
+              final decoded = jsonDecode(cachedRaw);
+              if (decoded is Map) {
+                final m = Map<String, dynamic>.from(decoded);
+                final email = m['email']?.toString();
+                final rid = m['role_id'];
+                final Map<String, dynamic>? meta =
+                    rid != null ? <String, dynamic>{'role_id': rid} : null;
+                currentUserAuth = AppUser(
+                  id: lastUserId,
+                  email: email,
+                  userMetadata: meta,
+                );
+                repository.primeCurrentUser(currentUserAuth);
+              }
+            } catch (e) {
+              debugPrint(
+                'presetBeforeSignin: offline user restore from cache failed ($e)',
+              );
+            }
+          }
+        }
+      }
+
       if (currentUserAuth == null) {
         emit(Unauthenticated(
           categories: currentCategories,
@@ -384,10 +435,24 @@ class AuthCubit extends Cubit<AuthState> {
 
       // 2) Fallback: user_apartments in Appwrite (string user_id + compound_id).
       if (localSelectedCompoundId == null) {
-        localSelectedCompoundId = await repository.getDefaultCompoundId(userId);
+        try {
+          localSelectedCompoundId =
+              await repository.getDefaultCompoundId(userId);
+        } catch (e, st) {
+          debugPrint(
+            '[AuthCubit] presetBeforeSignin: getDefaultCompoundId failed: $e\n$st',
+          );
+        }
       }
 
-      // 3) Resolve compound label from loaded categories when only default row exists.
+      // 3) Device-local last compound ([CacheHelper.saveCompoundCurrentIndex]).
+      if (localSelectedCompoundId == null || localSelectedCompoundId.isEmpty) {
+        localSelectedCompoundId = _coerceToCompoundId(
+          await CacheHelper.getCompoundCurrentIndex(),
+        );
+      }
+
+      // 4) Resolve compound label from loaded categories when only default row exists.
       if (localSelectedCompoundId != null && localMyCompounds.length <= 1) {
         try {
           final compound = currentCategories
@@ -428,23 +493,33 @@ class AuthCubit extends Cubit<AuthState> {
         selectedCompoundId = localSelectedCompoundId;
         myCompounds = localMyCompounds;
 
-        final result = await repository.loadCompoundMembers(
+        try {
+          final result = await repository.loadCompoundMembers(
             localSelectedCompoundId,
-            role: userRole);
-        chatMembers = result.members;
-        membersData = result.membersData;
-
-        final currentUserId = (state is Authenticated)
-            ? (state as Authenticated).user.id
-            : repository.currentUser?.id;
-        if (chatMembers.isEmpty) {
-          currentUser = null;
-        } else {
-          final uid = currentUserId?.trim() ?? '';
-          currentUser = chatMembers.firstWhere(
-            (member) => member.id.trim() == uid,
-            orElse: () => chatMembers.first,
+            role: userRole,
           );
+          chatMembers = result.members;
+          membersData = result.membersData;
+
+          final currentUserId = (state is Authenticated)
+              ? (state as Authenticated).user.id
+              : repository.currentUser?.id;
+          if (chatMembers.isEmpty) {
+            currentUser = null;
+          } else {
+            final uid = currentUserId?.trim() ?? '';
+            currentUser = chatMembers.firstWhere(
+              (member) => member.id.trim() == uid,
+              orElse: () => chatMembers.first,
+            );
+          }
+        } catch (e, st) {
+          debugPrint(
+            '[AuthCubit] presetBeforeSignin: loadCompoundMembers failed (offline?): $e\n$st',
+          );
+          chatMembers = [];
+          membersData = [];
+          currentUser = null;
         }
       }
 

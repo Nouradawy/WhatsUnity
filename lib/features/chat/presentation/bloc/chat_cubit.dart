@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 import 'package:WhatsUnity/features/chat/data/datasources/chat_realtime_handle.dart';
@@ -13,6 +15,7 @@ import '../../domain/usecases/resolve_user.dart';
 import '../../domain/usecases/subscribe_to_channel.dart';
 import '../../domain/usecases/update_message_metadata.dart';
 import '../../domain/usecases/fetch_message_by_id.dart';
+import '../../domain/repositories/chat_sync_repository.dart';
 import 'chat_state.dart';
 
 class ChatCubit extends Cubit<ChatState> {
@@ -26,6 +29,7 @@ class ChatCubit extends Cubit<ChatState> {
   final SubscribeToChannel subscribeToChannelUsecase;
   final UpdateMessageMetadata updateMessageMetadataUsecase;
   final FetchMessageById fetchMessageByIdUsecase;
+  final ChatSyncRepository? chatSyncRepository;
 
   ChatCubit({
     required this.fetchMessagesUsecase,
@@ -38,6 +42,7 @@ class ChatCubit extends Cubit<ChatState> {
     required this.subscribeToChannelUsecase,
     required this.updateMessageMetadataUsecase,
     required this.fetchMessageByIdUsecase,
+    this.chatSyncRepository,
   }) : super(ChatInitial());
 
   bool isRecording = false;
@@ -47,8 +52,18 @@ class ChatCubit extends Cubit<ChatState> {
   final int _pageSize = 20;
   bool _hasMore = true;
   ChatRealtimeHandle? _realtimeChannel;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  final Connectivity _connectivity = Connectivity();
+
   String? channelId;
   bool isBrainStorming = false;
+
+  static bool _connectivityLooksOnline(List<ConnectivityResult> results) {
+    if (results.isEmpty) return false;
+    return results.any(
+      (e) => e != ConnectivityResult.none && e != ConnectivityResult.bluetooth,
+    );
+  }
 
   List<types.Message> _messages = [];
 
@@ -129,7 +144,14 @@ class ChatCubit extends Cubit<ChatState> {
       _currentPage++;
       _hasMore = messages.length >= _pageSize;
 
-      _subscribeToRealtime(channelId);
+      _connectivitySub?.cancel();
+      _connectivitySub = _connectivity.onConnectivityChanged.listen((_) {
+        final id = this.channelId;
+        if (id != null) {
+          unawaited(_synchronizeRealtimeSubscription(id));
+        }
+      });
+      await _synchronizeRealtimeSubscription(channelId);
 
       emit(
         ChatMessagesLoaded(
@@ -178,20 +200,36 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
-  void _subscribeToRealtime(String channelId) {
+  /// Tears down Appwrite realtime while offline to avoid endless reconnect logs;
+  /// re-subscribes when connectivity returns.
+  Future<void> _synchronizeRealtimeSubscription(String channelId) async {
     _realtimeChannel?.unsubscribe();
-    _realtimeChannel = subscribeToChannelUsecase(
-      channelId: channelId,
-      onInsert: (message) {
-        _addOrUpdateMessage(message);
-      },
-      onUpdate: (message) {
-        _addOrUpdateMessage(message);
-      },
-      onDelete: (message) {
-        _removeMessage(message.id);
-      },
-    );
+    _realtimeChannel = null;
+    try {
+      final results = await _connectivity.checkConnectivity();
+      if (!_connectivityLooksOnline(results)) {
+        return;
+      }
+    } catch (e, st) {
+      debugPrint('ChatCubit: connectivity check failed, skip realtime: $e\n$st');
+      return;
+    }
+    try {
+      _realtimeChannel = subscribeToChannelUsecase(
+        channelId: channelId,
+        onInsert: (message) {
+          _addOrUpdateMessage(message);
+        },
+        onUpdate: (message) {
+          _addOrUpdateMessage(message);
+        },
+        onDelete: (message) {
+          _removeMessage(message.id);
+        },
+      );
+    } catch (e, st) {
+      debugPrint('ChatCubit: realtime subscribe failed: $e\n$st');
+    }
   }
 
   void _addOrUpdateMessage(types.Message message) {
@@ -241,6 +279,17 @@ class ChatCubit extends Cubit<ChatState> {
     required String userId,
     types.Message? repliedMessage,
   }) async {
+    final sync = chatSyncRepository;
+    if (sync != null) {
+      final m = await sync.sendTextMessageOfflineFirst(
+        text: text,
+        channelId: channelId,
+        userId: userId,
+        repliedMessageId: repliedMessage?.id,
+      );
+      _addOrUpdateMessage(m);
+      return;
+    }
     await sendTextMessageUsecase(
       text: text,
       channelId: channelId,
@@ -319,6 +368,8 @@ class ChatCubit extends Cubit<ChatState> {
 
   @override
   Future<void> close() {
+    _connectivitySub?.cancel();
+    _connectivitySub = null;
     _realtimeChannel?.unsubscribe();
     return super.close();
   }

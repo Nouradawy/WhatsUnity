@@ -66,4 +66,8 @@ abstract class AuthRepository {
   /// Calls account.get() and updates [currentUser]; safe to await before
   /// using the result in [AuthCubit._presetBeforeSigninImpl].
   Future<AppUser?> fetchCurrentUser();
+
+  /// Sets [currentUser] without calling Appwrite (offline cold boot after
+  /// [fetchCurrentUser] failed). Does not emit [onAuthStateChange].
+  void primeCurrentUser(AppUser user);
 }

@@ -29,6 +29,16 @@ abstract class ChatLocalDataSource {
 
   /// All messages for a channel, oldest first (for UI hydration).
   Future<List<Map<String, dynamic>>> getAllMessagesForChannelAscending(String channelId);
+
+  /// Full `messages` table row (for LWW + sync worker), or null.
+  Future<Map<String, dynamic>?> getRawMessageRow(String messageId);
+
+  /// After a successful outbound sync, align local metadata with the server.
+  Future<void> markMessageSyncClean({
+    required String messageId,
+    required int entityVersion,
+    String? remoteUpdatedAt,
+  });
 }
 
 class ChatLocalDataSourceImpl implements ChatLocalDataSource {
@@ -195,6 +205,18 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         raw['type']?.toString() ??
         'text';
 
+    final entityVersion = int.tryParse(
+          raw['entity_version']?.toString() ??
+              raw['version']?.toString() ??
+              '',
+        ) ??
+        0;
+    final syncStateStr = raw['sync_state']?.toString() ??
+        (((raw['is_synced'] is int && raw['is_synced'] == 0) ||
+                raw['is_synced'] == false)
+            ? 'dirty'
+            : 'clean');
+
     return {
       'id': id,
       'channel_id': channelId,
@@ -207,7 +229,12 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       'metadata': metaStr,
       'sent_at': raw['sent_at']?.toString(),
       'deleted_at': raw['deleted_at']?.toString(),
-      'is_synced': raw['is_synced'] is int ? raw['is_synced'] : 1,
+      'is_synced': syncStateStr == 'clean' ? 1 : 0,
+      'entity_version': entityVersion,
+      'sync_state': syncStateStr,
+      'local_updated_at': raw['local_updated_at']?.toString(),
+      'remote_updated_at': raw['remote_updated_at']?.toString(),
+      'last_sync_error': raw['last_sync_error']?.toString(),
       'payload_json': jsonEncode(payload),
     };
   }
@@ -223,5 +250,50 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   String _channelIdString(dynamic v) {
     if (v == null) return '';
     return v.toString();
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getRawMessageRow(String messageId) async {
+    if (messageId.isEmpty) return null;
+    try {
+      final db = await _db;
+      final rows = await db.query(
+        _table,
+        where: 'id = ?',
+        whereArgs: [messageId],
+        limit: 1,
+      );
+      if (rows.isEmpty) return null;
+      return Map<String, dynamic>.from(rows.first);
+    } on DatabaseException catch (e, st) {
+      debugPrint('ChatLocalDataSource.getRawMessageRow: $e\n$st');
+      return null;
+    }
+  }
+
+  @override
+  Future<void> markMessageSyncClean({
+    required String messageId,
+    required int entityVersion,
+    String? remoteUpdatedAt,
+  }) async {
+    if (messageId.isEmpty) return;
+    try {
+      final db = await _db;
+      await db.update(
+        _table,
+        {
+          'entity_version': entityVersion,
+          'sync_state': 'clean',
+          'last_sync_error': null,
+          if (remoteUpdatedAt != null) 'remote_updated_at': remoteUpdatedAt,
+          'is_synced': 1,
+        },
+        where: 'id = ?',
+        whereArgs: [messageId],
+      );
+    } on DatabaseException catch (e, st) {
+      debugPrint('ChatLocalDataSource.markMessageSyncClean: $e\n$st');
+    }
   }
 }
