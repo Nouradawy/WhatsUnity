@@ -23,7 +23,7 @@ class MessageReceiptsCubit extends Cubit<MessageReceiptsState> {
   Future<void> fetchSeenUsers(String messageId) async {
     emit(const MessageReceiptsLoading());
     try {
-      final rows = await _remote.listSeenReceiptsForMessage(messageId);
+      final rows = await _remote.remote_listSeenReceiptsForMessage(messageId);
       final mapped = <SeenUser>[];
       for (final r in rows) {
         final uid = (r['user_id'] as String?)?.trim();

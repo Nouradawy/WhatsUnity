@@ -368,7 +368,7 @@ Future<Map<String, String>> fetchAvatarsForUserIds(BuildContext context, List<Br
 
   if (userIds.isEmpty) return {};
   try {
-    return await context.read<ChatRemoteDataSource>().fetchProfileAvatarUrls(
+    return await context.read<ChatRemoteDataSource>().remote_fetchProfileAvatarUrls(
           userIds.toList(),
         );
   } catch (_) {

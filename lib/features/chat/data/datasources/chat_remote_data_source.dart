@@ -106,14 +106,16 @@ String _eventSuffix(List<String> events) {
 }
 
 abstract class ChatRemoteDataSource {
-  Future<List<Map<String, dynamic>>> fetchMessages({
+  /// Fetches one page of `messages` rows for [channelId] (`channels` document `$id`).
+  Future<List<Map<String, dynamic>>> remote_fetchMessages({
     required String channelId,
     required String currentUserId,
     required int pageSize,
     required int pageNum,
   });
 
-  Future<void> sendTextMessage({
+  /// Creates a text message where [channelId] is the Appwrite `channels` document `$id`.
+  Future<void> remote_sendTextMessage({
     required String text,
     required String channelId,
     required String userId,
@@ -122,7 +124,7 @@ abstract class ChatRemoteDataSource {
     String? repliedMessageId,
   });
 
-  Future<void> sendFileMessage({
+  Future<void> remote_sendFileMessage({
     required String uri,
     required String name,
     required int size,
@@ -134,7 +136,7 @@ abstract class ChatRemoteDataSource {
     Map<String, dynamic>? additionalMetadata,
   });
 
-  Future<void> sendVoiceNote({
+  Future<void> remote_sendVoiceNote({
     required String uri,
     required Duration duration,
     required List<double> waveform,
@@ -144,13 +146,13 @@ abstract class ChatRemoteDataSource {
     required int nowMs,
   });
 
-  Future<void> markMessageAsSeen(
+  Future<void> remote_markMessageAsSeen(
     String messageId,
     String userId,
     String nowIso,
   );
 
-  Future<void> deleteMessage(
+  Future<void> remote_deleteMessage(
     String messageId,
     String authorId,
     String currentUserId,
@@ -158,16 +160,16 @@ abstract class ChatRemoteDataSource {
   );
 
   /// Persists [metadata] JSON to the message document (e.g. reactions).
-  Future<void> updateMessageMetadata(
+  Future<void> remote_updateMessageMetadata(
     String messageId,
     Map<String, dynamic> metadata,
   );
 
-  /// Single message row (same shape as [fetchMessages]) for metadata refresh.
-  Future<Map<String, dynamic>> fetchMessageRow(String messageId);
+  /// Single message row (same shape as [remote_fetchMessages]) for metadata refresh.
+  Future<Map<String, dynamic>> remote_fetchMessageRow(String messageId);
 
   /// Idempotent create: uses [documentId] so retries do not duplicate rows.
-  Future<void> createTextMessageWithDocumentId({
+  Future<void> remote_createTextMessageWithDocumentId({
     required String documentId,
     required String text,
     required String channelId,
@@ -181,28 +183,28 @@ abstract class ChatRemoteDataSource {
   });
 
   /// Resolves the Appwrite `channels` document id used as `channel_id` on messages.
-  Future<String?> resolveChannelDocumentId({
+  Future<String?> remote_resolveChannelDocumentId({
     required String compoundId,
     required String channelType,
     String? buildingNameForScopedChat,
   });
 
   /// Returns `userId` → `avatar_url` (or `"null"` when missing) for avatar rings.
-  Future<Map<String, String>> fetchProfileAvatarUrls(List<String> userIds);
+  Future<Map<String, String>> remote_fetchProfileAvatarUrls(List<String> userIds);
 
   /// Receipt rows with a non-null `seen_at` for the poll "seen" list.
-  Future<List<Map<String, dynamic>>> listSeenReceiptsForMessage(String messageId);
+  Future<List<Map<String, dynamic>>> remote_listSeenReceiptsForMessage(String messageId);
 
   /// After offline media upload — sets [uri] and replaces `metadata` JSON.
-  Future<void> updateMessageUriAndMetadata({
+  Future<void> remote_updateMessageUriAndMetadata({
     required String messageId,
     required String uri,
     required Map<String, dynamic> metadata,
   });
 
-  Future<Map<String, dynamic>> resolveUser(String id);
+  Future<Map<String, dynamic>> remote_resolveUser(String id);
 
-  ChatRealtimeHandle subscribeToChannel({
+  ChatRealtimeHandle remote_subscribeToChannel({
     required String channelId,
     required void Function(Map<String, dynamic> payload) onInsert,
     required void Function(Map<String, dynamic> payload) onUpdate,
@@ -221,7 +223,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   final Realtime _realtime;
 
   @override
-  Future<List<Map<String, dynamic>>> fetchMessages({
+  Future<List<Map<String, dynamic>>> remote_fetchMessages({
     required String channelId,
     required String currentUserId,
     required int pageSize,
@@ -246,7 +248,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<void> sendTextMessage({
+  Future<void> remote_sendTextMessage({
     required String text,
     required String channelId,
     required String userId,
@@ -255,7 +257,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String? repliedMessageId,
   }) async {
     final docId = ID.unique();
-    await createTextMessageWithDocumentId(
+    await remote_createTextMessageWithDocumentId(
       documentId: docId,
       text: text,
       channelId: channelId,
@@ -268,7 +270,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<void> createTextMessageWithDocumentId({
+  Future<void> remote_createTextMessageWithDocumentId({
     required String documentId,
     required String text,
     required String channelId,
@@ -311,7 +313,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<void> updateMessageUriAndMetadata({
+  Future<void> remote_updateMessageUriAndMetadata({
     required String messageId,
     required String uri,
     required Map<String, dynamic> metadata,
@@ -335,7 +337,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<void> sendFileMessage({
+  Future<void> remote_sendFileMessage({
     required String uri,
     required String name,
     required int size,
@@ -370,7 +372,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<void> sendVoiceNote({
+  Future<void> remote_sendVoiceNote({
     required String uri,
     required Duration duration,
     required List<double> waveform,
@@ -405,7 +407,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<void> updateMessageMetadata(
+  Future<void> remote_updateMessageMetadata(
     String messageId,
     Map<String, dynamic> metadata,
   ) async {
@@ -420,7 +422,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<Map<String, dynamic>> fetchMessageRow(String messageId) async {
+  Future<Map<String, dynamic>> remote_fetchMessageRow(String messageId) async {
     final doc = await _databases.getDocument(
       databaseId: appwriteDatabaseId,
       collectionId: _kMessagesCollectionId,
@@ -430,7 +432,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<void> deleteMessage(
+  Future<void> remote_deleteMessage(
     String messageId,
     String authorId,
     String currentUserId,
@@ -453,7 +455,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<void> markMessageAsSeen(
+  Future<void> remote_markMessageAsSeen(
     String messageId,
     String userId,
     String nowIso,
@@ -493,7 +495,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<String?> resolveChannelDocumentId({
+  Future<String?> remote_resolveChannelDocumentId({
     required String compoundId,
     required String channelType,
     String? buildingNameForScopedChat,
@@ -540,7 +542,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<Map<String, String>> fetchProfileAvatarUrls(List<String> userIds) async {
+  Future<Map<String, String>> remote_fetchProfileAvatarUrls(List<String> userIds) async {
     if (userIds.isEmpty) return {};
     final uniq = userIds.toSet().toList();
     final list = await _databases.listDocuments(
@@ -566,7 +568,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listSeenReceiptsForMessage(
+  Future<List<Map<String, dynamic>>> remote_listSeenReceiptsForMessage(
     String messageId,
   ) async {
     final list = await _databases.listDocuments(
@@ -589,7 +591,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<Map<String, dynamic>> resolveUser(String id) async {
+  Future<Map<String, dynamic>> remote_resolveUser(String id) async {
     final doc = await _databases.getDocument(
       databaseId: appwriteDatabaseId,
       collectionId: _kProfilesCollectionId,
@@ -602,7 +604,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  ChatRealtimeHandle subscribeToChannel({
+  ChatRealtimeHandle remote_subscribeToChannel({
     required String channelId,
     required void Function(Map<String, dynamic> payload) onInsert,
     required void Function(Map<String, dynamic> payload) onUpdate,

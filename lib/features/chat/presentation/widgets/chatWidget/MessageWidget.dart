@@ -611,7 +611,9 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
   ) async {
     if (userIds.isEmpty) return {};
     try {
-      return await context.read<ChatRemoteDataSource>().fetchProfileAvatarUrls(
+      return await context
+          .read<ChatRemoteDataSource>()
+          .remote_fetchProfileAvatarUrls(
             userIds.toList(),
           );
     } catch (_) {
@@ -994,7 +996,7 @@ class _PollWithAvatarsState extends State<PollWithAvatars> {
   @override
   Widget build(BuildContext context) {
     _avatarsFuture ??=
-        context.read<ChatRemoteDataSource>().fetchProfileAvatarUrls(
+        context.read<ChatRemoteDataSource>().remote_fetchProfileAvatarUrls(
               widget.allUserIds.toList(),
             );
     final authState = context.read<AuthCubit>().state;

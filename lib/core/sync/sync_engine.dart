@@ -162,7 +162,7 @@ class SyncEngine {
         metaOverride = Map<String, dynamic>.from(jsonDecode(mj) as Map);
       } catch (_) {}
     }
-    await _remote.createTextMessageWithDocumentId(
+    await _remote.remote_createTextMessageWithDocumentId(
       documentId: documentId,
       text: p['text'] as String,
       channelId: p['channel_id'] as String,
@@ -173,7 +173,7 @@ class SyncEngine {
       version: (p['version'] as num?)?.toInt() ?? 0,
       metadataOverride: metaOverride,
     );
-    final row = await _remote.fetchMessageRow(documentId);
+    final row = await _remote.remote_fetchMessageRow(documentId);
     final v = int.tryParse(row['version']?.toString() ?? '') ?? 0;
     row['entity_version'] = v;
     row['sync_state'] = 'clean';
@@ -187,7 +187,7 @@ class SyncEngine {
   Future<void> _handleCreateMaintenanceReport(SyncJobRecord job) async {
     final p = jsonDecode(job.payloadJson) as Map<String, dynamic>;
     final documentId = p['document_id'] as String;
-    await _maintenanceRemote.createReportWithDocumentId(
+    await _maintenanceRemote.remote_createReportWithDocumentId(
       documentId: documentId,
       userId: p['user_id'] as String,
       title: p['title'] as String,
@@ -197,7 +197,7 @@ class SyncEngine {
       compoundId: p['compound_id'] as String?,
       version: (p['version'] as num?)?.toInt() ?? 0,
     );
-    final row = await _maintenanceRemote.fetchReportRow(documentId);
+    final row = await _maintenanceRemote.remote_fetchReportRow(documentId);
     final v = int.tryParse(row['version']?.toString() ?? '') ?? 0;
     row['entity_version'] = v;
     row['sync_state'] = 'clean';
@@ -211,7 +211,7 @@ class SyncEngine {
   Future<void> _handleCreateMaintenanceAttachment(SyncJobRecord job) async {
     final p = jsonDecode(job.payloadJson) as Map<String, dynamic>;
     final documentId = p['document_id'] as String;
-    await _maintenanceRemote.createAttachmentWithDocumentId(
+    await _maintenanceRemote.remote_createAttachmentWithDocumentId(
       documentId: documentId,
       reportId: p['report_id'] as String,
       sourceUrlJson: p['source_url_json'] as String,
@@ -219,7 +219,7 @@ class SyncEngine {
       compoundId: p['compound_id'] as String?,
       version: (p['version'] as num?)?.toInt() ?? 0,
     );
-    final row = await _maintenanceRemote.fetchAttachmentRow(documentId);
+    final row = await _maintenanceRemote.remote_fetchAttachmentRow(documentId);
     final v = int.tryParse(row['version']?.toString() ?? '') ?? 0;
     row['entity_version'] = v;
     row['sync_state'] = 'clean';
@@ -256,7 +256,7 @@ class SyncEngine {
       filenameOverride: payload['filename_override'] as String?,
       mimeType: payload['mime_type'] as String?,
     );
-    final row = await _remote.fetchMessageRow(messageId);
+    final row = await _remote.remote_fetchMessageRow(messageId);
     final meta = MessageModel.normalizeMeta(row['metadata']);
     for (final e in uploaded.entries) {
       meta[e.key] = e.value;
@@ -268,12 +268,12 @@ class SyncEngine {
     if (uri.isEmpty) {
       throw StateError('UPLOAD_MEDIA: no url in message upload result');
     }
-    await _remote.updateMessageUriAndMetadata(
+    await _remote.remote_updateMessageUriAndMetadata(
       messageId: messageId,
       uri: uri,
       metadata: meta,
     );
-    final fresh = await _remote.fetchMessageRow(messageId);
+    final fresh = await _remote.remote_fetchMessageRow(messageId);
     final v = int.tryParse(fresh['version']?.toString() ?? '') ?? 0;
     fresh['entity_version'] = v;
     fresh['sync_state'] = 'clean';
@@ -311,7 +311,7 @@ class SyncEngine {
     final name =
         payload['filename_override']?.toString() ?? p.basename(path);
     final size = uploaded['size']?.toString() ?? '${await file.length()}';
-    await _maintenanceRemote.appendAttachmentSourceEntry(
+    await _maintenanceRemote.remote_appendAttachmentSourceEntry(
       attachmentId: attachmentId,
       entry: {
         'uri': url,
@@ -319,7 +319,7 @@ class SyncEngine {
         'size': size,
       },
     );
-    final fresh = await _maintenanceRemote.fetchAttachmentRow(attachmentId);
+    final fresh = await _maintenanceRemote.remote_fetchAttachmentRow(attachmentId);
     final v = int.tryParse(fresh['version']?.toString() ?? '') ?? 0;
     fresh['entity_version'] = v;
     fresh['sync_state'] = 'clean';

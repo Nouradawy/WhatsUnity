@@ -2,7 +2,74 @@ import 'dart:convert';
 
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 
-class MessageModel {
+import '../../../../core/sync/sync_metadata.dart';
+import '../../../../core/sync/sync_state.dart';
+
+/// Appwrite-first message row model for `messages` (APPWRITE_SCHEMA.md §2.9).
+///
+/// IDs are always strings:
+/// - [id] is message document `$id`
+/// - [channelId] is `channels` document `$id`
+/// - [authorId] is `profiles` / account user `$id`
+class MessageModel with SyncMetadata {
+  MessageModel({
+    required this.id,
+    required this.authorId,
+    required this.channelId,
+    this.text,
+    this.uri,
+    this.type,
+    this.sentAt,
+    required this.metadata,
+    this.replyTo,
+    this.createdAt,
+    @override this.deletedAt,
+    @override this.version = 0,
+    @override this.syncState = SyncState.clean,
+    @override this.localUpdatedAt,
+    @override this.remoteUpdatedAt,
+    @override this.lastSyncError,
+  });
+
+  final String id;
+  final String authorId;
+  final String channelId;
+  final String? text;
+  final String? uri;
+  final String? type;
+  final DateTime? sentAt;
+  final Map<String, dynamic> metadata;
+  final String? replyTo;
+  final DateTime? createdAt;
+
+  @override
+  final DateTime? deletedAt;
+  @override
+  final int version;
+  @override
+  final SyncState syncState;
+  @override
+  final DateTime? localUpdatedAt;
+  @override
+  final DateTime? remoteUpdatedAt;
+  @override
+  final String? lastSyncError;
+
+  static DateTime? _parseDate(dynamic v) {
+    if (v == null) return null;
+    final raw = v.toString();
+    if (raw.isEmpty) return null;
+    final tzRegex = RegExp(r'(Z|[+\-]\d{2}:\d{2})$');
+    final normalized = tzRegex.hasMatch(raw) ? raw : '${raw}Z';
+    return DateTime.tryParse(normalized)?.toLocal();
+  }
+
+  static int? _parseMs(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
+
   static Map<String, dynamic> normalizeMeta(dynamic meta) {
     if (meta == null) return <String, dynamic>{};
     if (meta is Map) return Map<String, dynamic>.from(meta);
@@ -15,131 +82,153 @@ class MessageModel {
     return <String, dynamic>{};
   }
 
-  static types.Message fromMap(Map<String, dynamic> map) {
-    DateTime? parseDate(String? dateStr) {
-      if (dateStr == null) return null;
-      final tzRegex = RegExp(r'(Z|[+\-]\d{2}:\d{2})$');
-      DateTime parsed;
-      if (tzRegex.hasMatch(dateStr)) {
-        parsed = DateTime.parse(dateStr);
-      } else {
-        parsed = DateTime.parse('${dateStr}Z');
-      }
-      return parsed.toLocal();
+  /// Strict Appwrite message map parser using schema keys:
+  /// `author_id`, `channel_id`, `text`, `uri`, `type`, `sent_at`, `metadata`,
+  /// `reply_to`, `deleted_at`, `version`, and document `$id`.
+  factory MessageModel.fromAppwriteJson(Map<String, dynamic> json) {
+    final metadata = normalizeMeta(json['metadata']);
+    DateTime? createdAt = _parseDate(json[r'$createdAt']) ?? _parseDate(json['created_at']);
+    final createdAtMsRaw =
+        json['created_at_ms'] ?? json['createdAtMs'] ?? metadata['createdAtMs'];
+    final createdAtMs = _parseMs(createdAtMsRaw);
+    if (createdAtMs != null) {
+      createdAt = DateTime.fromMillisecondsSinceEpoch(
+        createdAtMs,
+        isUtc: true,
+      ).toLocal();
     }
 
-    DateTime? createdAt;
-    final createdAtMsRaw = map['created_at_ms'] ?? map['createdAtMs'] ?? map['metadata']?['createdAtMs'];
-    if (createdAtMsRaw != null) {
-      int? ms;
-      if (createdAtMsRaw is String) {
-        ms = int.tryParse(createdAtMsRaw);
-      } else if (createdAtMsRaw is num) {
-        ms = createdAtMsRaw.toInt();
-      }
-      if (ms != null) {
-        createdAt = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true).toLocal();
-      }
-    }
+    final parsedVersion = int.tryParse(
+          json['version']?.toString() ??
+              json[SyncMetadataColumns.version]?.toString() ??
+              '',
+        ) ??
+        0;
+    final parsedSyncState = syncStateFromString(
+      json[SyncMetadataColumns.syncState]?.toString(),
+    );
 
-    createdAt ??= parseDate(map['created_at']);
-    final deletedAt = parseDate(map['deleted_at']);
-    final failedAt = parseDate(map['failed_at']);
-    final bool isSeen = map['isSeen'] ?? false;
-    final sentAt = parseDate(map['sent_at']);
-    final deliveredAt = parseDate(map['delivered_at']);
-    final updatedAt = parseDate(map['updated_at']);
+    return MessageModel(
+      id: (json[r'$id'] ?? json['id'] ?? '').toString(),
+      authorId: (json['author_id'] ?? '').toString(),
+      channelId: (json['channel_id'] ?? '').toString(),
+      text: json['text']?.toString(),
+      uri: json['uri']?.toString(),
+      type: json['type']?.toString(),
+      sentAt: _parseDate(json['sent_at']),
+      metadata: metadata,
+      replyTo: json['reply_to']?.toString(),
+      createdAt: createdAt,
+      deletedAt: _parseDate(json['deleted_at']),
+      version: parsedVersion,
+      syncState: parsedSyncState,
+      localUpdatedAt: _parseDate(json[SyncMetadataColumns.localUpdatedAt]),
+      remoteUpdatedAt: _parseDate(
+        json[SyncMetadataColumns.remoteUpdatedAt] ?? json[r'$updatedAt'],
+      ),
+      lastSyncError: json[SyncMetadataColumns.lastSyncError]?.toString(),
+    );
+  }
 
-    final metadata = normalizeMeta(map['metadata']);
+  /// Builds Appwrite data payload for create/update.
+  Map<String, dynamic> toAppwriteJson() {
+    return {
+      'author_id': authorId,
+      'channel_id': channelId,
+      if (text != null) 'text': text,
+      if (uri != null) 'uri': uri,
+      if (type != null) 'type': type,
+      if (sentAt != null) 'sent_at': sentAt!.toUtc().toIso8601String(),
+      'metadata': jsonEncode(metadata),
+      if (replyTo != null && replyTo!.isNotEmpty) 'reply_to': replyTo,
+      if (deletedAt != null) 'deleted_at': deletedAt!.toUtc().toIso8601String(),
+      'version': version,
+    };
+  }
 
-    // Only promote top-level column values into metadata when the key is
-    // explicitly present in the incoming map.  If the key is absent (e.g. when
-    // the map was produced by ChatMessageMapCodec.messageToMap, which does not
-    // include every column), we must NOT overwrite the existing metadata value
-    // with null — that would silently erase soft-delete markers, reply links,
-    // and other data that survived the previous round-trip through storage.
-    if (map.containsKey('deleted_at')) {
-      metadata['deletedAt'] = deletedAt?.toIso8601String();
-    }
-    if (map.containsKey('failed_at')) {
-      metadata['failedAt'] = failedAt?.toIso8601String();
-    }
-    if (map.containsKey('sent_at')) {
-      metadata['sentAt'] = sentAt?.toIso8601String();
-    }
-    if (map.containsKey('delivered_at')) {
-      metadata['deliveredAt'] = deliveredAt?.toIso8601String();
-    }
-    if (map.containsKey('updated_at')) {
-      metadata['updatedAt'] = updatedAt?.toIso8601String();
-    }
-    // isSeen is a boolean flag; always set it (defaults to false when missing).
-    metadata['isSeen'] = isSeen;
+  /// Compatibility wrapper for existing call sites.
+  static types.Message fromMap(Map<String, dynamic> map) =>
+      MessageModel.fromAppwriteJson(map).toChatMessage();
 
+  types.Message toChatMessage() {
+    final metadataOut = Map<String, dynamic>.from(metadata);
+    final failedAt = _parseDate(metadataOut['failedAt']);
+    final sentAtParsed = sentAt ?? _parseDate(metadataOut['sentAt']);
+    final deliveredAt = _parseDate(metadataOut['deliveredAt']);
+    final updatedAt = _parseDate(metadataOut['updatedAt']);
+    final isSeen = metadataOut['isSeen'] == true;
+
+    if (deletedAt != null) metadataOut['deletedAt'] = deletedAt!.toIso8601String();
+    if (failedAt != null) metadataOut['failedAt'] = failedAt.toIso8601String();
+    if (sentAtParsed != null) metadataOut['sentAt'] = sentAtParsed.toIso8601String();
+    if (deliveredAt != null) metadataOut['deliveredAt'] = deliveredAt.toIso8601String();
+    if (updatedAt != null) metadataOut['updatedAt'] = updatedAt.toIso8601String();
+    metadataOut['isSeen'] = isSeen;
     if (createdAt != null) {
-      metadata['createdAtMs'] = createdAt.toUtc().millisecondsSinceEpoch;
+      metadataOut['createdAtMs'] = createdAt!.toUtc().millisecondsSinceEpoch;
     }
 
-    final messageType = metadata['type'] ?? map['type'];
-    const String deletedUserId = 'deleted_user';
+    final messageType = metadataOut['type'] ?? type;
+    const deletedUserId = 'deleted_user';
+    final safeAuthor = authorId.isNotEmpty ? authorId : deletedUserId;
 
     switch (messageType) {
       case 'image':
         return types.ImageMessage(
           createdAt: createdAt,
-          id: map['id'],
-          text: metadata['name'] ?? 'image',
-          authorId: map['author_id'] ?? deletedUserId,
-          size: metadata['size'] ?? 0,
-          height: metadata['height']?.toDouble(),
-          width: metadata['width']?.toDouble(),
-          source: map['uri'],
-          metadata: metadata,
-          replyToMessageId: metadata['reply_to'],
+          id: id,
+          text: metadataOut['name'] ?? 'image',
+          authorId: safeAuthor,
+          size: metadataOut['size'] ?? 0,
+          height: metadataOut['height']?.toDouble(),
+          width: metadataOut['width']?.toDouble(),
+          source: uri ?? '',
+          metadata: metadataOut,
+          replyToMessageId: metadataOut['reply_to'] ?? replyTo,
         );
       case 'file':
         return types.FileMessage(
           createdAt: createdAt,
-          id: map['id'],
-          authorId: map['author_id'] ?? deletedUserId,
-          name: metadata['name'] ?? 'File',
-          size: metadata['size'] ?? 0,
-          mimeType: metadata['mimeType'],
-          source: map['uri'],
-          metadata: metadata,
-          replyToMessageId: metadata['reply_to'],
+          id: id,
+          authorId: safeAuthor,
+          name: metadataOut['name'] ?? 'File',
+          size: metadataOut['size'] ?? 0,
+          mimeType: metadataOut['mimeType'],
+          source: uri ?? '',
+          metadata: metadataOut,
+          replyToMessageId: metadataOut['reply_to'] ?? replyTo,
         );
       case 'audio':
-        final durationString = metadata['duration'] ?? '00:00';
-        final parts = durationString.split(':');
+        final durationString = metadataOut['duration'] ?? '00:00';
+        final parts = durationString.toString().split(':');
         final duration = Duration(
-          minutes: int.tryParse(parts[0]) ?? 0,
-          seconds: int.tryParse(parts[1]) ?? 0,
+          minutes: int.tryParse(parts.isNotEmpty ? parts[0] : '0') ?? 0,
+          seconds: int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0,
         );
         return types.AudioMessage(
           createdAt: createdAt,
-          id: map['id'],
-          authorId: map['author_id'] ?? deletedUserId,
-          size: metadata['size'] ?? 0,
-          source: map['uri'],
+          id: id,
+          authorId: safeAuthor,
+          size: metadataOut['size'] ?? 0,
+          source: uri ?? '',
           duration: duration,
-          metadata: metadata,
-          replyToMessageId: metadata['reply_to'],
+          metadata: metadataOut,
+          replyToMessageId: metadataOut['reply_to'] ?? replyTo,
         );
       default:
         return types.TextMessage(
           createdAt: createdAt,
-          id: map['id'],
-          authorId: map['author_id'] ?? deletedUserId,
-          text: map['text'] ?? '',
-          metadata: metadata,
-          replyToMessageId: metadata['reply_to'],
+          id: id,
+          authorId: safeAuthor,
+          text: text ?? '',
+          metadata: metadataOut,
+          replyToMessageId: metadataOut['reply_to'] ?? replyTo,
           deliveredAt: deliveredAt,
         );
     }
   }
 
-  /// `channel_id` from a messages row (legacy int or Appwrite string).
+  /// `channel_id` from a messages row (always Appwrite channel document `$id`).
   static String channelIdFromRow(Map<String, dynamic> map) {
     final v = map['channel_id'];
     if (v == null) return '';

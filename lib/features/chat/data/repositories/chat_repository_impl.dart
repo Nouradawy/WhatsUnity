@@ -21,6 +21,8 @@ class ChatRepositoryImpl implements ChatRepository {
   final ChatLocalDataSource localDataSource;
 
   @override
+  /// UI provides [channelId] as Appwrite `channels` document `$id`.
+  /// We read local first, then pull remote rows and re-emit.
   Future<List<types.Message>> fetchMessages({
     required String channelId,
     required String currentUserId,
@@ -59,7 +61,7 @@ class ChatRepositoryImpl implements ChatRepository {
     void Function(List<types.Message> messages, int pageNum)? onRemoteSynced,
   }) async {
     try {
-      final raw = await remoteDataSource.fetchMessages(
+      final raw = await remoteDataSource.remote_fetchMessages(
         channelId: channelId,
         currentUserId: currentUserId,
         pageSize: pageSize,
@@ -90,7 +92,7 @@ class ChatRepositoryImpl implements ChatRepository {
     types.Message? repliedMessage,
   }) async {
     final now = await trustedUtcNow();
-    await remoteDataSource.sendTextMessage(
+    await remoteDataSource.remote_sendTextMessage(
       text: text,
       channelId: channelId,
       userId: userId,
@@ -111,7 +113,7 @@ class ChatRepositoryImpl implements ChatRepository {
     Map<String, dynamic>? additionalMetadata,
   }) async {
     final now = await trustedUtcNow();
-    await remoteDataSource.sendFileMessage(
+    await remoteDataSource.remote_sendFileMessage(
       uri: uri,
       name: name,
       size: size,
@@ -133,7 +135,7 @@ class ChatRepositoryImpl implements ChatRepository {
     required String userId,
   }) async {
     final now = await trustedUtcNow();
-    await remoteDataSource.sendVoiceNote(
+    await remoteDataSource.remote_sendVoiceNote(
       uri: uri,
       duration: duration,
       waveform: waveform,
@@ -148,7 +150,11 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<bool> markMessageAsSeen(String messageId, String userId) async {
     try {
       final now = await trustedUtcNow();
-      await remoteDataSource.markMessageAsSeen(messageId, userId, now.toIso8601String());
+      await remoteDataSource.remote_markMessageAsSeen(
+        messageId,
+        userId,
+        now.toIso8601String(),
+      );
       return true;
     } catch (_) {
       return false;
@@ -158,17 +164,26 @@ class ChatRepositoryImpl implements ChatRepository {
   @override
   Future<void> deleteMessage(types.Message message, String currentUserId) async {
     final now = await trustedUtcNow();
-    await remoteDataSource.deleteMessage(message.id, message.authorId, currentUserId, now.toIso8601String());
+    await remoteDataSource.remote_deleteMessage(
+      message.id,
+      message.authorId,
+      currentUserId,
+      now.toIso8601String(),
+    );
   }
 
   @override
+  /// Persists metadata changes (reactions/poll updates) remotely, then caches locally.
   Future<void> updateMessageMetadata({
     required String channelId,
     required types.Message message,
   }) async {
     final meta = message.metadata;
     if (meta == null) return;
-    await remoteDataSource.updateMessageMetadata(message.id, Map<String, dynamic>.from(meta));
+    await remoteDataSource.remote_updateMessageMetadata(
+      message.id,
+      Map<String, dynamic>.from(meta),
+    );
     try {
       await localDataSource.local_insertMessagesFromTypes(channelId, [message]);
     } catch (e, st) {
@@ -183,7 +198,7 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<types.Message?> fetchMessageById(String messageId) async {
     if (messageId.isEmpty) return null;
     try {
-      final row = await remoteDataSource.fetchMessageRow(messageId);
+      final row = await remoteDataSource.remote_fetchMessageRow(messageId);
       final msg = MessageModel.fromMap(row);
       try {
         final ch = MessageModel.channelIdFromRow(row);
@@ -206,7 +221,7 @@ class ChatRepositoryImpl implements ChatRepository {
       return const types.User(id: 'deleted_user', name: 'Deleted User');
     }
     try {
-      final userData = await remoteDataSource.resolveUser(id);
+      final userData = await remoteDataSource.remote_resolveUser(id);
       return types.User(
         id: id,
         name: userData['display_name'] ?? 'Unknown',
@@ -218,13 +233,14 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
+  /// Subscribes to Appwrite realtime for one [channelId] document id.
   ChatRealtimeHandle subscribeToChannel({
     required String channelId,
     required void Function(types.Message message) onInsert,
     required void Function(types.Message message) onUpdate,
     void Function(types.Message message)? onDelete,
   }) {
-    return remoteDataSource.subscribeToChannel(
+    return remoteDataSource.remote_subscribeToChannel(
       channelId: channelId,
       onInsert: (payload) {
         final map = Map<String, dynamic>.from(payload);
@@ -267,7 +283,7 @@ class ChatRepositoryImpl implements ChatRepository {
     required String channelType,
     String? buildingNameForScopedChat,
   }) {
-    return remoteDataSource.resolveChannelDocumentId(
+    return remoteDataSource.remote_resolveChannelDocumentId(
       compoundId: compoundId,
       channelType: channelType,
       buildingNameForScopedChat: buildingNameForScopedChat,

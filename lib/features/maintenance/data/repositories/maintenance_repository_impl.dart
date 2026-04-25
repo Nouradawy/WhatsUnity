@@ -40,9 +40,11 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
     );
   }
 
+  /// Pulls remote reports by Appwrite `compound_id` (compound document `$id`)
+  /// and merges into local cache.
   Future<void> _mergeRemoteReports(String compoundId, String type) async {
     try {
-      final remote = await remoteDataSource.getReports(
+      final remote = await remoteDataSource.remote_getReports(
         compoundId: compoundId,
         type: type,
       );
@@ -52,9 +54,10 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
     } catch (_) {}
   }
 
+  /// Pulls remote attachments by Appwrite `compound_id` and merges locally.
   Future<void> _mergeRemoteAttachments(String compoundId, String type) async {
     try {
-      final remote = await remoteDataSource.getAttachments(
+      final remote = await remoteDataSource.remote_getAttachments(
         compoundId: compoundId,
         type: type,
       );
@@ -108,7 +111,7 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
 
   @override
   Future<List<MaintenanceReportsHistory>> getReportNotes(String reportId) async {
-    final data = await remoteDataSource.getReportNotes(reportId);
+    final data = await remoteDataSource.remote_getReportNotes(reportId);
     return data.map(MaintenanceReportsHistory.fromJson).toList();
   }
 
@@ -118,7 +121,7 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
     required String actorId,
     required String action,
   }) async {
-    await remoteDataSource.postReportNote(
+    await remoteDataSource.remote_postReportNote(
       reportId: reportId,
       actorId: actorId,
       action: action,
@@ -133,14 +136,14 @@ class MaintenanceRepositoryImpl implements MaintenanceRepository {
     required String compoundId,
     required MaintenanceReportType type,
   }) async {
-    await remoteDataSource.updateReportStatus(
+    await remoteDataSource.remote_updateReportStatus(
       reportId: reportId,
       status: status,
       compoundId: compoundId,
       type: type.name,
     );
     try {
-      final row = await remoteDataSource.fetchReportRow(reportId);
+      final row = await remoteDataSource.remote_fetchReportRow(reportId);
       final v = int.tryParse(row['version']?.toString() ?? '') ?? 0;
       row['entity_version'] = v;
       row['sync_state'] = 'clean';

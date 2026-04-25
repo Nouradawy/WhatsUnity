@@ -77,7 +77,8 @@ Map<String, dynamic> _historyDocumentToRow(aw_models.Document doc) {
 }
 
 abstract class MaintenanceRemoteDataSource {
-  Future<Map<String, dynamic>> submitReport({
+  /// Creates a maintenance report remotely; returned `id` is the report document `$id`.
+  Future<Map<String, dynamic>> remote_submitReport({
     required String userId,
     required String title,
     required String description,
@@ -86,33 +87,33 @@ abstract class MaintenanceRemoteDataSource {
     required String? compoundId,
   });
 
-  Future<void> uploadAttachments({
+  Future<void> remote_uploadAttachments({
     required String reportId,
     required List<Map<String, String>> imageSources,
     required String? compoundId,
     required String type,
   });
 
-  Future<List<Map<String, dynamic>>> getReports({
+  Future<List<Map<String, dynamic>>> remote_getReports({
     required String compoundId,
     required String type,
   });
 
-  Future<List<Map<String, dynamic>>> getAttachments({
+  Future<List<Map<String, dynamic>>> remote_getAttachments({
     required String compoundId,
     required String type,
   });
 
-  Future<List<Map<String, dynamic>>> getReportNotes(String reportId);
+  Future<List<Map<String, dynamic>>> remote_getReportNotes(String reportId);
 
-  Future<void> postReportNote({
+  Future<void> remote_postReportNote({
     required String reportId,
     required String actorId,
     required String action,
     required DateTime createdAt,
   });
 
-  Future<void> updateReportStatus({
+  Future<void> remote_updateReportStatus({
     required String reportId,
     required String status,
     required String compoundId,
@@ -120,7 +121,7 @@ abstract class MaintenanceRemoteDataSource {
   });
 
   /// Idempotent create with client-chosen [documentId] (offline-first).
-  Future<void> createReportWithDocumentId({
+  Future<void> remote_createReportWithDocumentId({
     required String documentId,
     required String userId,
     required String title,
@@ -131,7 +132,7 @@ abstract class MaintenanceRemoteDataSource {
     int version = 0,
   });
 
-  Future<void> createAttachmentWithDocumentId({
+  Future<void> remote_createAttachmentWithDocumentId({
     required String documentId,
     required String reportId,
     required String sourceUrlJson,
@@ -140,12 +141,12 @@ abstract class MaintenanceRemoteDataSource {
     int version = 0,
   });
 
-  Future<Map<String, dynamic>> fetchReportRow(String reportId);
+  Future<Map<String, dynamic>> remote_fetchReportRow(String reportId);
 
-  Future<Map<String, dynamic>> fetchAttachmentRow(String attachmentId);
+  Future<Map<String, dynamic>> remote_fetchAttachmentRow(String attachmentId);
 
   /// Append one file map to `source_url` JSON array and bump `version`.
-  Future<void> appendAttachmentSourceEntry({
+  Future<void> remote_appendAttachmentSourceEntry({
     required String attachmentId,
     required Map<String, String> entry,
   });
@@ -159,7 +160,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   final Databases _databases;
 
   @override
-  Future<Map<String, dynamic>> submitReport({
+  Future<Map<String, dynamic>> remote_submitReport({
     required String userId,
     required String title,
     required String description,
@@ -168,7 +169,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     required String? compoundId,
   }) async {
     final id = ID.unique();
-    await createReportWithDocumentId(
+    await remote_createReportWithDocumentId(
       documentId: id,
       userId: userId,
       title: title,
@@ -182,7 +183,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<void> createReportWithDocumentId({
+  Future<void> remote_createReportWithDocumentId({
     required String documentId,
     required String userId,
     required String title,
@@ -218,7 +219,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<void> createAttachmentWithDocumentId({
+  Future<void> remote_createAttachmentWithDocumentId({
     required String documentId,
     required String reportId,
     required String sourceUrlJson,
@@ -249,7 +250,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<Map<String, dynamic>> fetchReportRow(String reportId) async {
+  Future<Map<String, dynamic>> remote_fetchReportRow(String reportId) async {
     final doc = await _databases.getDocument(
       databaseId: appwriteDatabaseId,
       collectionId: _kReports,
@@ -259,7 +260,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<Map<String, dynamic>> fetchAttachmentRow(String attachmentId) async {
+  Future<Map<String, dynamic>> remote_fetchAttachmentRow(String attachmentId) async {
     final doc = await _databases.getDocument(
       databaseId: appwriteDatabaseId,
       collectionId: _kAttachments,
@@ -269,7 +270,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<void> appendAttachmentSourceEntry({
+  Future<void> remote_appendAttachmentSourceEntry({
     required String attachmentId,
     required Map<String, String> entry,
   }) async {
@@ -298,14 +299,14 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<void> uploadAttachments({
+  Future<void> remote_uploadAttachments({
     required String reportId,
     required List<Map<String, String>> imageSources,
     required String? compoundId,
     required String type,
   }) async {
     final id = ID.unique();
-    await createAttachmentWithDocumentId(
+    await remote_createAttachmentWithDocumentId(
       documentId: id,
       reportId: reportId,
       sourceUrlJson: _jsonEncodeSourceUrl(imageSources),
@@ -316,7 +317,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getReports({
+  Future<List<Map<String, dynamic>>> remote_getReports({
     required String compoundId,
     required String type,
   }) async {
@@ -335,7 +336,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getAttachments({
+  Future<List<Map<String, dynamic>>> remote_getAttachments({
     required String compoundId,
     required String type,
   }) async {
@@ -354,7 +355,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getReportNotes(String reportId) async {
+  Future<List<Map<String, dynamic>>> remote_getReportNotes(String reportId) async {
     final list = await _databases.listDocuments(
       databaseId: appwriteDatabaseId,
       collectionId: _kHistory,
@@ -369,7 +370,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<void> postReportNote({
+  Future<void> remote_postReportNote({
     required String reportId,
     required String actorId,
     required String action,
@@ -390,7 +391,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
   }
 
   @override
-  Future<void> updateReportStatus({
+  Future<void> remote_updateReportStatus({
     required String reportId,
     required String status,
     required String compoundId,
