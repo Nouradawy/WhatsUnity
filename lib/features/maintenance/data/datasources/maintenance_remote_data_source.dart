@@ -5,11 +5,13 @@ import 'dart:convert';
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart' as aw_models;
 import 'package:WhatsUnity/core/config/appwrite.dart';
+import 'package:WhatsUnity/core/media/appwrite_function_helpers.dart';
 
 /// APPWRITE_SCHEMA.md §2.11–2.13 — tools/provision_spec.json
 const String _kReports = 'maintenance_reports';
 const String _kAttachments = 'maintenance_attachments';
 const String _kHistory = 'maintenance_history';
+const String _kReportCodeFunctionFallbackId = 'generate_report_code';
 
 const int _kListLimit = 2000;
 
@@ -29,7 +31,7 @@ List<dynamic> _decodeSourceUrl(dynamic v) {
   return [];
 }
 
-Map<String, dynamic> _reportDocumentToRow(aw_models.Document doc) {
+Map<String, dynamic> _reportDocumentToRow(aw_models.Row doc) {
   final d = doc.data;
   final v = int.tryParse(d['version']?.toString() ?? '') ?? 0;
   return {
@@ -49,7 +51,7 @@ Map<String, dynamic> _reportDocumentToRow(aw_models.Document doc) {
   };
 }
 
-Map<String, dynamic> _attachmentDocumentToRow(aw_models.Document doc) {
+Map<String, dynamic> _attachmentDocumentToRow(aw_models.Row doc) {
   final d = doc.data;
   final v = int.tryParse(d['version']?.toString() ?? '') ?? 0;
   return {
@@ -64,7 +66,7 @@ Map<String, dynamic> _attachmentDocumentToRow(aw_models.Document doc) {
   };
 }
 
-Map<String, dynamic> _historyDocumentToRow(aw_models.Document doc) {
+Map<String, dynamic> _historyDocumentToRow(aw_models.Row doc) {
   final d = doc.data;
   final createdAt = d['created_at']?.toString() ?? doc.$createdAt;
   return {
@@ -154,10 +156,37 @@ abstract class MaintenanceRemoteDataSource {
 
 /// Appwrite-backed implementation (replaces Supabase).
 class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSource {
-  AppwriteMaintenanceRemoteDataSourceImpl({required Databases databases})
+  AppwriteMaintenanceRemoteDataSourceImpl({required TablesDB databases})
       : _databases = databases;
 
-  final Databases _databases;
+  final TablesDB _databases;
+
+  bool _looksLikeReportCodeConflict(AppwriteException e) {
+    if (e.code != 409) return false;
+    final message = '${e.message}'.toLowerCase();
+    return message.contains('report_code') ||
+        message.contains('idx_maint_report_code') ||
+        message.contains('unique');
+  }
+
+  Future<String> _remote_generateReportCode(String reportType) async {
+    final functionId = resolveFunctionId(
+      'APPWRITE_FUNCTION_GENERATE_REPORT_CODE',
+      _kReportCodeFunctionFallbackId,
+    );
+    final response = await invokeAppwriteFunctionJson(
+      functions: appwriteFunctions,
+      functionId: functionId,
+      payload: {'reportType': reportType},
+    );
+    final reportCode = (response['report_code'] ?? response['reportCode'] ?? '')
+        .toString()
+        .trim();
+    if (reportCode.isEmpty) {
+      throw StateError('generate_report_code returned empty report_code');
+    }
+    return reportCode;
+  }
 
   @override
   Future<Map<String, dynamic>> remote_submitReport({
@@ -193,29 +222,58 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     required String? compoundId,
     int version = 0,
   }) async {
+    // Idempotent retry guard: do not allocate a new report code when the report already exists.
     try {
-      await _databases.createDocument(
+      await _databases.getRow(
         databaseId: appwriteDatabaseId,
-        collectionId: _kReports,
-        documentId: documentId,
-        data: {
-          'user_id': userId,
-          'title': title,
-          'description': description,
-          'category': category,
-          'type': type,
-          'status': 'New',
-          if (compoundId != null) 'compound_id': compoundId,
-          'version': version,
-        },
+        tableId: _kReports,
+        rowId: documentId,
       );
+      return;
     } on AppwriteException catch (e) {
-      if (e.code == 409 ||
-          '${e.message}'.toLowerCase().contains('already exists')) {
-        return;
-      }
-      rethrow;
+      if (e.code != 404) rethrow;
     }
+
+    for (var attempt = 0; attempt < 5; attempt++) {
+      final reportCode = await _remote_generateReportCode(type);
+      try {
+        await _databases.createRow(
+          databaseId: appwriteDatabaseId,
+          tableId: _kReports,
+          rowId: documentId,
+          data: {
+            'user_id': userId,
+            'report_code': reportCode,
+            'title': title,
+            'description': description,
+            'category': category,
+            'type': type,
+            'status': 'New',
+            if (compoundId != null) 'compound_id': compoundId,
+            'version': version,
+          },
+        );
+        return;
+      } on AppwriteException catch (e) {
+        // Idempotent retry for same report document.
+        if (e.code == 409 &&
+            '${e.message}'.toLowerCase().contains('already exists')) {
+          final doc = await _databases.getRow(
+            databaseId: appwriteDatabaseId,
+            tableId: _kReports,
+            rowId: documentId,
+          );
+          if (doc.$id == documentId) return;
+        }
+
+        // Unique report_code race: generate a fresh code and retry bounded times.
+        if (_looksLikeReportCodeConflict(e) && attempt < 4) {
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw StateError('Failed to create maintenance report after retries.');
   }
 
   @override
@@ -228,10 +286,10 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     int version = 0,
   }) async {
     try {
-      await _databases.createDocument(
+      await _databases.createRow(
         databaseId: appwriteDatabaseId,
-        collectionId: _kAttachments,
-        documentId: documentId,
+        tableId: _kAttachments,
+        rowId: documentId,
         data: {
           'report_id': reportId,
           'source_url': sourceUrlJson,
@@ -251,20 +309,20 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
 
   @override
   Future<Map<String, dynamic>> remote_fetchReportRow(String reportId) async {
-    final doc = await _databases.getDocument(
+    final doc = await _databases.getRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kReports,
-      documentId: reportId,
+      tableId: _kReports,
+      rowId: reportId,
     );
     return _reportDocumentToRow(doc);
   }
 
   @override
   Future<Map<String, dynamic>> remote_fetchAttachmentRow(String attachmentId) async {
-    final doc = await _databases.getDocument(
+    final doc = await _databases.getRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kAttachments,
-      documentId: attachmentId,
+      tableId: _kAttachments,
+      rowId: attachmentId,
     );
     return _attachmentDocumentToRow(doc);
   }
@@ -274,10 +332,10 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     required String attachmentId,
     required Map<String, String> entry,
   }) async {
-    final existing = await _databases.getDocument(
+    final existing = await _databases.getRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kAttachments,
-      documentId: attachmentId,
+      tableId: _kAttachments,
+      rowId: attachmentId,
     );
     final d = existing.data;
     final list = _decodeSourceUrl(d['source_url']);
@@ -287,10 +345,10 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     }
     merged.add(Map<String, dynamic>.from(entry));
     final v = int.tryParse(d['version']?.toString() ?? '') ?? 0;
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kAttachments,
-      documentId: attachmentId,
+      tableId: _kAttachments,
+      rowId: attachmentId,
       data: {
         'source_url': jsonEncode(merged),
         'version': v + 1,
@@ -321,9 +379,9 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     required String compoundId,
     required String type,
   }) async {
-    final list = await _databases.listDocuments(
+    final list = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kReports,
+      tableId: _kReports,
       queries: [
         Query.equal('compound_id', compoundId),
         Query.equal('type', type),
@@ -332,7 +390,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
         Query.limit(_kListLimit),
       ],
     );
-    return list.documents.map(_reportDocumentToRow).toList();
+    return list.rows.map(_reportDocumentToRow).toList();
   }
 
   @override
@@ -340,9 +398,9 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     required String compoundId,
     required String type,
   }) async {
-    final list = await _databases.listDocuments(
+    final list = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kAttachments,
+      tableId: _kAttachments,
       queries: [
         Query.equal('compound_id', compoundId),
         Query.equal('type', type),
@@ -351,14 +409,14 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
         Query.limit(_kListLimit),
       ],
     );
-    return list.documents.map(_attachmentDocumentToRow).toList();
+    return list.rows.map(_attachmentDocumentToRow).toList();
   }
 
   @override
   Future<List<Map<String, dynamic>>> remote_getReportNotes(String reportId) async {
-    final list = await _databases.listDocuments(
+    final list = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kHistory,
+      tableId: _kHistory,
       queries: [
         Query.equal('report_id', reportId),
         Query.isNull('deleted_at'),
@@ -366,7 +424,7 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
         Query.limit(_kListLimit),
       ],
     );
-    return list.documents.map(_historyDocumentToRow).toList();
+    return list.rows.map(_historyDocumentToRow).toList();
   }
 
   @override
@@ -376,10 +434,10 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     required String action,
     required DateTime createdAt,
   }) async {
-    await _databases.createDocument(
+    await _databases.createRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kHistory,
-      documentId: ID.unique(),
+      tableId: _kHistory,
+      rowId: ID.unique(),
       data: {
         'report_id': reportId,
         'actor_id': actorId,
@@ -397,10 +455,10 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
     required String compoundId,
     required String type,
   }) async {
-    final existing = await _databases.getDocument(
+    final existing = await _databases.getRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kReports,
-      documentId: reportId,
+      tableId: _kReports,
+      rowId: reportId,
     );
     final d = existing.data;
     final storedCompound = d['compound_id']?.toString() ?? '';
@@ -410,10 +468,10 @@ class AppwriteMaintenanceRemoteDataSourceImpl implements MaintenanceRemoteDataSo
       );
     }
     final v = int.tryParse(existing.data['version']?.toString() ?? '') ?? 0;
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kReports,
-      documentId: reportId,
+      tableId: _kReports,
+      rowId: reportId,
       data: {
         'status': status,
         'version': v + 1,

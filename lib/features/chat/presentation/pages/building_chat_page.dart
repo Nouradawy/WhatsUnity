@@ -60,7 +60,7 @@ class BuildingChat extends StatelessWidget {
               create: (context) => SocialCubit(
                 repository: SocialRepositoryImpl(
                   remoteDataSource: SocialRemoteDataSourceImpl(
-                    databases: appwriteDatabases,
+                    databases: appwriteTables,
                   ),
                 ),
               ),

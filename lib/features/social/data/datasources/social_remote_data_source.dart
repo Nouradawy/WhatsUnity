@@ -8,7 +8,7 @@ import 'package:WhatsUnity/core/config/appwrite.dart';
 const String _collectionPosts = 'posts';
 const String _collectionBrainstorms = 'brainstorms';
 
-Map<String, dynamic> _mergedDocumentJson(aw_models.Document d) => {
+Map<String, dynamic> _mergedDocumentJson(aw_models.Row d) => {
       r'$id': d.$id,
       r'$createdAt': d.$createdAt,
       r'$updatedAt': d.$updatedAt,
@@ -71,16 +71,16 @@ abstract class SocialRemoteDataSource {
 }
 
 class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
-  SocialRemoteDataSourceImpl({required Databases databases})
+  SocialRemoteDataSourceImpl({required TablesDB databases})
       : _databases = databases;
 
-  final Databases _databases;
+  final TablesDB _databases;
 
   @override
   Future<List<Map<String, dynamic>>> remote_getPosts(String compoundId) async {
-    final list = await _databases.listDocuments(
+    final list = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _collectionPosts,
+      tableId: _collectionPosts,
       queries: [
         Query.equal('compound_id', compoundId),
         Query.isNull('deleted_at'),
@@ -88,7 +88,7 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
         Query.limit(2000),
       ],
     );
-    return list.documents.map(_mergedDocumentJson).toList();
+    return list.rows.map(_mergedDocumentJson).toList();
   }
 
   @override
@@ -99,10 +99,10 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
     required String authorId,
     required List<Map<String, dynamic>> imageSources,
   }) async {
-    await _databases.createDocument(
+    await _databases.createRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _collectionPosts,
-      documentId: ID.unique(),
+      tableId: _collectionPosts,
+      rowId: ID.unique(),
       data: {
         'compound_id': compoundId,
         'author_id': authorId,
@@ -120,10 +120,10 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
     required String postId,
     required List<Map<String, dynamic>> comments,
   }) async {
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _collectionPosts,
-      documentId: postId,
+      tableId: _collectionPosts,
+      rowId: postId,
       data: {
         'Comments': _jsonAttr(comments),
       },
@@ -135,17 +135,17 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
     required String authorId,
     required String postId,
   }) async {
-    final doc = await _databases.getDocument(
+    final doc = await _databases.getRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _collectionPosts,
-      documentId: postId,
+      tableId: _collectionPosts,
+      rowId: postId,
     );
     if (doc.data['author_id']?.toString() != authorId) return;
     final v = int.tryParse(doc.data['version']?.toString() ?? '') ?? 0;
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _collectionPosts,
-      documentId: postId,
+      tableId: _collectionPosts,
+      rowId: postId,
       data: {
         'deleted_at': DateTime.now().toUtc().toIso8601String(),
         'version': v + 1,
@@ -158,9 +158,9 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
     String channelId,
     String compoundId,
   ) async {
-    final list = await _databases.listDocuments(
+    final list = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _collectionBrainstorms,
+      tableId: _collectionBrainstorms,
       queries: [
         Query.equal('channel_id', channelId),
         Query.equal('compound_id', compoundId),
@@ -169,7 +169,7 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
         Query.limit(2000),
       ],
     );
-    return list.documents.map(_mergedDocumentJson).toList();
+    return list.rows.map(_mergedDocumentJson).toList();
   }
 
   @override
@@ -183,10 +183,10 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
     required List<Map<String, dynamic>> imageSources,
     required dynamic options,
   }) async {
-    await _databases.createDocument(
+    await _databases.createRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _collectionBrainstorms,
-      documentId: ID.custom(id),
+      tableId: _collectionBrainstorms,
+      rowId: ID.custom(id),
       data: {
         'channel_id': channelId,
         'compound_id': compoundId,
@@ -207,10 +207,10 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
     required Map<String, Map<String, bool>> votes,
     required List<Map<String, dynamic>> options,
   }) async {
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _collectionBrainstorms,
-      documentId: pollId,
+      tableId: _collectionBrainstorms,
+      rowId: pollId,
       data: {
         'votes': _jsonAttr(votes),
         'options': _jsonAttr(options),
@@ -223,10 +223,10 @@ class SocialRemoteDataSourceImpl implements SocialRemoteDataSource {
     required String pollId,
     required List<Map<String, dynamic>> comments,
   }) async {
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _collectionBrainstorms,
-      documentId: pollId,
+      tableId: _collectionBrainstorms,
+      rowId: pollId,
       data: {
         'comments': _jsonAttr(comments),
       },

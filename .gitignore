@@ -50,3 +50,10 @@ android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 firebase.json
 android/app/google-service.json
+
+# Infrastructure secrets/state
+whatsunity-infra/terraform.tfvars
+whatsunity-infra/*.tfstate
+whatsunity-infra/*.tfstate.*
+whatsunity-infra/.terraform/
+whatsunity-infra/.terraform.lock.hcl

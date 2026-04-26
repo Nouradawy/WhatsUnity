@@ -11,7 +11,7 @@ const String _kReportUser = 'report_user';
 
 const int _kListLimit = 2000;
 
-Map<String, dynamic> _mergedDocumentJson(aw_models.Document d) => {
+Map<String, dynamic> _mergedDocumentJson(aw_models.Row d) => {
       r'$id': d.$id,
       r'$createdAt': d.$createdAt,
       r'$updatedAt': d.$updatedAt,
@@ -36,17 +36,17 @@ abstract class AdminRemoteDataSource {
 }
 
 class AppwriteAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
-  AppwriteAdminRemoteDataSourceImpl({required Databases databases})
+  AppwriteAdminRemoteDataSourceImpl({required TablesDB databases})
       : _databases = databases;
 
-  final Databases _databases;
+  final TablesDB _databases;
 
   @override
   Future<List<AdminUserModel>> remote_getCompoundMembers(
       String compoundId) async {
-    final ua = await _databases.listDocuments(
+    final ua = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kUserApartments,
+      tableId: _kUserApartments,
       queries: [
         Query.equal('compound_id', compoundId),
         Query.isNull('deleted_at'),
@@ -55,7 +55,7 @@ class AppwriteAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       ],
     );
     final userIds = <String>{};
-    for (final doc in ua.documents) {
+    for (final doc in ua.rows) {
       final uid = doc.data['user_id']?.toString();
       if (uid != null && uid.isNotEmpty) {
         userIds.add(uid);
@@ -64,9 +64,9 @@ class AppwriteAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     if (userIds.isEmpty) return [];
     final idList = userIds.toList();
 
-    final prof = await _databases.listDocuments(
+    final prof = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kProfiles,
+      tableId: _kProfiles,
       queries: [
         Query.equal(r'$id', idList),
         Query.isNull('deleted_at'),
@@ -74,26 +74,26 @@ class AppwriteAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
         Query.limit(_kListLimit),
       ],
     );
-    return prof.documents
+    return prof.rows
         .map((d) => AdminUserModel.fromAppwriteJson(_mergedDocumentJson(d)))
         .toList();
   }
 
   @override
   Future<void> remote_updateUserStatus(String userId, String status) async {
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kProfiles,
-      documentId: userId,
+      tableId: _kProfiles,
+      rowId: userId,
       data: {'userState': status},
     );
   }
 
   @override
   Future<List<UserReportModel>> remote_getUserReports({String? status}) async {
-    final list = await _databases.listDocuments(
+    final list = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kReportUser,
+      tableId: _kReportUser,
       queries: [
         if (status != null && status != 'All') Query.equal('state', status),
         Query.isNull('deleted_at'),
@@ -101,17 +101,17 @@ class AppwriteAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
         Query.limit(_kListLimit),
       ],
     );
-    return list.documents
+    return list.rows
         .map((d) => UserReportModel.fromAppwriteJson(_mergedDocumentJson(d)))
         .toList();
   }
 
   @override
   Future<void> remote_updateReportStatus(String reportId, String status) async {
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kReportUser,
-      documentId: reportId,
+      tableId: _kReportUser,
+      rowId: reportId,
       data: {'state': status},
     );
   }
@@ -120,10 +120,10 @@ class AppwriteAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   Future<void> remote_createReport(UserReportModel report) async {
     final data = report.toAppwriteJson();
     data['version'] = 0;
-    await _databases.createDocument(
+    await _databases.createRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kReportUser,
-      documentId: ID.unique(),
+      tableId: _kReportUser,
+      rowId: ID.unique(),
       data: data,
     );
   }

@@ -18,7 +18,7 @@ import 'package:WhatsUnity/features/chat/data/datasources/chat_local_data_source
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_details_cubit.dart';
 import 'package:WhatsUnity/features/chat/domain/repositories/chat_repository.dart';
 import 'package:WhatsUnity/core/config/Enums.dart';
-import 'package:WhatsUnity/core/config/appwrite.dart' show appwriteDatabases;
+import 'package:WhatsUnity/core/config/appwrite.dart' show appwriteTables;
 import 'package:WhatsUnity/core/constants/Constants.dart';
 import 'package:WhatsUnity/core/media/media_services.dart';
 import 'package:WhatsUnity/core/media/media_upload_exception.dart';
@@ -1280,7 +1280,7 @@ class _GeneralChatState extends State<GeneralChat>
             builder: (context) => BlocProvider(
               create: (context) => ChatDetailsCubit(
                 authCubit: context.read<AuthCubit>(),
-                databases: appwriteDatabases,
+                databases: appwriteTables,
               ),
               child: ChatDetails(compoundId: widget.compoundId),
             ),

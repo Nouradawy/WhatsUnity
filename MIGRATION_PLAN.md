@@ -172,10 +172,16 @@ Supabase metadata and profile fields (`role_id`, `owner_type`, `phone_number`, `
 ## 6.2 Offline create flow
 1. User submits report -> insert local report (`dirty`).
 2. Queue `create_report` sync job.
-3. If attachments exist:
+3. During remote create, Appwrite Function `generate_report_code` allocates
+   server-authoritative `report_code` by report type:
+   - maintenance -> `MR-######`
+   - security -> `SE-######`
+   - carservice -> `CS-######`
+4. Persist `report_code` on `maintenance_reports` document.
+5. If attachments exist:
    - store local attachment record with file path (`pending_upload`)
    - queue `upload_attachment` jobs.
-4. UI immediately reads local report list and details.
+6. UI immediately reads local report list and details.
 
 ## 6.3 Sync flow
 1. Push report create first.

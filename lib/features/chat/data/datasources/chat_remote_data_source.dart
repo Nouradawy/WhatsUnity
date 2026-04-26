@@ -214,12 +214,12 @@ abstract class ChatRemoteDataSource {
 
 class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   ChatRemoteDataSourceImpl({
-    required Databases databases,
+    required TablesDB databases,
     required Realtime realtime,
   })  : _databases = databases,
         _realtime = realtime;
 
-  final Databases _databases;
+  final TablesDB _databases;
   final Realtime _realtime;
 
   @override
@@ -233,9 +233,9 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     final _ = currentUserId;
 
     final limit = pageSize < 1 ? 1 : pageSize;
-    final list = await _databases.listDocuments(
+    final list = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kMessagesCollectionId,
+      tableId: _kMessagesCollectionId,
       queries: [
         Query.equal('channel_id', channelId),
         Query.isNull('deleted_at'),
@@ -244,7 +244,9 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         if (pageNum > 0) Query.offset(pageNum * pageSize),
       ],
     );
-    return list.documents.map(_documentToMessageRow).toList();
+    return list.rows
+        .map((row) => _mapPayloadToMessageRow(row.toMap()))
+        .toList();
   }
 
   @override
@@ -288,10 +290,10 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           if (repliedMessageId != null) 'reply_to': repliedMessageId,
         };
     try {
-      await _databases.createDocument(
+      await _databases.createRow(
         databaseId: appwriteDatabaseId,
-        collectionId: _kMessagesCollectionId,
-        documentId: documentId,
+        tableId: _kMessagesCollectionId,
+        rowId: documentId,
         data: {
           'author_id': userId,
           'channel_id': channelId,
@@ -318,16 +320,16 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     required String uri,
     required Map<String, dynamic> metadata,
   }) async {
-    final doc = await _databases.getDocument(
+    final doc = await _databases.getRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kMessagesCollectionId,
-      documentId: messageId,
+      tableId: _kMessagesCollectionId,
+      rowId: messageId,
     );
     final v = int.tryParse(doc.data['version']?.toString() ?? '') ?? 0;
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kMessagesCollectionId,
-      documentId: messageId,
+      tableId: _kMessagesCollectionId,
+      rowId: messageId,
       data: {
         'uri': uri,
         'metadata': _jsonEncodeMap(metadata),
@@ -355,10 +357,10 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       'createdAtMs': nowMs,
       if (additionalMetadata != null) ...additionalMetadata,
     };
-    await _databases.createDocument(
+    await _databases.createRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kMessagesCollectionId,
-      documentId: ID.unique(),
+      tableId: _kMessagesCollectionId,
+      rowId: ID.unique(),
       data: {
         'author_id': userId,
         'channel_id': channelId,
@@ -391,10 +393,10 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       'waveform': waveform,
       'status': 'processing',
     };
-    await _databases.createDocument(
+    await _databases.createRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kMessagesCollectionId,
-      documentId: ID.unique(),
+      tableId: _kMessagesCollectionId,
+      rowId: ID.unique(),
       data: {
         'author_id': userId,
         'channel_id': channelId,
@@ -411,10 +413,10 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String messageId,
     Map<String, dynamic> metadata,
   ) async {
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kMessagesCollectionId,
-      documentId: messageId,
+      tableId: _kMessagesCollectionId,
+      rowId: messageId,
       data: {
         'metadata': _jsonEncodeMap(metadata),
       },
@@ -423,12 +425,12 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
 
   @override
   Future<Map<String, dynamic>> remote_fetchMessageRow(String messageId) async {
-    final doc = await _databases.getDocument(
+    final doc = await _databases.getRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kMessagesCollectionId,
-      documentId: messageId,
+      tableId: _kMessagesCollectionId,
+      rowId: messageId,
     );
-    return _documentToMessageRow(doc);
+    return _mapPayloadToMessageRow(doc.toMap());
   }
 
   @override
@@ -441,10 +443,10 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     final text = authorId == currentUserId
         ? 'this message was deleted'
         : 'this message was deleted by admin';
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kMessagesCollectionId,
-      documentId: messageId,
+      tableId: _kMessagesCollectionId,
+      rowId: messageId,
       data: {
         'text': text,
         'uri': null,
@@ -460,20 +462,20 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String userId,
     String nowIso,
   ) async {
-    final existing = await _databases.listDocuments(
+    final existing = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kMessageReceiptsCollectionId,
+      tableId: _kMessageReceiptsCollectionId,
       queries: [
         Query.equal('message_id', messageId),
         Query.equal('user_id', userId),
         Query.limit(1),
       ],
     );
-    if (existing.documents.isEmpty) {
-      await _databases.createDocument(
+    if (existing.rows.isEmpty) {
+      await _databases.createRow(
         databaseId: appwriteDatabaseId,
-        collectionId: _kMessageReceiptsCollectionId,
-        documentId: ID.unique(),
+        tableId: _kMessageReceiptsCollectionId,
+        rowId: ID.unique(),
         data: {
           'message_id': messageId,
           'user_id': userId,
@@ -482,11 +484,11 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         },
       );
     } else {
-      final row = existing.documents.first;
-      await _databases.updateDocument(
+      final row = existing.rows.first;
+      await _databases.updateRow(
         databaseId: appwriteDatabaseId,
-        collectionId: _kMessageReceiptsCollectionId,
-        documentId: row.$id,
+        tableId: _kMessageReceiptsCollectionId,
+        rowId: row.$id,
         data: {
           'seen_at': nowIso,
         },
@@ -501,9 +503,9 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String? buildingNameForScopedChat,
   }) async {
     if (channelType == 'COMPOUND_GENERAL') {
-      final list = await _databases.listDocuments(
+      final list = await _databases.listRows(
         databaseId: appwriteDatabaseId,
-        collectionId: _kChannelsCollectionId,
+        tableId: _kChannelsCollectionId,
         queries: [
           Query.equal('compound_id', compoundId),
           Query.equal('type', channelType),
@@ -511,13 +513,13 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           Query.limit(1),
         ],
       );
-      return list.documents.isEmpty ? null : list.documents.first.$id;
+      return list.rows.isEmpty ? null : list.rows.first.$id;
     }
     final bn = buildingNameForScopedChat?.trim();
     if (bn == null || bn.isEmpty) return null;
-    final buildings = await _databases.listDocuments(
+    final buildings = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kBuildingsCollectionId,
+      tableId: _kBuildingsCollectionId,
       queries: [
         Query.equal('compound_id', compoundId),
         Query.equal('building_name', bn),
@@ -525,11 +527,11 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         Query.limit(1),
       ],
     );
-    if (buildings.documents.isEmpty) return null;
-    final buildingDocId = buildings.documents.first.$id;
-    final ch = await _databases.listDocuments(
+    if (buildings.rows.isEmpty) return null;
+    final buildingDocId = buildings.rows.first.$id;
+    final ch = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kChannelsCollectionId,
+      tableId: _kChannelsCollectionId,
       queries: [
         Query.equal('compound_id', compoundId),
         Query.equal('building_id', buildingDocId),
@@ -538,16 +540,16 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         Query.limit(1),
       ],
     );
-    return ch.documents.isEmpty ? null : ch.documents.first.$id;
+    return ch.rows.isEmpty ? null : ch.rows.first.$id;
   }
 
   @override
   Future<Map<String, String>> remote_fetchProfileAvatarUrls(List<String> userIds) async {
     if (userIds.isEmpty) return {};
     final uniq = userIds.toSet().toList();
-    final list = await _databases.listDocuments(
+    final list = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kProfilesCollectionId,
+      tableId: _kProfilesCollectionId,
       queries: [
         Query.equal(r'$id', uniq),
         Query.isNull('deleted_at'),
@@ -555,7 +557,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       ],
     );
     final out = <String, String>{};
-    for (final d in list.documents) {
+    for (final d in list.rows) {
       final id = d.$id;
       final url = d.data['avatar_url']?.toString();
       if (url != null && url.isNotEmpty) {
@@ -571,16 +573,16 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   Future<List<Map<String, dynamic>>> remote_listSeenReceiptsForMessage(
     String messageId,
   ) async {
-    final list = await _databases.listDocuments(
+    final list = await _databases.listRows(
       databaseId: appwriteDatabaseId,
-      collectionId: _kMessageReceiptsCollectionId,
+      tableId: _kMessageReceiptsCollectionId,
       queries: [
         Query.equal('message_id', messageId),
         Query.isNotNull('seen_at'),
         Query.limit(500),
       ],
     );
-    return list.documents
+    return list.rows
         .map(
           (d) => {
             'user_id': d.data['user_id']?.toString(),
@@ -592,10 +594,10 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
 
   @override
   Future<Map<String, dynamic>> remote_resolveUser(String id) async {
-    final doc = await _databases.getDocument(
+    final doc = await _databases.getRow(
       databaseId: appwriteDatabaseId,
-      collectionId: _kProfilesCollectionId,
-      documentId: id,
+      tableId: _kProfilesCollectionId,
+      rowId: id,
     );
     return {
       'display_name': doc.data['display_name'],
@@ -611,7 +613,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     void Function(Map<String, dynamic> payload)? onDelete,
   }) {
     final channel = [
-      'databases.$appwriteDatabaseId.collections.$_kMessagesCollectionId.documents',
+      'databases.$appwriteDatabaseId.collections.$_kMessagesCollectionId.rows',
     ];
     final sub = _realtime.subscribe(
       channel,

@@ -14,11 +14,11 @@ import '../../../../features/auth/presentation/bloc/auth_state.dart';
 
 class ChatDetailsCubit extends Cubit<ChatDetailsStates> {
   final AuthCubit authCubit;
-  final Databases _databases;
+  final TablesDB _databases;
 
   ChatDetailsCubit({
     required this.authCubit,
-    required Databases databases,
+    required TablesDB databases,
   })  : _databases = databases,
         super(ChatInitialState());
   
@@ -70,10 +70,10 @@ class ChatDetailsCubit extends Cubit<ChatDetailsStates> {
   }
 
   Future<void> banUser(String userid, UserState banType) async {
-    await _databases.updateDocument(
+    await _databases.updateRow(
       databaseId: appwriteDatabaseId,
-      collectionId: 'profiles',
-      documentId: userid,
+      tableId: 'profiles',
+      rowId: userid,
       data: {'userState': banType.name},
     );
     final currentState = authCubit.state;

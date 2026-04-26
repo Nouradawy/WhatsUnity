@@ -83,13 +83,13 @@ class MyApp extends StatelessWidget {
           child: RepositoryProvider<ChatRemoteDataSource>(
             create:
                 (_) => ChatRemoteDataSourceImpl(
-                  databases: appwriteDatabases,
+                  databases: appwriteTables,
                   realtime: appwriteRealtime,
                 ),
             child: RepositoryProvider<MaintenanceRemoteDataSource>(
               create:
                   (_) => AppwriteMaintenanceRemoteDataSourceImpl(
-                    databases: appwriteDatabases,
+                    databases: appwriteTables,
                   ),
               child: Provider<SyncEngine>(
                 create: (ctx) {
@@ -123,7 +123,7 @@ class MyApp extends StatelessWidget {
                       create:
                           (_) => AdminRepositoryImpl(
                             remoteDataSource: AppwriteAdminRemoteDataSourceImpl(
-                              databases: appwriteDatabases,
+                              databases: appwriteTables,
                             ),
                           ),
                       child: RepositoryProvider<ChatRepository>(
@@ -180,7 +180,7 @@ class MyApp extends StatelessWidget {
                             create:
                                 (context) => ChatDetailsCubit(
                                   authCubit: context.read<AuthCubit>(),
-                                  databases: appwriteDatabases,
+                                  databases: appwriteTables,
                                 ),
                           ),
                           BlocProvider(
@@ -220,7 +220,7 @@ class MyApp extends StatelessWidget {
                                   repository: SocialRepositoryImpl(
                                     remoteDataSource:
                                         SocialRemoteDataSourceImpl(
-                                          databases: appwriteDatabases,
+                                          databases: appwriteTables,
                                         ),
                                   ),
                                 ),

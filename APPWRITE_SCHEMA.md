@@ -285,6 +285,7 @@ Replaces: `MaintenanceReports`
 | description | string | 20000 | yes | — | no |  |
 | category | string | 128 | yes | — | no |  |
 | type | string | 64 | yes | — | no |  |
+| report_code | string | 32 | yes | — | no | Server-generated code (`MR-000001`, `SE-000001`, `CS-000001`) |
 | status | string | 64 | no | null | no |  |
 | version | integer | — | yes | 0 | no |  |
 | deleted_at | datetime | — | no | null | no |  |
@@ -295,6 +296,26 @@ Replaces: `MaintenanceReports`
 | --- | --- | --- | --- |
 | idx_maint_compound_type | key | compound_id, type | asc, asc |
 | idx_maint_compound_type_status | key | compound_id, type, status | all asc |
+| idx_maint_report_code | unique | report_code | asc |
+
+---
+
+### 2.11b `report_code_counters`
+
+Used by Appwrite Function `generate_report_code` to allocate per-type incremental
+maintenance report codes in a server-authoritative way.
+
+| attribute | type | size | required | default | array? | notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| prefix | string | 8 | yes | — | no | `MR` / `SE` / `CS`; document `\$id` may equal prefix |
+| next_number | integer | — | yes | 1 | no | next sequence number to allocate |
+| version | integer | — | yes | 0 | no | optional LWW metadata |
+
+**Indexes**
+
+| key | type | attributes | order |
+| --- | --- | --- | --- |
+| idx_report_code_counters_prefix | unique | prefix | asc |
 
 ---
 

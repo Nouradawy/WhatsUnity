@@ -1,0 +1,15 @@
+{
+  "name": "generate-report-code",
+  "version": "1.0.0",
+  "description": "Allocates incremental report_code prefixes for maintenance/security/carservice.",
+  "main": "src/main.js",
+  "scripts": {
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "node-appwrite": "^14.1.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5"
+  }
+}
