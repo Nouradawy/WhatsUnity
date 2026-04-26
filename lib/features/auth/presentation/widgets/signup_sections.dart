@@ -592,37 +592,86 @@ Column signInProviders(
         padding: EdgeInsets.symmetric(horizontal: MediaQuery.of(context).size.width * 0.075),
         child: MaterialButton(
           height: 40,
-          onPressed: () async {
-            if (cubit.signInToggler) {
-              await cubit.resetUserData();
-              cubit.signInWithGoogle(isSignin: true);
-            } else if (cubit.signupGoogleEmail == null) {
-              await cubit.resetUserData();
-              cubit.signInWithGoogle(isSignin: false);
-            } else {
-              if (cubit.roleName != Roles.manager) {
-                final isForm1Valid = formKey1.currentState?.validate() ?? false;
-                final isForm2Valid = formKey2.currentState?.validate() ?? false;
-                if (!isForm1Valid || !isForm2Valid) return;
-                await cubit.isApartmentTaken(
-                  compoundId: cubit.selectedCompoundId!,
-                  buildingName: buildingNum.text,
-                  apartmentNum: apartmentNum.text,
-                );
-                if (cubit.apartmentConflict) return;
-              }
-              cubit.completeRegistration(
-                fullName: fullName.text,
-                userName: userName.text,
-                ownerType: cubit.ownerType,
-                phoneNumber: phoneNumber.text,
-                roleId: cubit.roleName!.index + 1,
-                buildingName: cubit.roleName != Roles.manager ? buildingNum.text : '-1',
-                apartmentNum: cubit.roleName != Roles.manager ? apartmentNum.text : '-1',
-                compoundId: cubit.selectedCompoundId!,
-              );
-            }
-          },
+          elevation: 0,
+          disabledColor: Colors.grey.shade200,
+          onPressed: cubit.googleSigningIn
+              ? null
+              : () async {
+                  cubit.googleSignInSwitcher();
+                  try {
+                    if (cubit.signInToggler) {
+                      await cubit.resetUserData();
+                      await cubit.signInWithGoogle(isSignin: true);
+                    } else if (cubit.signupGoogleEmail == null) {
+                      await cubit.resetUserData();
+                      await cubit.signInWithGoogle(isSignin: false);
+                    } else {
+                      final selectedRole = cubit.roleName;
+                      final selectedCompoundId = cubit.selectedCompoundId;
+                      if (selectedRole == null) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            const SnackBar(
+                              behavior: SnackBarBehavior.floating,
+                              content: Text('Please select your role before continuing.'),
+                            ),
+                          );
+                        return;
+                      }
+                      if (selectedCompoundId == null || selectedCompoundId.isEmpty) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            const SnackBar(
+                              behavior: SnackBarBehavior.floating,
+                              content: Text('Please select your compound before continuing.'),
+                            ),
+                          );
+                        return;
+                      }
+
+                      if (cubit.roleName != Roles.manager) {
+                        final isForm1Valid = formKey1.currentState?.validate() ?? false;
+                        final isForm2Valid = formKey2.currentState?.validate() ?? false;
+                        if (!isForm1Valid || !isForm2Valid) return;
+                        await cubit.isApartmentTaken(
+                          compoundId: selectedCompoundId,
+                          buildingName: buildingNum.text,
+                          apartmentNum: apartmentNum.text,
+                        );
+                        if (cubit.apartmentConflict) return;
+                      }
+                      await cubit.completeRegistration(
+                        fullName: fullName.text,
+                        userName: userName.text,
+                        ownerType: cubit.ownerType,
+                        phoneNumber: phoneNumber.text,
+                        roleId: selectedRole.index + 1,
+                        buildingName: selectedRole != Roles.manager ? buildingNum.text : '-1',
+                        apartmentNum: selectedRole != Roles.manager ? apartmentNum.text : '-1',
+                        compoundId: selectedCompoundId,
+                      );
+                    }
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context)
+                      ..hideCurrentSnackBar()
+                      ..showSnackBar(
+                        SnackBar(
+                          behavior: SnackBarBehavior.floating,
+                          backgroundColor: Colors.pink,
+                          content: Text('Google registration failed: $e'),
+                        ),
+                      );
+                  } finally {
+                    if (cubit.googleSigningIn) {
+                      cubit.googleSignInSwitcher();
+                    }
+                  }
+                },
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
             side: const BorderSide(color: Colors.black26, width: 1),
@@ -631,6 +680,13 @@ Column signInProviders(
             mainAxisAlignment: MainAxisAlignment.center,
             spacing: 15,
             children: [
+              if (cubit.googleSigningIn)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
               Image.asset("assets/Google_icon-may25.webp", height: 25),
               Text(
                 cubit.signupGoogleEmail != null

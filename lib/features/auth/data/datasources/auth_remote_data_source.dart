@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/enums.dart';
 import 'package:appwrite/models.dart' as aw_models;
+import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 
@@ -55,24 +59,125 @@ abstract class AuthRemoteDataSource {
 class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   AppwriteAuthRemoteDataSourceImpl({
     required Account account,
+    required Functions functions,
+    String? googleServerClientId,
+    String? nativeGoogleBridgeFunctionId,
     this.oauthSuccessUrl,
     this.oauthFailureUrl,
-  }) : _account = account;
+  })  : _account = account,
+        _functions = functions,
+        _googleServerClientId = googleServerClientId,
+        _nativeGoogleBridgeFunctionId =
+            (nativeGoogleBridgeFunctionId?.trim().isNotEmpty ?? false)
+                ? nativeGoogleBridgeFunctionId!.trim()
+                : _kDefaultNativeGoogleBridgeFunctionId;
 
   final Account _account;
+  final Functions _functions;
+  final String? _googleServerClientId;
+  final String _nativeGoogleBridgeFunctionId;
+
+  static const String _kDefaultNativeGoogleBridgeFunctionId =
+      'google_native_signin_bridge';
 
   /// Deep-link URLs used by [signInWithGoogle].
   /// Falls back to Appwrite's built-in callback when null.
   final String? oauthSuccessUrl;
   final String? oauthFailureUrl;
 
+  bool get _isAndroid => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
   // ── Internal helpers ──────────────────────────────────────────────────────
 
   AppUser _toAppUser(aw_models.User user) => AppUser(
-        id: user.$id,
-        email: user.email,
-        userMetadata: Map<String, dynamic>.from(user.prefs.data),
+    id: user.$id,
+    email: user.email,
+    userMetadata: Map<String, dynamic>.from(user.prefs.data),
+  );
+
+  Future<Map<String, dynamic>> _invokeNativeGoogleBridge({
+    required String idToken,
+  }) async {
+    final execution = await _functions.createExecution(
+      functionId: _nativeGoogleBridgeFunctionId,
+      body: jsonEncode({'idToken': idToken}),
+      xasync: false,
+    );
+
+    if (execution.status == ExecutionStatus.failed) {
+      throw Exception(
+        'google_native_signin_bridge failed: '
+        'http=${execution.responseStatusCode} body=${execution.responseBody}',
       );
+    }
+    if (execution.responseStatusCode >= 400) {
+      throw Exception(
+        'google_native_signin_bridge HTTP ${execution.responseStatusCode}: '
+        '${execution.responseBody}',
+      );
+    }
+
+    final raw = execution.responseBody.trim();
+    if (raw.isEmpty) {
+      throw Exception('google_native_signin_bridge returned empty response body.');
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      throw Exception('google_native_signin_bridge response must be JSON object.');
+    }
+    return Map<String, dynamic>.from(decoded);
+  }
+
+  Future<AppUser?> _remote_signInWithGoogleAndroidNative() async {
+    final serverClientId = _googleServerClientId?.trim();
+    if (serverClientId == null || serverClientId.isEmpty) {
+      throw Exception(
+        'Missing GOOGLE_SERVER_CLIENT_ID in .env. '
+        'Use your Google Cloud "Web application" client ID.',
+      );
+    }
+
+    final googleSignIn = GoogleSignIn(
+      scopes: const ['email', 'profile', 'openid'],
+      serverClientId: serverClientId,
+    );
+
+    final selectedAccount = await googleSignIn.signIn();
+    if (selectedAccount == null) return null; // User cancelled picker.
+
+    final auth = await selectedAccount.authentication;
+    final idToken = auth.idToken?.trim();
+    if (idToken == null || idToken.isEmpty) {
+      throw Exception(
+        'Google Sign-In did not return idToken. '
+        'Check GOOGLE_SERVER_CLIENT_ID (must be Web client ID).',
+      );
+    }
+
+    final bridge = await _invokeNativeGoogleBridge(idToken: idToken);
+    final userId = (bridge['userId'] ?? '').toString().trim();
+    final secret = (bridge['secret'] ?? '').toString().trim();
+    final email = (bridge['email'] ?? '').toString().trim();
+    final name = (bridge['name'] ?? '').toString().trim();
+    final avatarUrl = (bridge['picture'] ?? '').toString().trim();
+    if (userId.isEmpty || secret.isEmpty) {
+      throw Exception(
+        'google_native_signin_bridge returned invalid userId/secret payload: $bridge',
+      );
+    }
+
+    await _account.createSession(userId: userId, secret: secret);
+    // Avoid an immediate extra /account call after session creation.
+    // We already have user identity from the bridge payload.
+    return AppUser(
+      id: userId,
+      email: email.isEmpty ? null : email,
+      userMetadata: <String, dynamic>{
+        if (name.isNotEmpty) 'name': name,
+        if (avatarUrl.isNotEmpty) 'avatar_url': avatarUrl,
+      },
+    );
+  }
 
   // ── AuthRemoteDataSource ──────────────────────────────────────────────────
 
@@ -93,15 +198,16 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     required String email,
     required String password,
   }) async {
-    await _account.createEmailPasswordSession(
-      email: email,
-      password: password,
-    );
+    await _account.createEmailPasswordSession(email: email, password: password);
     return await remote_getCurrentUser();
   }
 
   @override
   Future<AppUser?> remote_signInWithGoogle() async {
+    if (_isAndroid) {
+      return _remote_signInWithGoogleAndroidNative();
+    }
+
     await _account.createOAuth2Session(
       provider: OAuthProvider.google,
       success: oauthSuccessUrl,
@@ -126,8 +232,7 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
     final fullName = trimmed(data['full_name']);
     final displayName = trimmed(data['display_name']);
-    final accountName =
-        fullName ?? displayName ?? '';
+    final accountName = fullName ?? displayName ?? '';
 
     if (accountName.isEmpty) {
       throw Exception(
@@ -145,10 +250,7 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     // the project role stays `guests`, and [Account.getPrefs] / [updatePrefs] in
     // [AuthRepositoryImpl.signUp] throw `general_unauthorized_scope` (missing
     // `account` scope for guests).
-    await _account.createEmailPasswordSession(
-      email: email,
-      password: password,
-    );
+    await _account.createEmailPasswordSession(email: email, password: password);
     // 6-digit OTP is sent from [OtpScreen] (first frame + resend) via
     // [Account.createEmailToken] so the user only completes verification in-app.
     // Do not call [createEmailToken] here — it would duplicate the email and push

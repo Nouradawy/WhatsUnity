@@ -613,7 +613,10 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     void Function(Map<String, dynamic> payload)? onDelete,
   }) {
     final channel = [
-      'databases.$appwriteDatabaseId.collections.$_kMessagesCollectionId.rows',
+      // TablesDB realtime path (primary for current Appwrite data layer).
+      'databases.$appwriteDatabaseId.tables.$_kMessagesCollectionId.rows',
+      // Legacy collection path kept for backward compatibility.
+      'databases.$appwriteDatabaseId.collections.$_kMessagesCollectionId.documents',
     ];
     final sub = _realtime.subscribe(
       channel,

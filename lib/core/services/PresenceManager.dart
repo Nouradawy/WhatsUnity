@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../features/auth/presentation/bloc/auth_cubit.dart';
+import '../../features/auth/presentation/bloc/auth_state.dart';
 import '../../features/chat/presentation/bloc/presence_cubit.dart';
 import 'RealtimeUserService.dart';
 
@@ -16,6 +18,15 @@ class _PresenceManagerState extends State<PresenceManager> with WidgetsBindingOb
   // 1. Create a member variable to hold the PresenceCubit instance.
   late final PresenceCubit _presenceCubit;
 
+  (String, String)? _resolvePresenceIdentity() {
+    final authState = context.read<AuthCubit>().state;
+    if (authState is! Authenticated) return null;
+    final userId = authState.user.id.trim();
+    final compoundId = (authState.selectedCompoundId ?? '').trim();
+    if (userId.isEmpty || compoundId.isEmpty) return null;
+    return (userId, compoundId);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -26,8 +37,13 @@ class _PresenceManagerState extends State<PresenceManager> with WidgetsBindingOb
     // Start listening to app lifecycle events
     WidgetsBinding.instance.addObserver(this);
 
-    // Initialize the global presence channel using the stored instance
-    _presenceCubit.initializePresence();
+    final identity = _resolvePresenceIdentity();
+    if (identity != null) {
+      _presenceCubit.initializePresence(
+        userId: identity.$1,
+        compoundId: identity.$2,
+      );
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -53,7 +69,15 @@ class _PresenceManagerState extends State<PresenceManager> with WidgetsBindingOb
     // 4. Use the stored instance here as well for consistency and safety.
     if (state == AppLifecycleState.resumed) {
       // App is in the foreground
-      _presenceCubit.updatePresenceStatus('online');
+      final identity = _resolvePresenceIdentity();
+      if (identity != null) {
+        _presenceCubit.initializePresence(
+          userId: identity.$1,
+          compoundId: identity.$2,
+        );
+      } else {
+        _presenceCubit.updatePresenceStatus('online');
+      }
     } else {
       // App is in the background or closed, untrack to send a "leave" event
       _presenceCubit.untrackPresence();

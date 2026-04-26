@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter/foundation.dart' show compute, debugPrint, kDebugMode;
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/config/app_directory_types.dart';
 import '../../../../core/config/Enums.dart';
@@ -32,8 +33,8 @@ class AuthRepositoryImpl implements AuthRepository {
     required this.remoteDataSource,
     required Account appwriteAccount,
     required TablesDB appwriteTables,
-  })  : _appwriteAccount = appwriteAccount,
-        _tables = appwriteTables {
+  }) : _appwriteAccount = appwriteAccount,
+       _tables = appwriteTables {
     _checkExistingSession();
   }
 
@@ -142,6 +143,15 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> signOut() async {
     await remoteDataSource.remote_signOut();
+    // Best-effort native Google session cleanup (mainly Android native sign-in path).
+    try {
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Google signOut cleanup skipped: $e');
+      }
+    }
     await CacheHelper.removeData(CacheHelper.compoundCurrentIndexKey);
     await CacheHelper.removeData(CacheHelper.lastActiveUserIdKey);
     await CacheHelper.removeData("MyCompounds");
@@ -183,10 +193,7 @@ class AuthRepositoryImpl implements AuthRepository {
           databaseId: appwriteDatabaseId,
           collectionId: _kColProfiles,
           documentId: userId,
-          data: <String, dynamic>{
-            ...payload,
-            'version': 0,
-          },
+          data: <String, dynamic>{...payload, 'version': 0},
         );
       } else {
         rethrow;
@@ -265,6 +272,14 @@ class AuthRepositoryImpl implements AuthRepository {
     };
   }
 
+  String? _readCurrentUserAvatarUrl() {
+    final avatarCandidate = _currentUser?.userMetadata?['avatar_url'];
+    if (avatarCandidate == null) return null;
+    final avatarUrl = avatarCandidate.toString().trim();
+    if (avatarUrl.isEmpty) return null;
+    return avatarUrl;
+  }
+
   /// Merges with existing [Account] prefs and writes, so Google OAuth users keep
   /// any prior keys while completing registration.
   Future<void> _updateProvisioningPrefs(Map<String, dynamic> next) async {
@@ -290,21 +305,24 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     final userId = await _resolveAuthenticatedUserId();
     if (userId == null) return;
+    final avatarUrl = _readCurrentUserAvatarUrl();
 
     // 0. Appwrite: same prefs event as email sign-up (Google registers here).
+    final provisioningPayload = _provisioningMapFromCompleteRegistration(
+      fullName: fullName,
+      userName: userName,
+      ownerType: ownerType,
+      phoneNumber: phoneNumber,
+      roleId: roleId,
+      buildingName: buildingName,
+      apartmentNum: apartmentNum,
+      compoundId: compoundId,
+    );
+    if (avatarUrl != null) {
+      provisioningPayload['avatar_url'] = avatarUrl;
+    }
     try {
-      await _updateProvisioningPrefs(
-        _provisioningMapFromCompleteRegistration(
-          fullName: fullName,
-          userName: userName,
-          ownerType: ownerType,
-          phoneNumber: phoneNumber,
-          roleId: roleId,
-          buildingName: buildingName,
-          apartmentNum: apartmentNum,
-          compoundId: compoundId,
-        ),
-      );
+      await _updateProvisioningPrefs(provisioningPayload);
     } catch (e) {
       if (kDebugMode) {
         debugPrint('completeRegistration: updatePrefs $e');
@@ -317,6 +335,7 @@ class AuthRepositoryImpl implements AuthRepository {
       'display_name': userName,
       'owner_type': ownerType.name,
       'phone_number': phoneNumber,
+      if (avatarUrl != null) 'avatar_url': avatarUrl,
     };
     try {
       await appwriteDatabases.updateDocument(
@@ -332,10 +351,7 @@ class AuthRepositoryImpl implements AuthRepository {
           databaseId: appwriteDatabaseId,
           collectionId: _kColProfiles,
           documentId: userId,
-          data: <String, dynamic>{
-            ...profilePayload,
-            'version': 0,
-          },
+          data: <String, dynamic>{...profilePayload, 'version': 0},
         );
       } else {
         rethrow;
@@ -584,8 +600,7 @@ class AuthRepositoryImpl implements AuthRepository {
     // Client listRows is permission-scoped. Console "sees" all rows; the mobile
     // client only sees rows where the table allows Read for the current session
     // (e.g. role "users") or for guests ("any") during signup.
-    if (kDebugMode &&
-        (catDocs.rows.isEmpty || compoundDocs.rows.isEmpty)) {
+    if (kDebugMode && (catDocs.rows.isEmpty || compoundDocs.rows.isEmpty)) {
       try {
         final u = await _appwriteAccount.get();
         debugPrint(

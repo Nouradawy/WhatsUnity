@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:appwrite/appwrite.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/config/Enums.dart';
+import '../../../../core/config/appwrite.dart';
 import '../../../../core/config/app_directory_types.dart' show Users;
 import '../../../../core/constants/Constants.dart';
 import '../../../../core/models/CompoundsList.dart';
@@ -28,6 +31,7 @@ class AuthCubit extends Cubit<AuthState> {
   int authSessionNonce = DateTime.now().microsecondsSinceEpoch;
 
   bool signingIn = false;
+  bool googleSigningIn = false;
   List<XFile>? verFiles;
   final List<double> uploadProgress = [];
   bool apartmentConflict = false;
@@ -46,6 +50,7 @@ class AuthCubit extends Cubit<AuthState> {
     // Emits AppUser? — non-null means signed in, null means signed out.
     repository.onAuthStateChange.listen((appUser) {
       if (appUser != null) {
+        _attachRealtimeUserObservers(appUser.id);
         authSessionNonce = DateTime.now().microsecondsSinceEpoch;
         if (state is Authenticated) {
           // Preserve all loaded data (chatMembers, compounds, etc.);
@@ -61,6 +66,7 @@ class AuthCubit extends Cubit<AuthState> {
           ));
         }
       } else {
+        _detachRealtimeUserObservers();
         authSessionNonce = DateTime.now().microsecondsSinceEpoch;
         signInToggler = true;
         emit(Unauthenticated(
@@ -75,6 +81,201 @@ class AuthCubit extends Cubit<AuthState> {
   GoogleSignInAccount? googleUser;
   Future<void>? _presetBeforeSigninInFlight;
   bool _isSigningOut = false;
+  RealtimeSubscription? _profilesRealtimeSubscription;
+  RealtimeSubscription? _userRolesRealtimeSubscription;
+  String? _realtimeObservedUserId;
+  bool _refreshFromRealtimeInProgress = false;
+
+  Future<void> _persistCachedRoleId({
+    required String userId,
+    required String? email,
+    required Roles role,
+  }) async {
+    try {
+      final cacheKey = CacheHelper.cachedUserDataKey(userId);
+      final existingRaw =
+          await CacheHelper.getData(key: cacheKey, type: "String") as String?;
+      Map<String, dynamic> cached = <String, dynamic>{};
+      if (existingRaw != null && existingRaw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(existingRaw);
+          if (decoded is Map) {
+            cached = Map<String, dynamic>.from(decoded);
+          }
+        } catch (_) {
+          cached = <String, dynamic>{};
+        }
+      }
+      cached['email'] = email ?? (cached['email'] ?? '');
+      cached['role_id'] = role.index + 1;
+      await CacheHelper.saveData(key: cacheKey, value: jsonEncode(cached));
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[AuthCubit] _persistCachedRoleId failed: $e');
+      }
+    }
+  }
+
+  Roles? _resolveRoleFromRoleId(dynamic roleRaw) {
+    if (roleRaw == null) return null;
+    final roleId = roleRaw is int ? roleRaw : int.tryParse(roleRaw.toString());
+    if (roleId == null || roleId <= 0 || roleId > Roles.values.length) {
+      return null;
+    }
+    return Roles.values[roleId - 1];
+  }
+
+  Future<Roles?> _fetchRemoteRoleForUser(String userId) async {
+    try {
+      final result = await appwriteTables.listRows(
+        databaseId: appwriteDatabaseId,
+        tableId: 'user_roles',
+        queries: [
+          Query.equal('user_id', userId),
+          Query.isNull('deleted_at'),
+          Query.orderDesc(r'$updatedAt'),
+          Query.limit(1),
+        ],
+      );
+      if (result.rows.isEmpty) return null;
+      return _resolveRoleFromRoleId(result.rows.first.data['role_id']);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[AuthCubit] _fetchRemoteRoleForUser failed: $e');
+      }
+      return null;
+    }
+  }
+
+  Future<void> _refreshAuthenticatedStateFromRemote() async {
+    if (_refreshFromRealtimeInProgress) return;
+    _refreshFromRealtimeInProgress = true;
+    try {
+      final refreshedUser = await repository.fetchCurrentUser();
+      if (refreshedUser == null) return;
+
+      final roleFromUserRoles = await _fetchRemoteRoleForUser(refreshedUser.id);
+      final roleFromPrefs = _resolveRoleFromRoleId(
+        refreshedUser.userMetadata?['role_id'],
+      );
+      // Source of truth for runtime authorization is `user_roles`.
+      // Prefs can lag behind and must not override a fresh role change.
+      final resolvedRole = roleFromUserRoles ?? roleFromPrefs;
+      if (resolvedRole != null) {
+        await _persistCachedRoleId(
+          userId: refreshedUser.id,
+          email: refreshedUser.email,
+          role: resolvedRole,
+        );
+      }
+
+      final activeState = state;
+      final selectedCompoundId =
+          activeState is Authenticated ? activeState.selectedCompoundId : null;
+
+      List<ChatMember> refreshedMembers = const [];
+      List<Users> refreshedMembersData = const [];
+      ChatMember? refreshedCurrentMember;
+      if (selectedCompoundId != null && selectedCompoundId.isNotEmpty) {
+        try {
+          final membersResult = await repository.loadCompoundMembers(
+            selectedCompoundId,
+            role: resolvedRole,
+          );
+          refreshedMembers = membersResult.members;
+          refreshedMembersData = membersResult.membersData;
+          refreshedCurrentMember = refreshedMembers.firstWhere(
+            (member) => member.id.trim() == refreshedUser.id.trim(),
+            orElse: () => refreshedMembers.isNotEmpty
+                ? refreshedMembers.first
+                : throw StateError('No members found'),
+          );
+        } catch (_) {
+          refreshedCurrentMember = null;
+        }
+      }
+
+      if (activeState is Authenticated) {
+        emit(activeState.copyWith(
+          user: refreshedUser,
+          role: resolvedRole,
+          chatMembers: refreshedMembers,
+          membersData: refreshedMembersData,
+          currentUser: refreshedCurrentMember,
+          timestamp: DateTime.now().microsecondsSinceEpoch,
+        ));
+      } else {
+        emit(Authenticated(
+          user: refreshedUser,
+          role: resolvedRole,
+          chatMembers: refreshedMembers,
+          membersData: refreshedMembersData,
+          currentUser: refreshedCurrentMember,
+          timestamp: DateTime.now().microsecondsSinceEpoch,
+        ));
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[AuthCubit] _refreshAuthenticatedStateFromRemote failed: $e');
+      }
+    } finally {
+      _refreshFromRealtimeInProgress = false;
+    }
+  }
+
+  void _attachRealtimeUserObservers(String userId) {
+    if (_realtimeObservedUserId == userId &&
+        _profilesRealtimeSubscription != null &&
+        _userRolesRealtimeSubscription != null) {
+      return;
+    }
+    _detachRealtimeUserObservers();
+    _realtimeObservedUserId = userId;
+
+    final profileChannels = <String>[
+      'databases.$appwriteDatabaseId.collections.profiles.documents.$userId',
+    ];
+    _profilesRealtimeSubscription = appwriteRealtime.subscribe(profileChannels);
+    _profilesRealtimeSubscription!.stream.listen((_) {
+      _refreshAuthenticatedStateFromRemote();
+    });
+
+    final userRoleChannels = <String>[
+      'databases.$appwriteDatabaseId.collections.user_roles.documents',
+      'databases.$appwriteDatabaseId.tables.user_roles.rows',
+    ];
+    _userRolesRealtimeSubscription = appwriteRealtime.subscribe(userRoleChannels);
+    _userRolesRealtimeSubscription!.stream.listen((message) {
+      final payload = Map<String, dynamic>.from(message.payload);
+      final eventUserId = (payload['user_id'] ?? payload[r'$id'] ?? '')
+          .toString()
+          .trim();
+      if (eventUserId != userId) return;
+
+      final roleFromPayload = _resolveRoleFromRoleId(payload['role_id']);
+      if (roleFromPayload != null && state is Authenticated) {
+        final currentState = state as Authenticated;
+        unawaited(_persistCachedRoleId(
+          userId: currentState.user.id,
+          email: currentState.user.email,
+          role: roleFromPayload,
+        ));
+        emit((state as Authenticated).copyWith(
+          role: roleFromPayload,
+          timestamp: DateTime.now().microsecondsSinceEpoch,
+        ));
+      }
+      _refreshAuthenticatedStateFromRemote();
+    });
+  }
+
+  void _detachRealtimeUserObservers() {
+    _profilesRealtimeSubscription?.close();
+    _profilesRealtimeSubscription = null;
+    _userRolesRealtimeSubscription?.close();
+    _userRolesRealtimeSubscription = null;
+    _realtimeObservedUserId = null;
+  }
 
   void togglePasswordVisibility() {
     isPassword = !isPassword;
@@ -146,6 +347,20 @@ class AuthCubit extends Cubit<AuthState> {
   void signInSwitcher() {
     signingIn = !signingIn;
     emit(AuthInitial());
+  }
+
+  void googleSignInSwitcher() {
+    googleSigningIn = !googleSigningIn;
+    if (state is Authenticated) {
+      emit((state as Authenticated).copyWith());
+    } else if (state is Unauthenticated) {
+      emit(Unauthenticated(
+          categories: state.categories,
+          compoundsLogos: state.compoundsLogos));
+    } else {
+      emit(AuthInitial(
+          categories: state.categories, compoundsLogos: state.compoundsLogos));
+    }
   }
 
   Future<void> verFileImport() async {
@@ -474,14 +689,17 @@ class AuthCubit extends Cubit<AuthState> {
         }
       }
 
-      Roles? userRole;
-      final roleId =
-          currentUserAuth.userMetadata?["role_id"];
-      if (roleId != null) {
-        final rid = roleId is int ? roleId : int.tryParse(roleId.toString());
-        if (rid != null && rid > 0 && rid <= Roles.values.length) {
-          userRole = Roles.values[rid - 1];
-        }
+      final roleFromUserRoles = await _fetchRemoteRoleForUser(userId);
+      final roleFromPrefs = _resolveRoleFromRoleId(
+        currentUserAuth.userMetadata?["role_id"],
+      );
+      final Roles? userRole = roleFromUserRoles ?? roleFromPrefs;
+      if (userRole != null) {
+        await _persistCachedRoleId(
+          userId: userId,
+          email: currentUserAuth.email,
+          role: userRole,
+        );
       }
 
       List<ChatMember> chatMembers = [];
@@ -620,6 +838,8 @@ class AuthCubit extends Cubit<AuthState> {
     } catch (e) {
       signInGoogle = false;
       emit(AuthError(e.toString()));
+    } finally {
+      googleSigningIn = false;
     }
   }
 
@@ -657,6 +877,7 @@ class AuthCubit extends Cubit<AuthState> {
       apartmentConflict = false;
       verFiles = null;
       signingIn = false;
+      googleSigningIn = false;
       emit(Unauthenticated(
         categories: state.categories,
         compoundsLogos: state.compoundsLogos,
@@ -889,5 +1110,11 @@ class AuthCubit extends Cubit<AuthState> {
 
       emit(s.copyWith(chatMembers: updatedMembers, currentUser: newCurrent));
     }
+  }
+
+  @override
+  Future<void> close() {
+    _detachRealtimeUserObservers();
+    return super.close();
   }
 }

@@ -8,18 +8,20 @@ import 'package:flutter_chat_reactions/flutter_chat_reactions.dart';
 import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:WhatsUnity/features/admin/presentation/bloc/report_cubit.dart';
 
 import '../../../../../../core/config/Enums.dart';
-import '../../../../../admin/domain/entities/user_report.dart';
+import '../../../../../auth/presentation/bloc/auth_cubit.dart';
+import '../../../../../auth/presentation/bloc/auth_state.dart';
 import '../../../bloc/chat_cubit.dart';
-import '../../../../../admin/presentation/bloc/admin_cubit.dart';
+import '../../../../../admin/presentation/bloc/report_cubit.dart';
 
 import '../MessageWidget.dart';
 import '../Details/ChatMember.dart';
 
 
 class MessageRowWrapper extends StatelessWidget {
+  static final Set<String> _failedWebAvatarUrls = <String>{};
+
   final types.Message message;
   final int index;
   final bool isSentByMe;
@@ -31,6 +33,7 @@ class MessageRowWrapper extends StatelessWidget {
   final types.InMemoryChatController chatController;
   final bool isPreviousMessageFromSameUser;
   final Map<String, types.User> userCache;
+  final Map<String, ImageProvider<Object>> avatarImageProviderByUserId;
   final Future<void> Function(String) resolveUser; // Function to fetch user
   final List<types.Message> localMessages;
   final bool showDateHeaders;
@@ -63,6 +66,7 @@ class MessageRowWrapper extends StatelessWidget {
     required this.chatController,
     required this.isPreviousMessageFromSameUser,
     required this.userCache,
+    required this.avatarImageProviderByUserId,
     required this.resolveUser,
     required this.onVisibilityForHeader,
     required this.localMessages,
@@ -101,62 +105,9 @@ class MessageRowWrapper extends StatelessWidget {
 
     final bool showHeader = showDateHeaders && baseHeaderCond;
 
-    Future<void> _showReportDialog(BuildContext context) async {
-      final TextEditingController reasonController = TextEditingController();
-      String selectedReason = 'Spam';
-      final reasons = ['Spam', 'Harassment', 'Inappropriate Content', 'Hate Speech', 'Other'];
-
-      await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Report Message'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedReason,
-                items: reasons.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
-                onChanged: (val) => selectedReason = val ?? selectedReason,
-                decoration: const InputDecoration(labelText: 'Reason'),
-              ),
-              TextField(
-                controller: reasonController,
-                decoration: const InputDecoration(labelText: 'Description (optional)'),
-                maxLines: 3,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final report = UserReport(
-                  authorId: currentUserId,
-                  createdAt: DateTime.now(),
-                  reportedUserId: message.authorId,
-                  state: 'Pending',
-                  description: reasonController.text,
-                  messageId: message.id,
-                  reportedFor: selectedReason,
-                );
-                context.read<AdminCubit>().createReport(report);
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Report submitted')),
-                );
-              },
-              child: const Text('Report'),
-            ),
-          ],
-        ),
-      );
-    }
-
     Future<void> _showUserPopup(BuildContext context, String userId) async {
-      final member = chatMembers.firstWhere((member)=>member.id.trim() == userId);
+      final member = chatMembers.where((chatMember) => chatMember.id.trim() == userId).firstOrNull;
+      if (member == null) return;
       await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
@@ -191,16 +142,38 @@ class MessageRowWrapper extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: member.avatarUrl != null
-                          ? NetworkImage(member.avatarUrl!)
-                          : null,
-                      child: member.avatarUrl == null ? Text(member.displayName[0]) : null,
-                    ),
+                    leading: () {
+                      final rawAvatar = member.avatarUrl?.trim();
+                      final hasValidAvatar = rawAvatar != null &&
+                          rawAvatar.isNotEmpty &&
+                          rawAvatar.toLowerCase() != 'null';
+                      if (!hasValidAvatar) {
+                        return CircleAvatar(
+                          child: Text(member.displayName[0]),
+                        );
+                      }
+                      if (kIsWeb) {
+                        return CircleAvatar(
+                          child: ClipOval(
+                            child: Image.network(
+                              rawAvatar,
+                              fit: BoxFit.cover,
+                              width: 40,
+                              height: 40,
+                              errorBuilder: (_, __, ___) =>
+                                  Text(member.displayName[0]),
+                            ),
+                          ),
+                        );
+                      }
+                      return CircleAvatar(
+                        backgroundImage: NetworkImage(rawAvatar),
+                      );
+                    }(),
                     title: Text(member.displayName,
                         style: Theme.of(ctx).textTheme.titleMedium),
                     subtitle: Text(
-                      'Building ${member.building ?? '-'} · Apt ${member.apartment ?? '-'}',
+                      'Building ${member.building} · Apt ${member.apartment}',
                       style: Theme.of(ctx).textTheme.bodySmall,
                     ),
                   ),
@@ -269,13 +242,13 @@ class MessageRowWrapper extends StatelessWidget {
 
       if (isAdding) {
         usersForEmoji[currentUserId] = true;
-        if(replaceEmoji !=null)
-          {
-            reactions[replaceEmoji]?.remove(currentUserId);
-            if(reactions[replaceEmoji]!.isEmpty){
-              reactions.remove(replaceEmoji);
-            }
+        if (replaceEmoji != null) {
+          final existingReactionUsers = reactions[replaceEmoji];
+          existingReactionUsers?.remove(currentUserId);
+          if (existingReactionUsers != null && existingReactionUsers.isEmpty) {
+            reactions.remove(replaceEmoji);
           }
+        }
       } else {
         usersForEmoji.remove(currentUserId);
         if (usersForEmoji.isEmpty) {
@@ -478,18 +451,16 @@ class MessageRowWrapper extends StatelessWidget {
           }
 
           if (item.label == "Report") {
-            // Populate ReportCubit so the flutter_chat_reactions
-            // context menu widget can use it to file a report.
-            final reportCubit = context.read<ReportCubit>();
-            reportCubit
-              ..reportAuthorId = currentUserId
-              ..reportedUserId = message.authorId
-              ..messageId = message.id
-              ..issueType.clear()
-              ..reportDescription.clear();
-
-            // Do not open another dialog here; the reactions package
-            // will switch its dialog to the report form.
+            final reportCubit = ReportCubit.get(context);
+            final authState = context.read<AuthCubit>().state;
+            reportCubit.reportAuthorId = currentUserId;
+            reportCubit.reportedUserId = message.authorId;
+            reportCubit.messageId = message.id;
+            reportCubit.reportCompoundId =
+                authState is Authenticated ? authState.selectedCompoundId : null;
+            if (reportCubit.issueType.text.trim().isEmpty) {
+              reportCubit.issueType.text = 'other';
+            }
             return;
           }
         }
@@ -531,6 +502,21 @@ class MessageRowWrapper extends StatelessWidget {
     );
 
     final member = chatMembers.where((m) => m.id == message.authorId).firstOrNull;
+    String? normalizeAvatarUrl(String? raw) {
+      if (raw == null) return null;
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty || trimmed.toLowerCase() == 'null') return null;
+      return trimmed;
+    }
+
+    final avatarUrl = normalizeAvatarUrl(member?.avatarUrl);
+    final cachedAvatarImageProvider = avatarImageProviderByUserId[message.authorId];
+    final shouldShowAvatarForRow = !isPreviousMessageFromSameUser;
+    final isWebAvatarBlocked = kIsWeb &&
+        avatarUrl != null &&
+        _failedWebAvatarUrls.contains(avatarUrl);
+    final hasAvatar = cachedAvatarImageProvider != null ||
+        (avatarUrl != null && !isWebAvatarBlocked);
 
     final List<Widget> messageBody = [
       messageContent,
@@ -539,11 +525,30 @@ class MessageRowWrapper extends StatelessWidget {
             debugPrint(userRole.toString());
             _showUserPopup(context,message.authorId);
           },
-          child: (member?.avatarUrl != null)
-              ? CircleAvatar(
-                  radius: 16,
-                  backgroundImage: NetworkImage(member!.avatarUrl!),
-                )
+          child: (hasAvatar && shouldShowAvatarForRow)
+              ? (kIsWeb
+                  ? SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: ClipOval(
+                        child: Image(
+                          image: cachedAvatarImageProvider ?? NetworkImage(avatarUrl!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, error, ___) {
+                            final errorText = error.toString().toLowerCase();
+                            if (errorText.contains('429')) {
+                              _failedWebAvatarUrls.add(avatarUrl!);
+                            }
+                            return Avatar(userId: message.authorId);
+                          },
+                        ),
+                      ),
+                    )
+                  : CircleAvatar(
+                      radius: 16,
+                      backgroundImage:
+                          cachedAvatarImageProvider ?? NetworkImage(avatarUrl!),
+                    ))
               : Avatar(userId: message.authorId)),
 
     ];
@@ -563,7 +568,7 @@ class MessageRowWrapper extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (showHeader && createdAt != null) ...[
+          if (showHeader) ...[
             DateHeader(date: createdAt),
             const SizedBox(height: 11),
           ],
@@ -604,7 +609,7 @@ class DateHeader extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.black.withAlpha(800),
+          color: Colors.black.withAlpha(80),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(

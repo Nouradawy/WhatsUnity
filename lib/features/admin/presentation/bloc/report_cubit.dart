@@ -24,9 +24,10 @@ class ReportCubit extends Cubit<ReportCubitState> {
   final TextEditingController reportDescription = TextEditingController();
   final TextEditingController issueType = TextEditingController();
 
-  late String reportAuthorId;
-  late String reportedUserId;
-  late String messageId;
+  String? reportAuthorId;
+  String? reportedUserId;
+  String? messageId;
+  String? reportCompoundId;
 
   int index = 0;
   ReportAUsers? reportUser;
@@ -148,17 +149,40 @@ class ReportCubit extends Cubit<ReportCubitState> {
 
   Future<void> reportFilterUser(String userId) async {}
 
-  Future<void> fileReportToUser() async {
+  Future<void> fileReportToUser(BuildContext context) async {
+    final authState = context.read<AuthCubit>().state;
+    final fallbackAuthorId = authState is Authenticated ? authState.user.id.trim() : null;
+    final authorId = (reportAuthorId?.trim().isNotEmpty ?? false)
+        ? reportAuthorId!.trim()
+        : fallbackAuthorId;
+    final targetUserId = reportedUserId?.trim();
+    final targetMessageId = messageId?.trim();
+    final issue = issueType.text.trim();
+
+    if (authorId == null || authorId.isEmpty) {
+      throw StateError('reportAuthorId is missing');
+    }
+    if (targetUserId == null || targetUserId.isEmpty) {
+      throw StateError('reportedUserId is missing');
+    }
+    if (targetMessageId == null || targetMessageId.isEmpty) {
+      throw StateError('messageId is missing');
+    }
+    if (issue.isEmpty) {
+      throw StateError('issueType is missing');
+    }
+
     await _admin.createReport(
       UserReport(
         id: null,
-        authorId: reportAuthorId,
+        authorId: authorId,
         createdAt: DateTime.now().toUtc(),
-        reportedUserId: reportedUserId,
+        reportedUserId: targetUserId,
         state: 'New',
         description: reportDescription.text,
-        messageId: messageId,
-        reportedFor: issueType.text,
+        messageId: targetMessageId,
+        reportedFor: issue,
+        compoundId: reportCompoundId,
       ),
     );
   }

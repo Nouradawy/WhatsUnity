@@ -26,6 +26,8 @@ import 'package:WhatsUnity/core/media/media_upload_metadata.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_state.dart';
 import 'package:WhatsUnity/features/chat/presentation/utils/audio_message_playable.dart';
+import 'package:WhatsUnity/features/admin/domain/repositories/admin_repository.dart';
+import 'package:WhatsUnity/features/admin/presentation/bloc/report_cubit.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:mime/mime.dart';
@@ -148,6 +150,8 @@ class _GeneralChatState extends State<GeneralChat>
   // ── Message State ──────────────────────────────────────────────────────────
 
   final Map<String, types.User> _userCache = {};
+  final Map<String, ImageProvider<Object>> _avatarImageProviderByUserId = {};
+  bool _avatarPrefetchScheduled = false;
 
   /// Maps a placeholder message ID to its current upload progress (0.0–1.0).
   final Map<String, double> _uploadProgressByMessageId = {};
@@ -229,6 +233,58 @@ class _GeneralChatState extends State<GeneralChat>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _cacheService ??= ChatCacheService(context.read<ChatLocalDataSource>());
+  }
+
+  String? _normalizeAvatarUrl(String? rawUrl) {
+    if (rawUrl == null) return null;
+    final trimmedUrl = rawUrl.trim();
+    if (trimmedUrl.isEmpty || trimmedUrl.toLowerCase() == 'null') return null;
+    return trimmedUrl;
+  }
+
+  void _scheduleAvatarPrefetch(List<ChatMember> chatMembers) {
+    if (_avatarPrefetchScheduled) return;
+    _avatarPrefetchScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _avatarPrefetchScheduled = false;
+      if (!mounted) return;
+      final uncachedMembers = chatMembers.where((chatMember) {
+        final userId = chatMember.id.trim();
+        final avatarUrl = _normalizeAvatarUrl(chatMember.avatarUrl);
+        if (userId.isEmpty || avatarUrl == null) return false;
+        return !_avatarImageProviderByUserId.containsKey(userId);
+      }).toList(growable: false);
+      if (uncachedMembers.isEmpty) return;
+
+      const int prefetchBatchSize = 6;
+      bool hasNewCachedAvatar = false;
+      for (var start = 0; start < uncachedMembers.length; start += prefetchBatchSize) {
+        final end = (start + prefetchBatchSize > uncachedMembers.length)
+            ? uncachedMembers.length
+            : start + prefetchBatchSize;
+        final batchMembers = uncachedMembers.sublist(start, end);
+        await Future.wait(
+          batchMembers.map((chatMember) async {
+            final userId = chatMember.id.trim();
+            final avatarUrl = _normalizeAvatarUrl(chatMember.avatarUrl);
+            if (userId.isEmpty || avatarUrl == null) return;
+            if (_avatarImageProviderByUserId.containsKey(userId)) return;
+            final imageProvider = NetworkImage(avatarUrl);
+            try {
+              await precacheImage(imageProvider, context);
+              _avatarImageProviderByUserId[userId] = imageProvider;
+              hasNewCachedAvatar = true;
+            } catch (_) {
+              // Ignore prefetch failures and keep the runtime fallback path.
+            }
+          }),
+        );
+      }
+
+      if (mounted && hasNewCachedAvatar) {
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -1270,6 +1326,7 @@ class _GeneralChatState extends State<GeneralChat>
   }
 
   Widget _buildActiveChatScaffold(Authenticated authState) {
+    _scheduleAvatarPrefetch(authState.chatMembers);
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: _ChatAppBar(
@@ -1304,34 +1361,39 @@ class _GeneralChatState extends State<GeneralChat>
         Positioned.fill(
           child: NotificationListener<ScrollNotification>(
             onNotification: _onScrollNotification,
-            child: Chat(
-              key: _chatSurfaceKey,
-              chatController: _chatController,
-              currentUserId: _currentUserId,
-              onMessageSend: _handleSendPressed,
-              onAttachmentTap: _handleAttachmentTap,
-              resolveUser: (id) async {
-                await _resolveUserById(id);
-                return _userCache[id];
-              },
-              builders: types.Builders(
-                textMessageBuilder: (ctx, msg, idx,
-                        {required isSentByMe, groupStatus}) =>
-                    _buildMessageRow(ctx, msg, idx, isSentByMe: isSentByMe),
-                imageMessageBuilder: (ctx, msg, idx,
-                        {required isSentByMe, groupStatus}) =>
-                    _buildMessageRow(ctx, msg, idx, isSentByMe: isSentByMe),
-                audioMessageBuilder: (ctx, msg, idx,
-                        {required isSentByMe, groupStatus}) =>
-                    _buildMessageRow(ctx, msg, idx, isSentByMe: isSentByMe),
-                customMessageBuilder: (ctx, msg, idx,
-                        {required isSentByMe, groupStatus}) =>
-                    _buildMessageRow(ctx, msg, idx, isSentByMe: isSentByMe),
-                chatAnimatedListBuilder: (ctx, itemBuilder) => ChatAnimatedList(
-                  itemBuilder: itemBuilder,
-                  initialScrollToEndMode: InitialScrollToEndMode.jump,
+            child: BlocProvider(
+              create: (context) => ReportCubit(
+                adminRepository: context.read<AdminRepository>(),
+              ),
+              child: Chat(
+                key: _chatSurfaceKey,
+                chatController: _chatController,
+                currentUserId: _currentUserId,
+                onMessageSend: _handleSendPressed,
+                onAttachmentTap: _handleAttachmentTap,
+                resolveUser: (id) async {
+                  await _resolveUserById(id);
+                  return _userCache[id];
+                },
+                builders: types.Builders(
+                  textMessageBuilder: (ctx, msg, idx,
+                          {required isSentByMe, groupStatus}) =>
+                      _buildMessageRow(ctx, msg, idx, isSentByMe: isSentByMe),
+                  imageMessageBuilder: (ctx, msg, idx,
+                          {required isSentByMe, groupStatus}) =>
+                      _buildMessageRow(ctx, msg, idx, isSentByMe: isSentByMe),
+                  audioMessageBuilder: (ctx, msg, idx,
+                          {required isSentByMe, groupStatus}) =>
+                      _buildMessageRow(ctx, msg, idx, isSentByMe: isSentByMe),
+                  customMessageBuilder: (ctx, msg, idx,
+                          {required isSentByMe, groupStatus}) =>
+                      _buildMessageRow(ctx, msg, idx, isSentByMe: isSentByMe),
+                  chatAnimatedListBuilder: (ctx, itemBuilder) => ChatAnimatedList(
+                    itemBuilder: itemBuilder,
+                    initialScrollToEndMode: InitialScrollToEndMode.jump,
+                  ),
+                  composerBuilder: _buildComposer,
                 ),
-                composerBuilder: _buildComposer,
               ),
             ),
           ),
@@ -1440,6 +1502,7 @@ class _GeneralChatState extends State<GeneralChat>
       isPreviousMessageFromSameUser: index > 0 &&
           _chatController.messages[index - 1].authorId == message.authorId,
       userCache: _userCache,
+      avatarImageProviderByUserId: _avatarImageProviderByUserId,
       resolveUser: _resolveUserById,
       onVisibilityForHeader: _onMessageVisibilityChanged,
       localMessages: _chatController.messages,

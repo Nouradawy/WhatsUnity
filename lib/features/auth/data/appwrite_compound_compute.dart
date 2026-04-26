@@ -10,54 +10,53 @@ import '../../chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
 /// Background [Isolate] entry points for [compute] — synchronous only.
 
 /// Resolves document/row id after [compute] and `Map` copies (key quirks across isolates / tables API).
-String _rowId(Map<String, dynamic> row) {
-  Object? v = row[r'$id'] ?? row['\$id'] ?? row[r'$Id'] ?? row['id'];
-  if (v == null) {
-    final d = row['data'];
-    if (d is Map) {
-      final m = Map<String, dynamic>.from(d);
-      v = m[r'id'] ?? m['id'] ?? m[r'$id'] ?? m['\$id'];
+String _resolveRowId(Map<String, dynamic> rowMap) {
+  Object? rowIdValue =
+      rowMap[r'$id'] ?? rowMap['\$id'] ?? rowMap[r'$Id'] ?? rowMap['id'];
+  if (rowIdValue == null) {
+    final nestedData = rowMap['data'];
+    if (nestedData is Map) {
+      final nestedDataMap = Map<String, dynamic>.from(nestedData);
+      rowIdValue = nestedDataMap[r'id'] ??
+          nestedDataMap['id'] ??
+          nestedDataMap[r'$id'] ??
+          nestedDataMap['\$id'];
     }
   }
-  return v?.toString() ?? '';
+  return rowIdValue?.toString() ?? '';
 }
 
-Map<String, dynamic> _rowData(Map<String, dynamic> row) {
-  final d = row['data'];
-  if (d is Map) {
-    final m = Map<String, dynamic>.from(d);
-    if (m.isNotEmpty) return m;
+Map<String, dynamic> _extractRowData(Map<String, dynamic> rowMap) {
+  final nestedData = rowMap['data'];
+  if (nestedData is Map) {
+    final nestedDataMap = Map<String, dynamic>.from(nestedData);
+    if (nestedDataMap.isNotEmpty) return nestedDataMap;
   }
   // Flat row shape: custom columns on the root next to $metadata keys.
-  final out = <String, dynamic>{};
-  for (final e in row.entries) {
-    final k = e.key;
-    if (k == 'data' || (k.isNotEmpty && k.startsWith(r'$'))) {
+  final rowData = <String, dynamic>{};
+  for (final entry in rowMap.entries) {
+    final key = entry.key;
+    if (key == 'data' || (key.isNotEmpty && key.startsWith(r'$'))) {
       continue;
     }
-    out[k] = e.value;
+    rowData[key] = entry.value;
   }
-  return out;
+  return rowData;
 }
 
-/// Normalized category id for matching [compound_id] to [Category.id] (string-safe).
-String _catKey(Object? v) {
-  if (v == null) return '';
-  final s = v.toString().trim();
-  return s;
-}
-
-List<Map<String, dynamic>> _verFilesListFromProfile(dynamic v) {
-  if (v == null) return [];
-  if (v is List) {
-    return v.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+List<Map<String, dynamic>> _parseVerificationFiles(dynamic rawVerificationFiles) {
+  if (rawVerificationFiles == null) return [];
+  if (rawVerificationFiles is List) {
+    return rawVerificationFiles
+        .map((file) => Map<String, dynamic>.from(file as Map))
+        .toList();
   }
-  if (v is String && v.isNotEmpty) {
+  if (rawVerificationFiles is String && rawVerificationFiles.isNotEmpty) {
     try {
-      final d = jsonDecode(v);
-      if (d is List) {
-        return d
-            .map((e) => Map<String, dynamic>.from(e as Map))
+      final decodedVerificationFiles = jsonDecode(rawVerificationFiles);
+      if (decodedVerificationFiles is List) {
+        return decodedVerificationFiles
+            .map((file) => Map<String, dynamic>.from(file as Map))
             .toList();
       }
     } catch (_) {}
@@ -68,102 +67,111 @@ List<Map<String, dynamic>> _verFilesListFromProfile(dynamic v) {
 /// Builds [Category] / [Compound] trees from serialized [Row.toMap] payloads.
 List<Category> parseAppwriteCompoundsForIsolate(Map<String, dynamic> payload) {
   final categoryRows = (payload['categories'] as List)
-      .map((e) => Map<String, dynamic>.from(e as Map))
+      .map((row) => Map<String, dynamic>.from(row as Map))
       .toList();
   final compoundRows = (payload['compounds'] as List)
-      .map((e) => Map<String, dynamic>.from(e as Map))
+      .map((row) => Map<String, dynamic>.from(row as Map))
       .toList();
 
-  final byCategory = <String, List<Compound>>{};
-  final catIds = categoryRows.map(_rowId).where((e) => e.isNotEmpty).toSet();
+  final compoundsByCategoryId = <String, List<Compound>>{};
+  final categoryIds = categoryRows
+      .map(_resolveRowId)
+      .where((categoryId) => categoryId.isNotEmpty)
+      .toSet();
 
-  for (final m in compoundRows) {
-    final d = _rowData(m);
-    final raw = _catKey(d['category_id'] ?? m['category_id']);
-    final key = (raw.isNotEmpty && catIds.contains(raw)) ? raw : '';
-    byCategory.putIfAbsent(key, () => []).add(
+  for (final compoundRow in compoundRows) {
+    final compoundData = _extractRowData(compoundRow);
+    final categoryId = (compoundData['category_id'] ?? compoundRow['category_id'])
+        ?.toString()
+        .trim();
+    final safeCategoryId = (categoryId != null &&
+            categoryId.isNotEmpty &&
+            categoryIds.contains(categoryId))
+        ? categoryId
+        : '';
+    compoundsByCategoryId.putIfAbsent(safeCategoryId, () => []).add(
           Compound(
-            id: _rowId(m),
-            name: d['name'] as String? ?? '',
-            developer: d['developer'] as String?,
-            city: d['city'] as String?,
-            pictureUrl: d['picture_url'] as String?,
+            id: _resolveRowId(compoundRow),
+            name: compoundData['name'] as String? ?? '',
+            developer: compoundData['developer'] as String?,
+            city: compoundData['city'] as String?,
+            pictureUrl: compoundData['picture_url'] as String?,
           ),
         );
   }
 
-  final out = <Category>[];
-  for (final m in categoryRows) {
-    final id = _rowId(m);
-    out.add(
+  final categories = <Category>[];
+  for (final categoryRow in categoryRows) {
+    final categoryId = _resolveRowId(categoryRow);
+    categories.add(
       Category(
-        id: id,
-        name: _rowData(m)['name'] as String? ?? '',
-        compounds: byCategory[id] ?? const [],
+        id: categoryId,
+        name: _extractRowData(categoryRow)['name'] as String? ?? '',
+        compounds: compoundsByCategoryId[categoryId] ?? const [],
       ),
     );
   }
-  final uncategorized = byCategory[''];
-  if (uncategorized != null && uncategorized.isNotEmpty) {
-    out.add(
+  final otherCategoryCompounds = compoundsByCategoryId[''];
+  if (otherCategoryCompounds != null && otherCategoryCompounds.isNotEmpty) {
+    categories.add(
       Category(
         id: 'uncategorized',
         name: 'Other',
-        compounds: uncategorized,
+        compounds: otherCategoryCompounds,
       ),
     );
   }
   if (kDebugMode) {
-    final totalOut =
-        out.fold<int>(0, (sum, c) => sum + c.compounds.length);
-    final orphan = uncategorized?.length ?? 0;
+    final totalCompounds =
+        categories.fold<int>(0, (sum, category) => sum + category.compounds.length);
+    final uncategorizedCount = otherCategoryCompounds?.length ?? 0;
     debugPrint(
       '[Appwrite/isolate] parseAppwriteCompounds: ${categoryRows.length} category row(s), '
-      '${compoundRows.length} compound row(s) → ${out.length} category bucket(s), '
-      '$totalOut compound(s) listed ($orphan in "Other" from unmatched category_id)',
+      '${compoundRows.length} compound row(s) → ${categories.length} category bucket(s), '
+      '$totalCompounds compound(s) listed ($uncategorizedCount in "Other" from unmatched category_id)',
     );
   }
-  return out;
+  return categories;
 }
 
 /// Builds [ChatMember] / [Users] lists from serialized [Row.toMap] payloads.
 CompoundMembersResult parseAppwriteMembersForIsolate(Map<String, dynamic> payload) {
   final isAdmin = payload['isAdmin'] == true;
   final apartmentRows = (payload['apartments'] as List)
-      .map((e) => Map<String, dynamic>.from(e as Map))
+      .map((row) => Map<String, dynamic>.from(row as Map))
       .toList();
   final profileRows = (payload['profiles'] as List)
-      .map((e) => Map<String, dynamic>.from(e as Map))
+      .map((row) => Map<String, dynamic>.from(row as Map))
       .toList();
 
-  final apartmentsMap = <String, Map<String, dynamic>>{};
-  for (final m in apartmentRows) {
-    final d = _rowData(m);
-    final uid = d['user_id']?.toString() ?? '';
-    if (uid.isEmpty) continue;
-    apartmentsMap[uid] = d;
+  final apartmentRowByUserId = <String, Map<String, dynamic>>{};
+  for (final apartmentRow in apartmentRows) {
+    final apartmentData = _extractRowData(apartmentRow);
+    final userId = apartmentData['user_id']?.toString() ?? '';
+    if (userId.isEmpty) continue;
+    apartmentRowByUserId[userId] = apartmentData;
   }
 
-  final membersList = <ChatMember>[];
-  for (final m in profileRows) {
-    final id = _rowId(m);
-    final data = _rowData(m);
-    final apt = apartmentsMap[id];
-    membersList.add(
+  final members = <ChatMember>[];
+  for (final profileRow in profileRows) {
+    final profileId = _resolveRowId(profileRow);
+    final profileData = _extractRowData(profileRow);
+    final apartmentData = apartmentRowByUserId[profileId];
+    members.add(
       ChatMember(
-        id: id,
-        displayName: data['display_name'] as String? ?? 'No Name',
-        fullName: data['full_name'] as String?,
-        avatarUrl: data['avatar_url'] as String?,
-        building: apt?['building_num']?.toString() ?? '',
-        apartment: apt?['apartment_num']?.toString() ?? '',
-        phoneNumber: data['phone_number']?.toString() ?? '',
+        id: profileId,
+        displayName: profileData['display_name'] as String? ?? 'No Name',
+        fullName: profileData['full_name'] as String?,
+        avatarUrl: profileData['avatar_url'] as String?,
+        building: apartmentData?['building_num']?.toString() ?? '',
+        apartment: apartmentData?['apartment_num']?.toString() ?? '',
+        phoneNumber: profileData['phone_number']?.toString() ?? '',
         ownerType: OwnerTypes.values.firstWhere(
-          (type) => type.name == data['owner_type'],
+          (type) => type.name == profileData['owner_type'],
           orElse: () => OwnerTypes.owner,
         ),
         userState: UserState.values.firstWhere(
-          (state) => state.name == data['userState'],
+          (state) => state.name == profileData['userState'],
           orElse: () => UserState.New,
         ),
       ),
@@ -172,21 +180,21 @@ CompoundMembersResult parseAppwriteMembersForIsolate(Map<String, dynamic> payloa
 
   var memberData = <Users>[];
   if (isAdmin) {
-    memberData = profileRows.map((m) {
-      final data = _rowData(m);
-      final updated = m[r'$updatedAt']?.toString() ?? '';
+    memberData = profileRows.map((profileRow) {
+      final profileData = _extractRowData(profileRow);
+      final updatedAtText = profileRow[r'$updatedAt']?.toString() ?? '';
       return Users(
-        authorId: _rowId(m),
-        phoneNumber: (data['phone_number'] ?? '').toString(),
-        updatedAt: DateTime.tryParse(updated) ??
+        authorId: _resolveRowId(profileRow),
+        phoneNumber: (profileData['phone_number'] ?? '').toString(),
+        updatedAt: DateTime.tryParse(updatedAtText) ??
             DateTime.fromMillisecondsSinceEpoch(0),
-        ownerShipType: (data['owner_type'] ?? '').toString(),
-        userState: (data['userState'] ?? '').toString(),
-        actionTakenBy: (data['actionTakenBy'] ?? '').toString(),
-        verFile: _verFilesListFromProfile(data['verFiles']),
+        ownerShipType: (profileData['owner_type'] ?? '').toString(),
+        userState: (profileData['userState'] ?? '').toString(),
+        actionTakenBy: (profileData['actionTakenBy'] ?? '').toString(),
+        verFile: _parseVerificationFiles(profileData['verFiles']),
       );
     }).toList();
   }
 
-  return CompoundMembersResult(members: membersList, membersData: memberData);
+  return CompoundMembersResult(members: members, membersData: memberData);
 }

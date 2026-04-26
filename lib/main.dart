@@ -1,3 +1,4 @@
+import 'package:appwrite/appwrite.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -46,7 +47,6 @@ import 'features/admin/presentation/bloc/report_cubit.dart';
 import 'features/admin/data/datasources/admin_remote_data_source.dart';
 import 'features/admin/data/repositories/admin_repository_impl.dart';
 import 'features/admin/domain/repositories/admin_repository.dart';
-import 'features/admin/presentation/bloc/admin_cubit.dart';
 import 'features/auth/presentation/pages/signup_page.dart';
 import 'features/auth/data/auth_ready_gate.dart';
 
@@ -63,6 +63,7 @@ void main() async {
 
   // ── Appwrite (auth primary backend) ───────────────────────────────────────
   await initAppwrite();
+  sendPing();
   initMediaUploadService();
 
   runApp(const MyApp());
@@ -136,191 +137,200 @@ class MyApp extends StatelessWidget {
                             ),
                         child: MultiBlocProvider(
                           providers: [
-                          BlocProvider(
-                            create: (context) {
-                              final authCubit = AuthCubit(
-                                repository: AuthRepositoryImpl(
-                                  remoteDataSource:
-                                      AppwriteAuthRemoteDataSourceImpl(
-                                        account: appwriteAccount,
-                                        oauthSuccessUrl:
-                                            dotenv
-                                                .env['APPWRITE_OAUTH_SUCCESS'],
-                                        oauthFailureUrl:
-                                            dotenv
-                                                .env['APPWRITE_OAUTH_FAILURE'],
-                                      ),
-                                  appwriteAccount: appwriteAccount,
-                                  appwriteTables: appwriteTables,
-                                ),
-                              );
-                              // Preserved teardown-safe bootstrap — see MIGRATION_PLAN.md §2.3.
-                              authCubit.presetBeforeSignin();
-                              return authCubit;
-                            },
-                          ),
-                          BlocProvider(create: (context) => AppCubit()),
-                          BlocProvider(
-                            create:
-                                (context) => ReportCubit(
-                                  adminRepository:
-                                      context.read<AdminRepository>(),
-                                ),
-                          ),
-                          BlocProvider(create: (context) => PresenceCubit()),
-                          BlocProvider(
-                            create:
-                                (context) => AdminCubit(
-                                  adminRepository:
-                                      context.read<AdminRepository>(),
-                                ),
-                          ),
-                          BlocProvider(create: (context) => ManagerCubit()),
-                          BlocProvider(
-                            create:
-                                (context) => ChatDetailsCubit(
-                                  authCubit: context.read<AuthCubit>(),
-                                  databases: appwriteTables,
-                                ),
-                          ),
-                          BlocProvider(
-                            create: (context) {
-                              final authState = context.read<AuthCubit>().state;
-                              final members =
-                                  (authState is Authenticated)
-                                      ? authState.chatMembers
-                                      : <ChatMember>[];
-                              return MessageReceiptsCubit(
-                                context.read<ChatRemoteDataSource>(),
-                                chatMembers: members,
-                              );
-                            },
-                          ),
-                          BlocProvider(
-                            create:
-                                (context) => MaintenanceCubit(
-                                  repository: MaintenanceRepositoryImpl(
+                            BlocProvider(
+                              create: (context) {
+                                final authCubit = AuthCubit(
+                                  repository: AuthRepositoryImpl(
                                     remoteDataSource:
-                                        context
-                                            .read<
-                                              MaintenanceRemoteDataSource
-                                            >(),
-                                    localDataSource:
-                                        context
-                                            .read<MaintenanceLocalDataSource>(),
-                                    syncRepository:
-                                        context
-                                            .read<MaintenanceSyncRepository>(),
-                                  ),
-                                ),
-                          ),
-                          BlocProvider(
-                            create:
-                                (context) => SocialCubit(
-                                  repository: SocialRepositoryImpl(
-                                    remoteDataSource:
-                                        SocialRemoteDataSourceImpl(
-                                          databases: appwriteTables,
+                                        AppwriteAuthRemoteDataSourceImpl(
+                                          account: appwriteAccount,
+                                        functions: appwriteFunctions,
+                                        googleServerClientId:
+                                            dotenv.env['GOOGLE_SERVER_CLIENT_ID'],
+                                        nativeGoogleBridgeFunctionId:
+                                            dotenv
+                                                .env['APPWRITE_FUNCTION_GOOGLE_NATIVE_SIGNIN_BRIDGE'],
+                                          oauthSuccessUrl:
+                                              dotenv
+                                                  .env['APPWRITE_OAUTH_SUCCESS'],
+                                          oauthFailureUrl:
+                                              dotenv
+                                                  .env['APPWRITE_OAUTH_FAILURE'],
                                         ),
+                                    appwriteAccount: appwriteAccount,
+                                    appwriteTables: appwriteTables,
                                   ),
-                                ),
-                          ),
-                          BlocProvider(create: (context) => ProfileCubit()),
-                        ],
-                        child: ChangeNotifierProvider(
-                          create:
-                              (context) => AuthManager(
-                                // AuthRepositoryImpl is the same instance held by AuthCubit.
-                                authRepository:
-                                    context.read<AuthCubit>().repository,
-                              ),
-                        child: ScreenUtilInit(
-                          designSize: const Size(360, 690),
-                          minTextAdapt: true,
-                          splitScreenMode: true,
-                          builder: (context, child) {
-                            return MaterialApp(
-                              title: 'WhatsUnity',
-                              debugShowCheckedModeBanner: false,
-                              theme: myLightTheme(),
-                              supportedLocales: L10n.all,
-                              localeResolutionCallback: (
-                                deviceLocale,
-                                supportedLocales,
-                              ) {
-                                if (deviceLocale != null &&
-                                    supportedLocales.any(
-                                      (l) =>
-                                          l.languageCode ==
-                                          deviceLocale.languageCode,
-                                    )) {
-                                  return deviceLocale;
-                                }
-                                return supportedLocales.first;
-                              },
-                              localizationsDelegates: const [
-                                AppLocalizations.delegate,
-                                GlobalMaterialLocalizations.delegate,
-                                GlobalWidgetsLocalizations.delegate,
-                                GlobalCupertinoLocalizations.delegate,
-                              ],
-                              builder: (context, child) {
-                                ScreenUtil.init(
-                                  context,
-                                  designSize: const Size(360, 690),
-                                  minTextAdapt: true,
-                                  splitScreenMode: true,
                                 );
-                                final mq = MediaQuery.of(context);
-                                return MediaQuery(
-                                  data: mq.copyWith(
-                                    textScaler: mq.textScaler.clamp(
-                                      minScaleFactor: 0.8,
-                                      maxScaleFactor: 1.0,
+                                // Preserved teardown-safe bootstrap — see MIGRATION_PLAN.md §2.3.
+                                authCubit.presetBeforeSignin();
+                                return authCubit;
+                              },
+                            ),
+                            BlocProvider(create: (context) => AppCubit()),
+                            BlocProvider(
+                              create:
+                                  (context) => ReportCubit(
+                                    adminRepository:
+                                        context.read<AdminRepository>(),
+                                  ),
+                            ),
+                            BlocProvider(create: (context) => PresenceCubit()),
+                            BlocProvider(create: (context) => ManagerCubit()),
+                            BlocProvider(
+                              create:
+                                  (context) => ChatDetailsCubit(
+                                    authCubit: context.read<AuthCubit>(),
+                                    databases: appwriteTables,
+                                  ),
+                            ),
+                            BlocProvider(
+                              create: (context) {
+                                final authState =
+                                    context.read<AuthCubit>().state;
+                                final members =
+                                    (authState is Authenticated)
+                                        ? authState.chatMembers
+                                        : <ChatMember>[];
+                                return MessageReceiptsCubit(
+                                  context.read<ChatRemoteDataSource>(),
+                                  chatMembers: members,
+                                );
+                              },
+                            ),
+                            BlocProvider(
+                              create:
+                                  (context) => MaintenanceCubit(
+                                    repository: MaintenanceRepositoryImpl(
+                                      remoteDataSource:
+                                          context
+                                              .read<
+                                                MaintenanceRemoteDataSource
+                                              >(),
+                                      localDataSource:
+                                          context
+                                              .read<
+                                                MaintenanceLocalDataSource
+                                              >(),
+                                      syncRepository:
+                                          context
+                                              .read<
+                                                MaintenanceSyncRepository
+                                              >(),
                                     ),
                                   ),
-                                  child: Directionality(
-                                    textDirection: TextDirection.ltr,
-                                    child: child ?? const SizedBox.shrink(),
+                            ),
+                            BlocProvider(
+                              create:
+                                  (context) => SocialCubit(
+                                    repository: SocialRepositoryImpl(
+                                      remoteDataSource:
+                                          SocialRemoteDataSourceImpl(
+                                            databases: appwriteTables,
+                                          ),
+                                    ),
+                                  ),
+                            ),
+                            BlocProvider(create: (context) => ProfileCubit()),
+                          ],
+                          child: ChangeNotifierProvider(
+                            create:
+                                (context) => AuthManager(
+                                  // AuthRepositoryImpl is the same instance held by AuthCubit.
+                                  authRepository:
+                                      context.read<AuthCubit>().repository,
+                                ),
+                            child: ScreenUtilInit(
+                              designSize: const Size(360, 690),
+                              minTextAdapt: true,
+                              splitScreenMode: true,
+                              builder: (context, child) {
+                                return MaterialApp(
+                                  title: 'WhatsUnity',
+                                  debugShowCheckedModeBanner: false,
+                                  theme: myLightTheme(),
+                                  supportedLocales: L10n.all,
+                                  localeResolutionCallback: (
+                                    deviceLocale,
+                                    supportedLocales,
+                                  ) {
+                                    if (deviceLocale != null &&
+                                        supportedLocales.any(
+                                          (l) =>
+                                              l.languageCode ==
+                                              deviceLocale.languageCode,
+                                        )) {
+                                      return deviceLocale;
+                                    }
+                                    return supportedLocales.first;
+                                  },
+                                  localizationsDelegates: const [
+                                    AppLocalizations.delegate,
+                                    GlobalMaterialLocalizations.delegate,
+                                    GlobalWidgetsLocalizations.delegate,
+                                    GlobalCupertinoLocalizations.delegate,
+                                  ],
+                                  builder: (context, child) {
+                                    ScreenUtil.init(
+                                      context,
+                                      designSize: const Size(360, 690),
+                                      minTextAdapt: true,
+                                      splitScreenMode: true,
+                                    );
+                                    final mq = MediaQuery.of(context);
+                                    return MediaQuery(
+                                      data: mq.copyWith(
+                                        textScaler: mq.textScaler.clamp(
+                                          minScaleFactor: 0.8,
+                                          maxScaleFactor: 1.0,
+                                        ),
+                                      ),
+                                      child: Directionality(
+                                        textDirection: TextDirection.ltr,
+                                        child: child ?? const SizedBox.shrink(),
+                                      ),
+                                    );
+                                  },
+                                  home: BlocBuilder<AuthCubit, AuthState>(
+                                    buildWhen:
+                                        (previous, current) =>
+                                            previous.runtimeType !=
+                                            current.runtimeType,
+                                    builder: (context, state) {
+                                      final authManager =
+                                          context.watch<AuthManager>();
+                                      final authCubit =
+                                          context.read<AuthCubit>();
+
+                                      if (authManager.status ==
+                                          AuthStatus.unknown) {
+                                        return const Scaffold(
+                                          body: Center(
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                        );
+                                      }
+
+                                      if (authManager.status ==
+                                              AuthStatus.authenticated &&
+                                          authCubit.signupGoogleEmail == null &&
+                                          authCubit.signInGoogle == false) {
+                                        // ValueKey(authSessionNonce) guarantees a fresh widget
+                                        // subtree on every new login session — preserves teardown
+                                        // safety for MainScreen / GeneralChat / Social.
+                                        return AuthReadyGate(
+                                          key: ValueKey(
+                                            authCubit.authSessionNonce,
+                                          ),
+                                        );
+                                      }
+
+                                      return SignUp();
+                                    },
                                   ),
                                 );
                               },
-                              home: BlocBuilder<AuthCubit, AuthState>(
-                                buildWhen:
-                                    (previous, current) =>
-                                        previous.runtimeType !=
-                                        current.runtimeType,
-                                builder: (context, state) {
-                                  final authManager =
-                                      context.watch<AuthManager>();
-                                  final authCubit = context.read<AuthCubit>();
-
-                                  if (authManager.status == AuthStatus.unknown) {
-                                    return const Scaffold(
-                                      body: Center(
-                                        child: CircularProgressIndicator(),
-                                      ),
-                                    );
-                                  }
-
-                                  if (authManager.status ==
-                                          AuthStatus.authenticated &&
-                                      authCubit.signupGoogleEmail == null &&
-                                      authCubit.signInGoogle == false) {
-                                    // ValueKey(authSessionNonce) guarantees a fresh widget
-                                    // subtree on every new login session — preserves teardown
-                                    // safety for MainScreen / GeneralChat / Social.
-                                    return AuthReadyGate(
-                                      key: ValueKey(authCubit.authSessionNonce),
-                                    );
-                                  }
-
-                                  return SignUp();
-                                },
-                              ),
-                            );
-                          },
-                        ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -330,7 +340,6 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -370,5 +379,26 @@ class AuthManager extends ChangeNotifier {
   void dispose() {
     _sub?.cancel();
     super.dispose();
+  }
+}
+
+void sendPing() async {
+  // 1. Initialize the Client
+  Client client = Client()
+      .setEndpoint('https://fra.cloud.appwrite.io/v1')
+      .setProject('69e96b7d000f7bf9528c');
+
+  // 2. Initialize the Account service using that client
+  Account account = Account(client);
+
+  try {
+    // 3. This is the actual "ping" request
+    // It will likely return an error (401 Unauthorized) because no user is logged in,
+    // BUT the Appwrite server will see the request and verify your app.
+    await account.get();
+    print("Appwrite connection successful");
+  } catch (e) {
+    // Even an error here counts as a successful "ping" to the console
+    print("Appwrite reached! Error (Expected if not logged in): $e");
   }
 }

@@ -15,6 +15,8 @@ import 'package:uuid/uuid.dart';
 import 'package:WhatsUnity/core/config/appwrite.dart';
 import 'package:WhatsUnity/core/media/media_services.dart';
 import 'package:WhatsUnity/core/media/recorder_upload_bridge.dart';
+import 'package:WhatsUnity/features/admin/domain/repositories/admin_repository.dart';
+import 'package:WhatsUnity/features/admin/presentation/bloc/report_cubit.dart';
 import 'package:WhatsUnity/features/social/data/datasources/social_remote_data_source.dart';
 import 'package:WhatsUnity/features/social/data/repositories/social_repository_impl.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
@@ -57,17 +59,22 @@ class BuildingChat extends StatelessWidget {
           children: [
             BlocProvider(
               key: chatKey,
-              create: (context) => SocialCubit(
-                repository: SocialRepositoryImpl(
-                  remoteDataSource: SocialRemoteDataSourceImpl(
-                    databases: appwriteTables,
+              create: (context) => ReportCubit(
+                adminRepository: context.read<AdminRepository>(),
+              ),
+              child: BlocProvider(
+                create: (context) => SocialCubit(
+                  repository: SocialRepositoryImpl(
+                    remoteDataSource: SocialRemoteDataSourceImpl(
+                      databases: appwriteTables,
+                    ),
                   ),
                 ),
-              ),
-              child: GeneralChat(
-                key: chatKey,
-                compoundId: currentCompoundId,
-                channelName: 'BUILDING_CHAT',
+                child: GeneralChat(
+                  key: chatKey,
+                  compoundId: currentCompoundId,
+                  channelName: 'BUILDING_CHAT',
+                ),
               ),
             ),
             BlocBuilder<ChatCubit, ChatState>(

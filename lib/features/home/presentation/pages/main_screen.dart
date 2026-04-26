@@ -5,7 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../../Layout/Cubit/cubit.dart';
 import '../../../../Layout/Cubit/states.dart';
 import '../../../../core/config/Enums.dart';
-import '../../../admin/presentation/pages/AdminDashboard/AdminDashboard.dart';
+import '../../../admin/presentation/pages/AdminDashboard/admin_dashboard_scope.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../auth/presentation/pages/gatekeeper_user_page.dart';
@@ -44,8 +44,14 @@ class MainScreen extends StatelessWidget {
               GatekeeperScreen(index: role == Roles.manager ? 0 : 1),
               if (role != Roles.manager) const BuildingChat(),
               ProfilePage(),
-              if (role == Roles.admin) AdminDashboard(),
+              if (role == Roles.admin) const AdminDashboardScope(),
             ];
+            final safeIndex = cubit.bottomNavIndex >= screens.length
+                ? 0
+                : cubit.bottomNavIndex;
+            if (safeIndex != cubit.bottomNavIndex) {
+              Future.microtask(() => cubit.bottomNavIndexChange(safeIndex));
+            }
 
             return Scaffold(
               // Let the body shrink with the keyboard so chat/composer stay above it.
@@ -87,7 +93,7 @@ class MainScreen extends StatelessWidget {
                       ),
                   ]),
               body: IndexedStack(
-                index: cubit.bottomNavIndex,
+                index: safeIndex,
                 children: screens,
               ),
             );

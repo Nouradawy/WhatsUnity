@@ -4,6 +4,7 @@ const TYPE_TO_PREFIX = {
   maintenance: "MR",
   security: "SE",
   carservice: "CS",
+  careservice: "CS",
 };
 
 function parseJsonBody(raw) {

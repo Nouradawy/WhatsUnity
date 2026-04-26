@@ -88,6 +88,29 @@
             "buildSpecification": "s-0.5vcpu-512mb",
             "runtimeSpecification": "s-0.5vcpu-512mb",
             "deploymentRetention": 0
+        },
+        {
+            "$id": "google_native_signin_bridge",
+            "name": "google_native_signin_bridge",
+            "runtime": "node-25",
+            "path": "functions/google-native-signin-bridge",
+            "entrypoint": "src/main.js",
+            "execute": [
+                "any"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "commands": "npm install",
+            "scopes": [
+                "users.read",
+                "users.write"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb",
+            "deploymentRetention": 0
         }
     ]
 }

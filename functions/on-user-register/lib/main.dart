@@ -420,9 +420,11 @@ Future<dynamic> main(final context) async {
       return _jsonRes(context, err('buildings', e), 500);
     }
 
-    // ---- Channel (BUILDING_CHAT) — insert if not exists. Optional compound logo (schema has no image on channels).
+    // ---- Channels (idempotent upsert per building)
+    // BUILDING_CHAT: create only if missing for this compound/building.
+    // COMPOUND_GENERAL: also check independently for the same building_id and create only if missing.
     try {
-      final chQ = await db.listDocuments(
+      final buildingChatQ = await db.listDocuments(
         databaseId: databaseId,
         collectionId: _kColChannels,
         queries: [
@@ -433,19 +435,8 @@ Future<dynamic> main(final context) async {
           Query.limit(1),
         ],
       );
-      if (chQ.documents.isEmpty) {
-        String? compoundPicture;
-        try {
-          final cdoc = await db.getDocument(
-            databaseId: databaseId,
-            collectionId: _kColCompounds,
-            documentId: compound,
-          );
-          compoundPicture = cdoc.data['picture_url']?.toString();
-        } catch (e) {
-          log('compounds: optional read failed: $e');
-        }
-        final channelName = 'Building $bn Chat';
+
+      if (buildingChatQ.documents.isEmpty) {
         await db.createDocument(
           databaseId: databaseId,
           collectionId: _kColChannels,
@@ -453,29 +444,38 @@ Future<dynamic> main(final context) async {
           data: {
             'compound_id': compound,
             'building_id': buildingDocId,
-            'name': channelName,
+            'name': 'Building $bn Chat',
             'type': 'BUILDING_CHAT',
             'version': 0,
           },
         );
-        if (compoundPicture != null) {
-          log('on_user_register: compound picture_url=$compoundPicture (not stored on channel per schema)');
-        }
+      }
+
+      final compoundGeneralQ = await db.listDocuments(
+        databaseId: databaseId,
+        collectionId: _kColChannels,
+        queries: [
+          Query.equal('compound_id', compound),
+          Query.equal('building_id', buildingDocId),
+          Query.equal('type', 'COMPOUND_GENERAL'),
+          Query.isNull('deleted_at'),
+          Query.limit(1),
+        ],
+      );
+
+      if (compoundGeneralQ.documents.isEmpty) {
         await db.createDocument(
           databaseId: databaseId,
           collectionId: _kColChannels,
           documentId: ID.unique(),
           data: {
             'compound_id': compound,
-            'building_id': "",
-            'name': channelName,
+            'building_id': buildingDocId,
+            'name': 'Building $bn General',
             'type': 'COMPOUND_GENERAL',
             'version': 0,
           },
         );
-        if (compoundPicture != null) {
-          log('on_user_register: compound picture_url=$compoundPicture (not stored on channel per schema)');
-        }
       }
     } catch (e, st) {
       log('channels: $e\n$st');
