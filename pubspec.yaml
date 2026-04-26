@@ -45,6 +45,7 @@ dependencies:
   font_awesome_flutter: ^10.9.1
   shared_preferences: ^2.5.3
   sqflite: ^2.4.2
+  sqflite_common_ffi_web: ^1.0.0
   path: ^1.9.1
   hexcolor: ^3.0.1
   flutter_svg: ^2.2.0
@@ -77,6 +78,7 @@ dependencies:
   condition_builder: ^2.1.0
   equatable: ^2.0.8
   provider: ^6.1.1
+  flutter_screenutil: ^5.9.3
 
 
 

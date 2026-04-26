@@ -71,6 +71,7 @@
   "ownerShip_proof" : "أثبات ملكية الشقة",
   "ownerShipType" : "نوع الملكية",
   "rental" : "مستأجر",
-  "owner" : "مالك"
+  "owner" : "مالك",
+  "add" : "أضافة"
 
 }

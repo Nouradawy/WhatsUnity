@@ -73,7 +73,8 @@
   "ownerShip_proof" : "Ownership proof",
   "ownerShipType" : "Ownership type",
   "rental" : "Rental",
-  "owner" : "Owner"
+  "owner" : "Owner",
+  "add" : "New"
 
 
 

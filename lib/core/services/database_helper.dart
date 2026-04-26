@@ -1,6 +1,8 @@
 import 'package:path/path.dart' as p;
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common/sqlite_api.dart';
+import 'database_open_delegate.dart';
 
 /// Singleton access to the app SQLite database.
 class DatabaseHelper {
@@ -20,10 +22,16 @@ class DatabaseHelper {
   }
 
   Future<Database> _open() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final path = p.join(dir.path, _dbName);
-    return openDatabase(
-      path,
+    final String path;
+    if (kIsWeb) {
+      // Web/PWA: persisted in IndexedDB via sqflite_common_ffi_web.
+      path = _dbName;
+    } else {
+      final dir = await getApplicationDocumentsDirectory();
+      path = p.join(dir.path, _dbName);
+    }
+    return openPlatformDatabase(
+      path: path,
       version: _dbVersion,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,

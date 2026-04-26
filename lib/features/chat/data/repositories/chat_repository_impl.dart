@@ -67,17 +67,23 @@ class ChatRepositoryImpl implements ChatRepository {
         pageSize: pageSize,
         pageNum: pageNum,
       );
-      await localDataSource.local_insertMessages(raw);
-      if (onRemoteSynced != null) {
+      List<types.Message> syncedMessages;
+      try {
+        await localDataSource.local_insertMessages(raw);
         final rows = await localDataSource.local_getMessagesByChannelWithPagination(
           channelId: channelId,
           limit: pageSize,
           offset: pageNum * pageSize,
         );
-        onRemoteSynced(
-          rows.map(MessageModel.fromMap).toList(),
-          pageNum,
-        );
+        syncedMessages = rows.map(MessageModel.fromMap).toList();
+      } catch (e, st) {
+        // Web/PWA fallback: if local DB initialization or writes fail, still
+        // surface the remote payload so chat can render instead of staying empty.
+        debugPrint('fetchMessages local persist fallback: $e\n$st');
+        syncedMessages = raw.map(MessageModel.fromMap).toList();
+      }
+      if (onRemoteSynced != null) {
+        onRemoteSynced(syncedMessages, pageNum);
       }
     } catch (e, st) {
       debugPrint('fetchMessages remote sync: $e\n$st');

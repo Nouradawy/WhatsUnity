@@ -3,6 +3,7 @@
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:dotted_border/dotted_border.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_polls/flutter_polls.dart';
@@ -489,12 +490,24 @@ class _CreateBrainstormDialogState extends State<CreateBrainstormDialog> with Wi
                       ),
                       itemCount: file?.length ?? 0,
                       itemBuilder: (context, index) {
+                        final imagePath = file![index].path;
                         return ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            File(file![index].path),
-                            fit: BoxFit.cover,
-                          ),
+                          child: kIsWeb
+                              ? Image.network(
+                                  imagePath,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const ColoredBox(
+                                    color: Colors.black12,
+                                    child: Center(
+                                      child: Icon(Icons.image_not_supported_outlined),
+                                    ),
+                                  ),
+                                )
+                              : Image.file(
+                                  File(imagePath),
+                                  fit: BoxFit.cover,
+                                ),
                         );
                       },
                     ),

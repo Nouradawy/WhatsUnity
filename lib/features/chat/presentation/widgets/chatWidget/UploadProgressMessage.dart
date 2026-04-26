@@ -1,5 +1,6 @@
 // Create this new file, e.g., in chatWidget/UploadProgressMessage.dart
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class UploadProgressMessage extends StatelessWidget {
@@ -24,10 +25,21 @@ class UploadProgressMessage extends StatelessWidget {
             // Local image thumbnail
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.file(
-                File(filePath),
-                fit: BoxFit.cover,
-              ),
+              child: kIsWeb
+                  ? Image.network(
+                      filePath,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const ColoredBox(
+                        color: Colors.black12,
+                        child: Center(
+                          child: Icon(Icons.image_not_supported_outlined),
+                        ),
+                      ),
+                    )
+                  : Image.file(
+                      File(filePath),
+                      fit: BoxFit.cover,
+                    ),
             ),
             // Translucent overlay
             Container(

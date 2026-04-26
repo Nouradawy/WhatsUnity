@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:WhatsUnity/features/social/presentation/bloc/social_cubit.dart';
 import 'package:WhatsUnity/features/social/presentation/bloc/social_state.dart';
@@ -664,8 +663,6 @@ class _GeneralChatState extends State<GeneralChat>
     if (pickedFile == null) return;
 
     final localId = const Uuid().v4();
-    final file = File(pickedFile.path);
-
     // Insert a local placeholder immediately so the UI feels responsive.
     final placeholder = types.CustomMessage(
       id: localId,
@@ -704,7 +701,7 @@ class _GeneralChatState extends State<GeneralChat>
 
     if (imageUrl != null && imageUrl.isNotEmpty) {
       if (!mounted || _disposed || _tearingDown) return;
-      final bytes = await file.readAsBytes();
+      final bytes = await pickedFile.readAsBytes();
       final image = await decodeImageFromList(bytes);
       if (!mounted || _disposed || _tearingDown) return;
       await context.read<ChatCubit>().sendFileMessage(

@@ -227,4 +227,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get owner => 'Owner';
+
+  @override
+  String get add => 'New';
 }

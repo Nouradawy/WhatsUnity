@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:appwrite/appwrite.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mime/mime.dart';
 
 import 'appwrite_function_helpers.dart';
@@ -37,13 +38,9 @@ class GumletService {
     required String filename,
     String? mimeType,
   }) async {
-    final file = File(path);
-    if (!await file.exists()) {
-      throw MediaUploadException('Local file missing (sqflite path stale?): $path');
-    }
-
     final mime = _normalizeUploadMime(mimeType, path, filename);
-    final size = await file.length();
+    final uploadPayload = await _readUploadPayload(path);
+    final size = uploadPayload.size;
     if (size < 64) {
       throw MediaUploadException(
         'Recording file too small ($size bytes); encoder may not have finalized.',
@@ -89,7 +86,7 @@ class GumletService {
 
     await _dio.put<List<int>>(
       uploadUrl,
-      data: await file.readAsBytes(),
+      data: uploadPayload.bytes,
       options: Options(
         headers: <String, Object?>{
           Headers.contentTypeHeader: putMime,
@@ -110,6 +107,30 @@ class GumletService {
       assetId: assetId,
       playbackUrl: playbackUrl,
     ).toJson();
+  }
+
+  Future<({List<int> bytes, int size})> _readUploadPayload(String path) async {
+    if (kIsWeb) {
+      final response = await _dio.get<List<int>>(
+        path,
+        options: Options(
+          responseType: ResponseType.bytes,
+          validateStatus: (s) => s != null && s >= 200 && s < 300,
+        ),
+      );
+      final bytes = response.data;
+      if (bytes == null || bytes.isEmpty) {
+        throw MediaUploadException('Selected web file is empty or unreadable: $path');
+      }
+      return (bytes: bytes, size: bytes.length);
+    }
+
+    final file = File(path);
+    if (!await file.exists()) {
+      throw MediaUploadException('Local file missing (sqflite path stale?): $path');
+    }
+    final bytes = await file.readAsBytes();
+    return (bytes: bytes, size: bytes.length);
   }
 
   /// Gumlet and S3-style PUT URLs expect real audio types; [application/octet-stream]

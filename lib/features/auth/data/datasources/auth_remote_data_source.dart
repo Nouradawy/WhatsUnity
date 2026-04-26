@@ -11,9 +11,10 @@ import '../../domain/entities/app_user.dart';
 
 abstract class AuthRemoteDataSource {
   /// Returns the signed-in [AppUser] or `null` when no active session exists.
-  Future<AppUser?> getCurrentUser();
+  Future<AppUser?> remote_getCurrentUser();
 
-  Future<AppUser?> signInWithPassword({
+  /// Creates an email/password Appwrite session and returns the authenticated account.
+  Future<AppUser?> remote_signInWithPassword({
     required String email,
     required String password,
   });
@@ -27,20 +28,22 @@ abstract class AuthRemoteDataSource {
   ///   • `.env` APPWRITE_OAUTH_SUCCESS and APPWRITE_OAUTH_FAILURE URL-scheme values
   ///   • Android: intent-filter with the scheme in AndroidManifest.xml
   ///   • iOS: CFBundleURLTypes entry in Info.plist
-  Future<AppUser?> signInWithGoogle();
+  Future<AppUser?> remote_signInWithGoogle();
 
   /// Creates an Appwrite account and an email session. Provisioning prefs for
   /// [functions/on_user_register] are written in [AuthRepositoryImpl] (after this call).
-  Future<void> signUp({
+  /// Creates an Appwrite account and signs in with an active user session.
+  Future<void> remote_signUp({
     required String email,
     required String password,
     required Map<String, dynamic> data,
   });
 
-  Future<void> signOut();
+  /// Ends the current Appwrite session.
+  Future<void> remote_signOut();
 
   /// Uploads verification images via [mediaUploadService] (R2 presign).
-  Future<void> uploadVerificationFiles({
+  Future<void> remote_uploadVerificationFiles({
     required List<XFile> files,
     required String userId,
     required void Function(int index, double progress) onProgress,
@@ -74,7 +77,7 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   // ── AuthRemoteDataSource ──────────────────────────────────────────────────
 
   @override
-  Future<AppUser?> getCurrentUser() async {
+  Future<AppUser?> remote_getCurrentUser() async {
     try {
       final user = await _account.get();
       return _toAppUser(user);
@@ -86,7 +89,7 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
-  Future<AppUser?> signInWithPassword({
+  Future<AppUser?> remote_signInWithPassword({
     required String email,
     required String password,
   }) async {
@@ -94,21 +97,21 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       email: email,
       password: password,
     );
-    return await getCurrentUser();
+    return await remote_getCurrentUser();
   }
 
   @override
-  Future<AppUser?> signInWithGoogle() async {
+  Future<AppUser?> remote_signInWithGoogle() async {
     await _account.createOAuth2Session(
       provider: OAuthProvider.google,
       success: oauthSuccessUrl,
       failure: oauthFailureUrl,
     );
-    return await getCurrentUser();
+    return await remote_getCurrentUser();
   }
 
   @override
-  Future<void> signUp({
+  Future<void> remote_signUp({
     required String email,
     required String password,
     required Map<String, dynamic> data,
@@ -153,12 +156,12 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
-  Future<void> signOut() async {
+  Future<void> remote_signOut() async {
     await _account.deleteSession(sessionId: 'current');
   }
 
   @override
-  Future<void> uploadVerificationFiles({
+  Future<void> remote_uploadVerificationFiles({
     required List<XFile> files,
     required String userId,
     required void Function(int index, double progress) onProgress,

@@ -1,3 +1,4 @@
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -56,6 +57,7 @@ import 'l10n/l10n.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ScreenUtil.ensureScreenSize();
   Bloc.observer = const SimpleBlocObserver();
   await dotenv.load(fileName: ".env");
 
@@ -232,80 +234,93 @@ class MyApp extends StatelessWidget {
                                 authRepository:
                                     context.read<AuthCubit>().repository,
                               ),
-                          child: MaterialApp(
-                            title: 'WhatsUnity',
-                            debugShowCheckedModeBanner: false,
-                            theme: myLightTheme(),
-                            supportedLocales: L10n.all,
-                            localeResolutionCallback: (
-                              deviceLocale,
-                              supportedLocales,
-                            ) {
-                              if (deviceLocale != null &&
-                                  supportedLocales.any(
-                                    (l) =>
-                                        l.languageCode ==
-                                        deviceLocale.languageCode,
-                                  )) {
-                                return deviceLocale;
-                              }
-                              return supportedLocales.first;
-                            },
-                            localizationsDelegates: const [
-                              AppLocalizations.delegate,
-                              GlobalMaterialLocalizations.delegate,
-                              GlobalWidgetsLocalizations.delegate,
-                              GlobalCupertinoLocalizations.delegate,
-                            ],
-                            builder: (context, child) {
-                              final mq = MediaQuery.of(context);
-                              return MediaQuery(
-                                data: mq.copyWith(
-                                  textScaler: mq.textScaler.clamp(
-                                    minScaleFactor: 0.8,
-                                    maxScaleFactor: 1.0,
-                                  ),
-                                ),
-                                child: Directionality(
-                                  textDirection: TextDirection.ltr,
-                                  child: child ?? const SizedBox.shrink(),
-                                ),
-                              );
-                            },
-                            home: BlocBuilder<AuthCubit, AuthState>(
-                              buildWhen:
-                                  (previous, current) =>
-                                      previous.runtimeType !=
-                                      current.runtimeType,
-                              builder: (context, state) {
-                                final authManager =
-                                    context.watch<AuthManager>();
-                                final authCubit = context.read<AuthCubit>();
-
-                                if (authManager.status == AuthStatus.unknown) {
-                                  return const Scaffold(
-                                    body: Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  );
+                        child: ScreenUtilInit(
+                          designSize: const Size(360, 690),
+                          minTextAdapt: true,
+                          splitScreenMode: true,
+                          builder: (context, child) {
+                            return MaterialApp(
+                              title: 'WhatsUnity',
+                              debugShowCheckedModeBanner: false,
+                              theme: myLightTheme(),
+                              supportedLocales: L10n.all,
+                              localeResolutionCallback: (
+                                deviceLocale,
+                                supportedLocales,
+                              ) {
+                                if (deviceLocale != null &&
+                                    supportedLocales.any(
+                                      (l) =>
+                                          l.languageCode ==
+                                          deviceLocale.languageCode,
+                                    )) {
+                                  return deviceLocale;
                                 }
-
-                                if (authManager.status ==
-                                        AuthStatus.authenticated &&
-                                    authCubit.signupGoogleEmail == null &&
-                                    authCubit.signInGoogle == false) {
-                                  // ValueKey(authSessionNonce) guarantees a fresh widget
-                                  // subtree on every new login session — preserves teardown
-                                  // safety for MainScreen / GeneralChat / Social.
-                                  return AuthReadyGate(
-                                    key: ValueKey(authCubit.authSessionNonce),
-                                  );
-                                }
-
-                                return SignUp();
+                                return supportedLocales.first;
                               },
-                            ),
-                          ),
+                              localizationsDelegates: const [
+                                AppLocalizations.delegate,
+                                GlobalMaterialLocalizations.delegate,
+                                GlobalWidgetsLocalizations.delegate,
+                                GlobalCupertinoLocalizations.delegate,
+                              ],
+                              builder: (context, child) {
+                                ScreenUtil.init(
+                                  context,
+                                  designSize: const Size(360, 690),
+                                  minTextAdapt: true,
+                                  splitScreenMode: true,
+                                );
+                                final mq = MediaQuery.of(context);
+                                return MediaQuery(
+                                  data: mq.copyWith(
+                                    textScaler: mq.textScaler.clamp(
+                                      minScaleFactor: 0.8,
+                                      maxScaleFactor: 1.0,
+                                    ),
+                                  ),
+                                  child: Directionality(
+                                    textDirection: TextDirection.ltr,
+                                    child: child ?? const SizedBox.shrink(),
+                                  ),
+                                );
+                              },
+                              home: BlocBuilder<AuthCubit, AuthState>(
+                                buildWhen:
+                                    (previous, current) =>
+                                        previous.runtimeType !=
+                                        current.runtimeType,
+                                builder: (context, state) {
+                                  final authManager =
+                                      context.watch<AuthManager>();
+                                  final authCubit = context.read<AuthCubit>();
+
+                                  if (authManager.status == AuthStatus.unknown) {
+                                    return const Scaffold(
+                                      body: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    );
+                                  }
+
+                                  if (authManager.status ==
+                                          AuthStatus.authenticated &&
+                                      authCubit.signupGoogleEmail == null &&
+                                      authCubit.signInGoogle == false) {
+                                    // ValueKey(authSessionNonce) guarantees a fresh widget
+                                    // subtree on every new login session — preserves teardown
+                                    // safety for MainScreen / GeneralChat / Social.
+                                    return AuthReadyGate(
+                                      key: ValueKey(authCubit.authSessionNonce),
+                                    );
+                                  }
+
+                                  return SignUp();
+                                },
+                              ),
+                            );
+                          },
+                        ),
                         ),
                       ),
                     ),

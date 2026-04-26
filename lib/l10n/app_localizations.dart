@@ -529,6 +529,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Owner'**
   String get owner;
+
+  /// No description provided for @add.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get add;
 }
 
 class _AppLocalizationsDelegate

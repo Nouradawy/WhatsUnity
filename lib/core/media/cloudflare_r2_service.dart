@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:appwrite/appwrite.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mime/mime.dart';
 
 import 'appwrite_function_helpers.dart';
@@ -39,13 +40,9 @@ class CloudflareR2Service {
     required String filename,
     String? mimeType,
   }) async {
-    final file = File(path);
-    if (!await file.exists()) {
-      throw MediaUploadException('Local file missing (sqflite path stale?): $path');
-    }
-
     final mime = mimeType ?? lookupMimeType(path) ?? 'application/octet-stream';
-    final size = await file.length();
+    final uploadPayload = await _readUploadPayload(path);
+    final size = uploadPayload.size;
 
     final res = await invokeAppwriteFunctionJson(
       functions: _functions,
@@ -86,7 +83,7 @@ class CloudflareR2Service {
 
     await _dio.put<List<int>>(
       signedUrl,
-      data: await file.readAsBytes(),
+      data: uploadPayload.bytes,
       options: Options(
         headers: <String, Object?>{
           Headers.contentTypeHeader: mime,
@@ -97,5 +94,29 @@ class CloudflareR2Service {
     );
 
     return R2UploadMetadata(url: publicUrl, mime: mime).toJson();
+  }
+
+  Future<({List<int> bytes, int size})> _readUploadPayload(String path) async {
+    if (kIsWeb) {
+      final response = await _dio.get<List<int>>(
+        path,
+        options: Options(
+          responseType: ResponseType.bytes,
+          validateStatus: (s) => s != null && s >= 200 && s < 300,
+        ),
+      );
+      final bytes = response.data;
+      if (bytes == null || bytes.isEmpty) {
+        throw MediaUploadException('Selected web file is empty or unreadable: $path');
+      }
+      return (bytes: bytes, size: bytes.length);
+    }
+
+    final file = File(path);
+    if (!await file.exists()) {
+      throw MediaUploadException('Local file missing (sqflite path stale?): $path');
+    }
+    final bytes = await file.readAsBytes();
+    return (bytes: bytes, size: bytes.length);
   }
 }

@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 import 'package:flutter_chat_reactions/flutter_chat_reactions.dart';
 import 'package:flutter_chat_ui/flutter_chat_ui.dart';
@@ -400,11 +401,22 @@ class MessageRowWrapper extends StatelessWidget {
           alignment: Alignment.center,
           fit: StackFit.expand,
           children: [
-            // Local Image
-            Image.file(
-              File(path),
-              fit: BoxFit.cover,
-            ),
+            // Local preview: web cannot render `Image.file`.
+            kIsWeb
+                ? Image.network(
+                    path,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const ColoredBox(
+                      color: Colors.black12,
+                      child: Center(
+                        child: Icon(Icons.image_not_supported_outlined),
+                      ),
+                    ),
+                  )
+                : Image.file(
+                    File(path),
+                    fit: BoxFit.cover,
+                  ),
             // Dark Overlay
             Container(color: Colors.black38),
             // Progress Indicator

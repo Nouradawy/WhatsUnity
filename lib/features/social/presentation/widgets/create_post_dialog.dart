@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dotted_border/dotted_border.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -103,12 +104,24 @@ class _CreatePostDialogState extends State<CreatePostDialog>
                       ),
                       itemCount: file?.length ?? 0,
                       itemBuilder: (context, index) {
+                        final imagePath = file![index].path;
                         return ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            File(file![index].path),
-                            fit: BoxFit.cover,
-                          ),
+                          child: kIsWeb
+                              ? Image.network(
+                                  imagePath,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const ColoredBox(
+                                    color: Colors.black12,
+                                    child: Center(
+                                      child: Icon(Icons.image_not_supported_outlined),
+                                    ),
+                                  ),
+                                )
+                              : Image.file(
+                                  File(imagePath),
+                                  fit: BoxFit.cover,
+                                ),
                         );
                       },
                     ),

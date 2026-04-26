@@ -98,16 +98,11 @@ class BrainStormModel extends BrainStorm implements SyncMetadata {
         DateTime.now();
     final compoundId = json['compound_id']?.toString() ?? '';
     final channelId = json['channel_id']?.toString() ?? '';
-    final title = json['title']?.toString() ??
-        json['Title']?.toString() ??
-        '';
-    final image = _decodeJsonMapList(
-      json['imageSources'] ?? json['Image'] ?? json['image'],
-    );
-    final options = _decodeJsonMapList(json['options'] ?? json['Options']);
-    final comments =
-        _decodeJsonMapList(json['comments'] ?? json['Comments']);
-    final votes = _decodeVotes(json['votes'] ?? json['Votes']);
+    final title = json['title']?.toString() ?? '';
+    final image = _decodeJsonMapList(json['imageSources']);
+    final options = _decodeJsonMapList(json['options']);
+    final comments = _decodeJsonMapList(json['comments']);
+    final votes = _decodeVotes(json['votes']);
     final ver = int.tryParse(json['version']?.toString() ?? '') ?? 0;
     final deletedAt = _parseDate(json['deleted_at']);
 

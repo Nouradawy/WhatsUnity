@@ -78,13 +78,13 @@ class AuthRepositoryImpl implements AuthRepository {
   /// Async session probe fired from the constructor so [AuthManager] and
   /// the cubit receive an event without needing to await construction.
   Future<void> _checkExistingSession() async {
-    final user = await remoteDataSource.getCurrentUser();
+    final user = await remoteDataSource.remote_getCurrentUser();
     _notify(user);
   }
 
   @override
   Future<AppUser?> fetchCurrentUser() async {
-    final user = await remoteDataSource.getCurrentUser();
+    final user = await remoteDataSource.remote_getCurrentUser();
     _currentUser = user;
     if (user != null) {
       unawaited(CacheHelper.saveLastActiveUserId(user.id));
@@ -105,7 +105,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String email,
     required String password,
   }) async {
-    final user = await remoteDataSource.signInWithPassword(
+    final user = await remoteDataSource.remote_signInWithPassword(
       email: email,
       password: password,
     );
@@ -116,7 +116,7 @@ class AuthRepositoryImpl implements AuthRepository {
   /// Google auth goes through Appwrite's native OAuth2 flow.
   @override
   Future<AppUser?> signInWithGoogle() async {
-    final user = await remoteDataSource.signInWithGoogle();
+    final user = await remoteDataSource.remote_signInWithGoogle();
     _notify(user);
     return user;
   }
@@ -127,17 +127,21 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
     required Map<String, dynamic> data,
   }) async {
-    await remoteDataSource.signUp(email: email, password: password, data: data);
+    await remoteDataSource.remote_signUp(
+      email: email,
+      password: password,
+      data: data,
+    );
     // Triggers `users.*.update.prefs` → on_user_register (Appwrite function).
     await _updateProvisioningPrefs(_provisioningMapFromSignUpData(data));
     // Fetch and cache the newly created user (includes prefs in userMetadata).
-    final user = await remoteDataSource.getCurrentUser();
+    final user = await remoteDataSource.remote_getCurrentUser();
     _notify(user);
   }
 
   @override
   Future<void> signOut() async {
-    await remoteDataSource.signOut();
+    await remoteDataSource.remote_signOut();
     await CacheHelper.removeData(CacheHelper.compoundCurrentIndexKey);
     await CacheHelper.removeData(CacheHelper.lastActiveUserIdKey);
     await CacheHelper.removeData("MyCompounds");
@@ -448,7 +452,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String userId,
     required void Function(int index, double progress) onProgress,
   }) async {
-    await remoteDataSource.uploadVerificationFiles(
+    await remoteDataSource.remote_uploadVerificationFiles(
       files: files,
       userId: userId,
       onProgress: onProgress,

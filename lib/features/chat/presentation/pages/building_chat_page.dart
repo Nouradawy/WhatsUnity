@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:WhatsUnity/features/social/presentation/bloc/social_cubit.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:social_media_recorder/audio_encoder_type.dart';
 import 'package:social_media_recorder/screen/social_media_recorder.dart';
 import 'package:uuid/uuid.dart';
@@ -89,7 +91,18 @@ class BuildingChat extends StatelessWidget {
                     right: 0,
                     child: SafeArea(
                       child: SocialMediaRecorder(
-                        onButtonPress: () {
+                        onButtonPress: () async {
+                          final micStatus = await Permission.microphone.request();
+                          if (!micStatus.isGranted) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Microphone permission is required to record audio.'),
+                                ),
+                              );
+                            }
+                            return;
+                          }
                           chatCubit.recordedAmplitudes.clear();
                           chatCubit.toggleRecording();
                         },
@@ -112,10 +125,12 @@ class BuildingChat extends StatelessWidget {
                               'voice_note_${const Uuid().v4()}.m4a';
                           File? staged;
                           try {
-                            staged = stageRecorderFileForUpload(soundFile);
+                            final uploadPath = kIsWeb
+                                ? soundFile.path
+                                : (staged = stageRecorderFileForUpload(soundFile)).path;
                             final meta =
                                 await mediaUploadService.uploadFromLocalPath(
-                              localFilePath: staged.path,
+                              localFilePath: uploadPath,
                               filenameOverride: fileName,
                             );
                             final playbackUrl = meta['playback_url'] as String? ??
@@ -132,9 +147,11 @@ class BuildingChat extends StatelessWidget {
                           } catch (e, st) {
                             debugPrint('Voice upload failed: $e\n$st');
                           } finally {
-                            try {
-                              staged?.deleteSync();
-                            } catch (_) {}
+                            if (!kIsWeb) {
+                              try {
+                                staged?.deleteSync();
+                              } catch (_) {}
+                            }
                           }
                         },
                         fullRecordPackageHeight: 80,

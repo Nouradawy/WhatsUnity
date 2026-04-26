@@ -226,4 +226,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get owner => 'مالك';
+
+  @override
+  String get add => 'أضافة';
 }

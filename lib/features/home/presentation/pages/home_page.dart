@@ -1,12 +1,15 @@
 import 'dart:io';
 
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
+import 'package:WhatsUnity/features/home/presentation/widgets/header_compound_title.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hexcolor/hexcolor.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:social_media_recorder/audio_encoder_type.dart';
 import 'package:social_media_recorder/screen/social_media_recorder.dart';
 import 'package:WhatsUnity/Layout/Cubit/cubit.dart';
@@ -26,6 +29,7 @@ import 'package:WhatsUnity/features/chat/presentation/widgets/chat_scope.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/AudioWaveformPainter.dart';
 import 'package:WhatsUnity/features/maintenance/presentation/bloc/maintenance_cubit.dart';
 import 'package:WhatsUnity/features/maintenance/presentation/pages/maintenance_page.dart';
+import '../widgets/header_services.dart';
 import 'announcement_screen.dart';
 
 class HomePage extends StatelessWidget {
@@ -81,53 +85,7 @@ class HomePage extends StatelessWidget {
           appBar: AppBar(
             backgroundColor: Colors.white,
             leadingWidth: 120,
-            title:
-                isEnabledMultiCompound
-                    ? DropdownMenu(
-                      initialSelection: currentSelectedCompoundId?.toString(),
-                      width: MediaQuery.sizeOf(context).width * 0.55,
-                      inputDecorationTheme: InputDecorationTheme(
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                        labelStyle: GoogleFonts.plusJakartaSans(color: HexColor("#111518"), fontSize: 13, fontWeight: FontWeight.w500),
-                        constraints: const BoxConstraints(maxHeight: 50),
-                      ),
-                      menuStyle: MenuStyle(
-                        backgroundColor: WidgetStateProperty.all(Colors.white),
-                        fixedSize: WidgetStateProperty.all<Size>(Size(MediaQuery.sizeOf(context).width * 0.55, double.infinity)),
-                        elevation: WidgetStateProperty.all(0.5),
-                        shape: WidgetStateProperty.all(
-                          RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(5), // adjust radius
-                            // optional border
-                          ),
-                        ),
-                      ),
-
-                      dropdownMenuEntries:
-                          (currentMyCompounds.entries.toList().reversed).map((entry) {
-                            String key = entry.key;
-                            String value = entry.value;
-                            return DropdownMenuEntry<String>(leadingIcon: key == '0' ? Icon(Icons.add) : null, value: key, label: value.toString());
-                          }).toList(),
-                      onSelected: (selectedKey) async {
-                        if (selectedKey == '0') {
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => JoinCommunity()));
-                        } else {
-                          final newCompoundId = selectedKey.toString();
-                          authCubit.loadCompoundMembers(newCompoundId);
-                          await authCubit.selectCompound(
-                            compoundId: newCompoundId,
-                            compoundName: currentMyCompounds[selectedKey]!,
-                            atWelcome: false,
-                          );
-                        }
-                      },
-                    )
-                    : Text(
-                      // Safely handle the case where currentMyCompounds might be empty
-                      currentMyCompounds.isNotEmpty ? currentMyCompounds.values.last.toString() : 'Select Community',
-                      style: GoogleFonts.plusJakartaSans(color: HexColor("#111518"), fontSize: 17, fontWeight: FontWeight.w500),
-                    ),
+            title: headerCompoundTitle(context, isEnabledMultiCompound, currentSelectedCompoundId, currentMyCompounds, authCubit),
             leading: Container(
               alignment: AlignmentDirectional.center,
               padding: EdgeInsets.only(left: 7),
@@ -149,81 +107,7 @@ class HomePage extends StatelessWidget {
               NestedScrollView(
                 headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
                   return [
-                    SliverAppBar(
-                      backgroundColor: Colors.white,
-                      expandedHeight: MediaQuery.of(context).size.width * 0.40,
-                      flexibleSpace: FlexibleSpaceBar(
-                        background: Column(
-                          children: [
-                            //Searchbar
-                            const SizedBox(height: 30),
-
-                            //<-----------------ListView for Services---------------->
-                            Container(
-                              margin: EdgeInsets.only(left: MediaQuery.of(context).size.width * 0.075),
-                              height: MediaQuery.sizeOf(context).width * 0.28,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                clipBehavior: Clip.none,
-                                itemCount: services.length,
-                                itemBuilder: (context, index) {
-                                  final service = services[index];
-                                  return Container(
-                                    width: MediaQuery.sizeOf(context).width * 0.25,
-                                    margin: const EdgeInsets.only(right: 10),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12), // <-- Rounded corners
-                                      color: service["Background"],
-                                    ),
-                                    child: MaterialButton(
-                                      padding: EdgeInsets.zero,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12), // <-- Rounded corners
-                                      ),
-                                      onPressed: () {
-                                        if (index == 3) {
-                                          Navigator.push(context, MaterialPageRoute(builder: (context) => AnnouncementScreen()));
-                                        } else if (currentSelectedCompoundId != null) {
-                                          context.read<MaintenanceCubit>().getMaintenanceReports(
-                                            compoundId: currentSelectedCompoundId.toString(),
-                                            type: MaintenanceReportType.values[index],
-                                          );
-                                          Navigator.push(context, MaterialPageRoute(builder: (context) => Maintenance(maintenanceType: MaintenanceReportType.values[index])));
-                                        }
-                                      },
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        crossAxisAlignment: CrossAxisAlignment.center,
-
-                                        children: [
-                                          const SizedBox(height: 15),
-                                          Container(
-                                            padding: const EdgeInsets.all(12),
-                                            width: 50,
-                                            height: 50,
-                                            decoration: BoxDecoration(shape: BoxShape.circle, color: service["icon bg"]),
-                                            child: SvgPicture.asset(colorFilter: ColorFilter.mode(service["icon color"], BlendMode.srcIn), service['icon']),
-                                          ),
-                                          const SizedBox(height: 5),
-                                          SizedBox(
-                                            width: 100,
-                                            child: Text(
-                                              service['Name'],
-                                              textAlign: TextAlign.center,
-                                              style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: service["text Color"]),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    headerServices( context , isEnabledMultiCompound , currentSelectedCompoundId , currentMyCompounds , authCubit , services),
                   ];
                 },
                 body: DefaultTabController(
@@ -276,7 +160,21 @@ class HomePage extends StatelessWidget {
                           right: 0,
                           child: SafeArea(
                             child: SocialMediaRecorder(
-                              onButtonPress: () {
+                              onButtonPress: () async {
+                                final micStatus =
+                                    await Permission.microphone.request();
+                                if (!micStatus.isGranted) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Microphone permission is required to record audio.',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  return;
+                                }
                                 chatCubit.recordedAmplitudes.clear();
                                 chatCubit.toggleRecording();
                               },
@@ -299,9 +197,11 @@ class HomePage extends StatelessWidget {
                                 final fileName = 'voice_note_${const Uuid().v4()}.m4a';
                                 File? staged;
                                 try {
-                                  staged = stageRecorderFileForUpload(soundFile);
+                                  final uploadPath = kIsWeb
+                                      ? soundFile.path
+                                      : (staged = stageRecorderFileForUpload(soundFile)).path;
                                   final meta = await mediaUploadService.uploadFromLocalPath(
-                                    localFilePath: staged.path,
+                                    localFilePath: uploadPath,
                                     filenameOverride: fileName,
                                   );
                                   final playbackUrl =
@@ -318,9 +218,11 @@ class HomePage extends StatelessWidget {
                                 } catch (e, st) {
                                   debugPrint('Voice upload failed: $e\n$st');
                                 } finally {
-                                  try {
-                                    staged?.deleteSync();
-                                  } catch (_) {}
+                                  if (!kIsWeb) {
+                                    try {
+                                      staged?.deleteSync();
+                                    } catch (_) {}
+                                  }
                                 }
                               },
 

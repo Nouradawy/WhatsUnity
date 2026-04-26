@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:dotted_border/dotted_border.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -39,39 +40,46 @@ class Maintenance extends StatelessWidget {
           appBar: AppBar(
             title: Text(context.loc.maintenance),
             actions: [
-              IconButton(
-                onPressed: () {
-                  final authState = context.read<AuthCubit>().state;
-                  if (authState is Authenticated && authState.selectedCompoundId != null) {
-                    cubit.getMaintenanceReports(
-                      compoundId: authState.selectedCompoundId!.toString(),
-                      type: maintenanceType,
-                    );
-                  }
-                },
-                icon: const Icon(Icons.sync),
+              // IconButton(
+              //   onPressed: () {
+              //     final authState = context.read<AuthCubit>().state;
+              //     if (authState is Authenticated && authState.selectedCompoundId != null) {
+              //       cubit.getMaintenanceReports(
+              //         compoundId: authState.selectedCompoundId!.toString(),
+              //         type: maintenanceType,
+              //       );
+              //     }
+              //   },
+              //   icon: const Icon(Icons.sync),
+              // )
+              Padding(
+                padding: const EdgeInsets.only(right:8.0),
+                child: FilledButton(onPressed: ()=>newReport(
+                  context.loc.maintenanceReport,
+                  context,
+                  issueDescription,
+                  issueTitle,
+                  issueCategory,
+                  maintenanceType,
+                ),
+                 style: ButtonStyle(
+                   visualDensity: const VisualDensity(vertical: -4),
+                   padding: WidgetStateProperty.all<EdgeInsetsGeometry>(EdgeInsets.symmetric(horizontal: 8 , vertical: 0)),
+                   backgroundColor: WidgetStateProperty.all<Color>(HexColor("#76b7f5")),
+                   fixedSize: WidgetStateProperty.all<Size>(Size(30, 30)),
+                   shape: WidgetStateProperty.all<RoundedRectangleBorder>(RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                 ),
+                child: Row(
+                    children: [
+                  Icon(Icons.add),
+                  Text(context.loc.add)
+                ]),
+                ),
               )
+
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () {
-              newReport(
-                context.loc.maintenanceReport,
-                context,
-                issueDescription,
-                issueTitle,
-                issueCategory,
-                maintenanceType,
-              );
-            },
-            label: Text(
-              context.loc.reportProblem,
-              style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.w600, color: HexColor("#121416")),
-            ),
-            icon: Icon(Icons.add, color: HexColor("#121416")),
-            backgroundColor: HexColor("#dce8f3"),
-          ),
+
           body: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             child: Column(
@@ -464,12 +472,24 @@ class _CreateMaintenanceReportDialogState
                       ),
                       itemCount: file?.length ?? 0,
                       itemBuilder: (context, index) {
+                        final imagePath = file![index].path;
                         return ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            File(file![index].path),
-                            fit: BoxFit.cover,
-                          ),
+                          child: kIsWeb
+                              ? Image.network(
+                                  imagePath,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const ColoredBox(
+                                    color: Colors.black12,
+                                    child: Center(
+                                      child: Icon(Icons.image_not_supported_outlined),
+                                    ),
+                                  ),
+                                )
+                              : Image.file(
+                                  File(imagePath),
+                                  fit: BoxFit.cover,
+                                ),
                         );
                       },
                     ),
