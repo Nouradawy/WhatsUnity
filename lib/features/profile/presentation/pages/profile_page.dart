@@ -6,6 +6,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hexcolor/hexcolor.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/di/app_services.dart';
+import '../../../../core/services/message_notification_lifecycle_service.dart';
 import '../../../../core/config/Enums.dart';
 import '../../../../core/constants/Constants.dart';
 import '../../../../core/services/PolicyDialog.dart';
@@ -27,11 +29,17 @@ class _ProfilePageState extends State<ProfilePage> {
   late final TextEditingController fullNameController;
   late final TextEditingController emailController;
   final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmPasswordController = TextEditingController();
+  final TextEditingController confirmPasswordController =
+      TextEditingController();
   final _formKey1 = GlobalKey<FormState>();
   final _formKey2 = GlobalKey<FormState>();
 
   bool _controllersInitialized = false;
+  bool _isNotificationSettingsLoading = false;
+  bool _isGeneralChatNotificationsEnabled = true;
+  bool _isBuildingChatNotificationsEnabled = true;
+  bool _isAdminNotificationsEnabled = true;
+  bool _isMaintenanceNotificationsEnabled = true;
 
   @override
   void initState() {
@@ -57,38 +65,115 @@ class _ProfilePageState extends State<ProfilePage> {
       fullNameController.text = state.currentUser?.fullName ?? "";
       emailController.text = state.user.email ?? "";
       _controllersInitialized = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadNotificationPreferences(state.user.id);
+      });
     }
+  }
+
+  Future<void> _loadNotificationPreferences(String userId) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) return;
+    if (!mounted) return;
+    setState(() {
+      _isNotificationSettingsLoading = true;
+    });
+    final notificationService = AppServices.messageNotificationLifecycleService;
+    final generalChatEnabled = await notificationService
+        .fetchIsNotificationChannelEnabled(
+          userId: normalizedUserId,
+          notificationPreferenceChannel:
+              NotificationPreferenceChannel.generalChat,
+        );
+    final buildingChatEnabled = await notificationService
+        .fetchIsNotificationChannelEnabled(
+          userId: normalizedUserId,
+          notificationPreferenceChannel:
+              NotificationPreferenceChannel.buildingChat,
+        );
+    final adminNotificationsEnabled = await notificationService
+        .fetchIsNotificationChannelEnabled(
+          userId: normalizedUserId,
+          notificationPreferenceChannel:
+              NotificationPreferenceChannel.adminNotification,
+        );
+    final maintenanceNotificationsEnabled = await notificationService
+        .fetchIsNotificationChannelEnabled(
+          userId: normalizedUserId,
+          notificationPreferenceChannel:
+              NotificationPreferenceChannel.maintenanceNotification,
+        );
+    if (!mounted) return;
+    setState(() {
+      _isGeneralChatNotificationsEnabled = generalChatEnabled;
+      _isBuildingChatNotificationsEnabled = buildingChatEnabled;
+      _isAdminNotificationsEnabled = adminNotificationsEnabled;
+      _isMaintenanceNotificationsEnabled = maintenanceNotificationsEnabled;
+      _isNotificationSettingsLoading = false;
+    });
+  }
+
+  Future<void> _toggleNotificationPreference({
+    required String userId,
+    required NotificationPreferenceChannel notificationPreferenceChannel,
+    required bool isEnabled,
+  }) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) return;
+    await AppServices.messageNotificationLifecycleService
+        .updateNotificationChannelEnabled(
+          userId: normalizedUserId,
+          notificationPreferenceChannel: notificationPreferenceChannel,
+          isEnabled: isEnabled,
+        );
+    if (!mounted) return;
+    setState(() {
+      if (notificationPreferenceChannel ==
+          NotificationPreferenceChannel.generalChat) {
+        _isGeneralChatNotificationsEnabled = isEnabled;
+      } else if (notificationPreferenceChannel ==
+          NotificationPreferenceChannel.buildingChat) {
+        _isBuildingChatNotificationsEnabled = isEnabled;
+      } else if (notificationPreferenceChannel ==
+          NotificationPreferenceChannel.adminNotification) {
+        _isAdminNotificationsEnabled = isEnabled;
+      } else {
+        _isMaintenanceNotificationsEnabled = isEnabled;
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-
     return BlocBuilder<AuthCubit, AuthState>(
       builder: (context, authState) {
         if (authState is Authenticated) {
           _initializeControllers(authState);
           return Scaffold(
-              appBar: AppBar(
-                backgroundColor: Colors.white,
-                title: Text(context.loc.profile, style: GoogleFonts.plusJakartaSans()),
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              title: Text(
+                context.loc.profile,
+                style: GoogleFonts.plusJakartaSans(),
               ),
-              body: SingleChildScrollView(
-                child: Container(
-                  color: HexColor("#f9f9f9"),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      _buildHeader(authState),
-                      _buildInfo(authState),
-                      const SizedBox(height: 20),
-                      _buildSections(context, authState),
-                      const SizedBox(height: 10),
-                      _buildFooterActions(context, authState),
-                    ],
-                  ),
+            ),
+            body: SingleChildScrollView(
+              child: Container(
+                color: HexColor("#f9f9f9"),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildHeader(authState),
+                    _buildInfo(authState),
+                    const SizedBox(height: 20),
+                    _buildSections(context, authState),
+                    const SizedBox(height: 10),
+                    _buildFooterActions(context, authState),
+                  ],
                 ),
               ),
-            );
+            ),
+          );
         }
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
       },
@@ -105,11 +190,13 @@ class _ProfilePageState extends State<ProfilePage> {
           const Icon(Icons.edit),
           CircleAvatar(
             radius: 60,
-            backgroundImage: state.currentUser?.avatarUrl != null
-                ? CachedNetworkImageProvider(
-                    state.currentUser!.avatarUrl.toString(),
-                  )
-                : const AssetImage("assets/defaultUser.webp") as ImageProvider,
+            backgroundImage:
+                state.currentUser?.avatarUrl != null
+                    ? CachedNetworkImageProvider(
+                      state.currentUser!.avatarUrl.toString(),
+                    )
+                    : const AssetImage("assets/defaultUser.webp")
+                        as ImageProvider,
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.white, width: 4),
@@ -127,7 +214,10 @@ class _ProfilePageState extends State<ProfilePage> {
       children: [
         Text(
           state.currentUser?.displayName ?? context.loc.guest,
-          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 20),
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
         ),
         if (state.currentUser != null)
           Text(
@@ -206,18 +296,31 @@ class _ProfilePageState extends State<ProfilePage> {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
-            children: items.sublist(0, count).asMap().entries.map((entry) {
-              int index = entry.key;
-              var value = entry.value;
-              return _buildAccordionItem(context, authState, section, index, value);
-            }).toList(),
-          )
+            children:
+                items.sublist(0, count).asMap().entries.map((entry) {
+                  int index = entry.key;
+                  var value = entry.value;
+                  return _buildAccordionItem(
+                    context,
+                    authState,
+                    section,
+                    index,
+                    value,
+                  );
+                }).toList(),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildAccordionItem(BuildContext context, Authenticated authState, ProfileSection section, int index, String title) {
+  Widget _buildAccordionItem(
+    BuildContext context,
+    Authenticated authState,
+    ProfileSection section,
+    int index,
+    String title,
+  ) {
     int totalForSection(ProfileSection profileSection) {
       switch (profileSection) {
         case ProfileSection.account:
@@ -229,15 +332,15 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     }
 
-
     return BlocBuilder<ProfileCubit, ProfileState>(
-      builder: (context , profileState) {
+      builder: (context, profileState) {
         final profileCubit = context.read<ProfileCubit>();
         final isActive = profileCubit.isSectionActive(section, index);
 
         return AnimatedCrossFade(
           key: ValueKey('${section.name}_item_$index'),
-          crossFadeState: isActive ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+          crossFadeState:
+              isActive ? CrossFadeState.showSecond : CrossFadeState.showFirst,
           duration: const Duration(milliseconds: 500),
           firstChild: InkWell(
             onTap: () => _handleItemTap(context, authState, section, index),
@@ -253,7 +356,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ],
           ),
         );
-      }
+      },
     );
   }
 
@@ -265,8 +368,18 @@ class _ProfilePageState extends State<ProfilePage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w400, fontSize: 15)),
-              Icon(Icons.arrow_forward_ios, size: 20, color: Colors.grey.shade500),
+              Text(
+                title,
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w400,
+                  fontSize: 15,
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 20,
+                color: Colors.grey.shade500,
+              ),
             ],
           ),
         ),
@@ -275,7 +388,12 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  void _handleItemTap(BuildContext context, Authenticated authState, ProfileSection section, int index) {
+  void _handleItemTap(
+    BuildContext context,
+    Authenticated authState,
+    ProfileSection section,
+    int index,
+  ) {
     if (section == ProfileSection.support) {
       if (index == 1) {
         _showPolicy(context, 'Privacy_policy');
@@ -291,18 +409,116 @@ class _ProfilePageState extends State<ProfilePage> {
     context.read<ProfileCubit>().toggleSection(section, index);
   }
 
-  Widget _buildExpandedContent(BuildContext context, Authenticated authState, ProfileSection section, int index) {
+  Widget _buildExpandedContent(
+    BuildContext context,
+    Authenticated authState,
+    ProfileSection section,
+    int index,
+  ) {
     if (section == ProfileSection.account) {
       if (index == 0) return _buildEditProfileForm(context, authState);
       if (index == 1) return _buildChangePasswordForm(context);
     }
     if (section == ProfileSection.preferences && index == 0) {
-      return Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Text(context.loc.comingSoon),
-      );
+      return _buildNotificationChannelSettings(context, authState);
     }
     return const SizedBox.shrink();
+  }
+
+  Widget _buildNotificationChannelSettings(
+    BuildContext context,
+    Authenticated authState,
+  ) {
+    if (_isNotificationSettingsLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Column(
+        children: [
+          _buildNotificationChannelSwitchTile(
+            title: 'GeneralChat',
+            subtitle: 'Mentions and new messages from GeneralChat.',
+            value: _isGeneralChatNotificationsEnabled,
+            onChanged:
+                (isEnabled) => _toggleNotificationPreference(
+                  userId: authState.user.id,
+                  notificationPreferenceChannel:
+                      NotificationPreferenceChannel.generalChat,
+                  isEnabled: isEnabled,
+                ),
+          ),
+          _buildNotificationChannelSwitchTile(
+            title: 'BuildingChat',
+            subtitle: 'Updates from your building chat channel.',
+            value: _isBuildingChatNotificationsEnabled,
+            onChanged:
+                (isEnabled) => _toggleNotificationPreference(
+                  userId: authState.user.id,
+                  notificationPreferenceChannel:
+                      NotificationPreferenceChannel.buildingChat,
+                  isEnabled: isEnabled,
+                ),
+          ),
+          _buildNotificationChannelSwitchTile(
+            title: 'Admin',
+            subtitle: 'Administrative announcements and alerts.',
+            value: _isAdminNotificationsEnabled,
+            onChanged:
+                (isEnabled) => _toggleNotificationPreference(
+                  userId: authState.user.id,
+                  notificationPreferenceChannel:
+                      NotificationPreferenceChannel.adminNotification,
+                  isEnabled: isEnabled,
+                ),
+          ),
+          _buildNotificationChannelSwitchTile(
+            title: 'Maintenance',
+            subtitle: 'Maintenance updates and service notices.',
+            value: _isMaintenanceNotificationsEnabled,
+            onChanged:
+                (isEnabled) => _toggleNotificationPreference(
+                  userId: authState.user.id,
+                  notificationPreferenceChannel:
+                      NotificationPreferenceChannel.maintenanceNotification,
+                  isEnabled: isEnabled,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationChannelSwitchTile({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return SwitchListTile.adaptive(
+      contentPadding: EdgeInsets.zero,
+      title: Text(
+        title,
+        style: GoogleFonts.plusJakartaSans(
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: GoogleFonts.plusJakartaSans(
+          fontWeight: FontWeight.w400,
+          fontSize: 12,
+          color: HexColor("#637488"),
+        ),
+      ),
+      value: value,
+      onChanged: onChanged,
+    );
   }
 
   Widget _buildEditProfileForm(BuildContext context, Authenticated authState) {
@@ -372,14 +588,16 @@ class _ProfilePageState extends State<ProfilePage> {
               context,
               controller: passwordController,
               IsPassword: true,
-              labelText: context.loc.password, keyboardType: TextInputType.visiblePassword,
+              labelText: context.loc.password,
+              keyboardType: TextInputType.visiblePassword,
             ),
             const SizedBox(height: 10),
             defaultTextForm(
               context,
               controller: confirmPasswordController,
               IsPassword: true,
-              labelText: context.loc.confirmPassword, keyboardType: TextInputType.visiblePassword,
+              labelText: context.loc.confirmPassword,
+              keyboardType: TextInputType.visiblePassword,
             ),
             const SizedBox(height: 10),
             Align(
@@ -398,14 +616,18 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Future<void> _applyProfileChanges(BuildContext context, Authenticated authState) async {
+  Future<void> _applyProfileChanges(
+    BuildContext context,
+    Authenticated authState,
+  ) async {
     if (!(_formKey1.currentState?.validate() ?? false)) return;
 
     final authCubit = context.read<AuthCubit>();
     final profileCubit = context.read<ProfileCubit>();
     final currentUser = authState.currentUser;
 
-    if (userNameController.text != currentUser?.displayName || fullNameController.text != currentUser?.fullName) {
+    if (userNameController.text != currentUser?.displayName ||
+        fullNameController.text != currentUser?.fullName) {
       await authCubit.updateProfile(
         fullName: fullNameController.text,
         displayName: userNameController.text,
@@ -437,13 +659,25 @@ class _ProfilePageState extends State<ProfilePage> {
             color: Colors.pinkAccent,
             height: 42,
             minWidth: double.infinity,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const FaIcon(FontAwesomeIcons.handHoldingHeart, color: Colors.white, size: 18),
+                const FaIcon(
+                  FontAwesomeIcons.handHoldingHeart,
+                  color: Colors.white,
+                  size: 18,
+                ),
                 const SizedBox(width: 10),
-                Text(context.loc.donateToCommunity, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w900)),
+                Text(
+                  context.loc.donateToCommunity,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ],
             ),
           ),
@@ -453,13 +687,25 @@ class _ProfilePageState extends State<ProfilePage> {
             color: Colors.blueGrey.shade100,
             height: 42,
             minWidth: double.infinity,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                FaIcon(FontAwesomeIcons.arrowRightFromBracket, color: HexColor("#ae060e"), size: 16),
+                FaIcon(
+                  FontAwesomeIcons.arrowRightFromBracket,
+                  color: HexColor("#ae060e"),
+                  size: 16,
+                ),
                 const SizedBox(width: 10),
-                Text(context.loc.logOut, style: GoogleFonts.plusJakartaSans(color: HexColor("#ae060e"), fontWeight: FontWeight.w900)),
+                Text(
+                  context.loc.logOut,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: HexColor("#ae060e"),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ],
             ),
           ),
@@ -475,9 +721,7 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (context) {
         final locale = Localizations.localeOf(context).languageCode;
         final fileName = locale == "ar" ? "${baseName}_ar.md" : "$baseName.md";
-        return Dialog(
-          child: PolicyDialog(mdFileName: fileName),
-        );
+        return Dialog(child: PolicyDialog(mdFileName: fileName));
       },
     );
   }
@@ -485,46 +729,61 @@ class _ProfilePageState extends State<ProfilePage> {
   void _showDeleteAccountDialog(BuildContext context, Authenticated authState) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.loc.deleteAccountTitle),
-        content: Text(context.loc.deleteAccountMessage),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(context.loc.cancel)),
-          TextButton(
-            onPressed: () async {
-              final Uri emailLaunchUri = Uri(
-                scheme: 'mailto',
-                path: 'support@whatsunity.work.gd',
-                query: 'subject=Delete My Account&body=User ID: ${authState.user.id}',
-              );
-              await launchUrl(emailLaunchUri);
-              if (!context.mounted) return;
-              Navigator.pop(context);
-            },
-            child: Text(context.loc.delete, style: const TextStyle(color: Colors.red)),
+      builder:
+          (context) => AlertDialog(
+            title: Text(context.loc.deleteAccountTitle),
+            content: Text(context.loc.deleteAccountMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(context.loc.cancel),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final Uri emailLaunchUri = Uri(
+                    scheme: 'mailto',
+                    path: 'support@whatsunity.work.gd',
+                    query:
+                        'subject=Delete My Account&body=User ID: ${authState.user.id}',
+                  );
+                  await launchUrl(emailLaunchUri);
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  context.loc.delete,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
   void _showDonationDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.loc.supportWhatsUnity),
-        content: Text(context.loc.donationMessage),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(context.loc.later)),
-          TextButton(
-            onPressed: () {
-              launchUrl(Uri.parse("https://ipn.eg/S/nouradawynbe/instapay/673PPO"), mode: LaunchMode.externalApplication);
-              Navigator.pop(context);
-            },
-            child: Text(context.loc.donateNow),
+      builder:
+          (context) => AlertDialog(
+            title: Text(context.loc.supportWhatsUnity),
+            content: Text(context.loc.donationMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(context.loc.later),
+              ),
+              TextButton(
+                onPressed: () {
+                  launchUrl(
+                    Uri.parse("https://ipn.eg/S/nouradawynbe/instapay/673PPO"),
+                    mode: LaunchMode.externalApplication,
+                  );
+                  Navigator.pop(context);
+                },
+                child: Text(context.loc.donateNow),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 }

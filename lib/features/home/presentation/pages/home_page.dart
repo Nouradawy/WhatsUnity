@@ -6,9 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:hexcolor/hexcolor.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:social_media_recorder/audio_encoder_type.dart';
 import 'package:social_media_recorder/screen/social_media_recorder.dart';
@@ -16,21 +14,17 @@ import 'package:WhatsUnity/Layout/Cubit/cubit.dart';
 import 'package:WhatsUnity/Layout/Cubit/states.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:WhatsUnity/core/config/Enums.dart';
 import 'package:WhatsUnity/core/media/media_services.dart';
 import 'package:WhatsUnity/core/media/recorder_upload_bridge.dart';
 import 'package:WhatsUnity/features/social/presentation/pages/Social.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
-import 'package:WhatsUnity/features/auth/presentation/pages/welcome_page.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_state.dart';
+import 'package:WhatsUnity/features/chat/presentation/bloc/mention_notification_cubit.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chat_scope.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/AudioWaveformPainter.dart';
-import 'package:WhatsUnity/features/maintenance/presentation/bloc/maintenance_cubit.dart';
-import 'package:WhatsUnity/features/maintenance/presentation/pages/maintenance_page.dart';
 import '../widgets/header_services.dart';
-import 'announcement_screen.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -92,12 +86,50 @@ class HomePage extends StatelessWidget {
               child: Text("WhatsUnity", textScaler: TextScaler.noScaling, style: GoogleFonts.lobster(fontSize: 20, fontWeight: FontWeight.w500, color: Colors.indigo.shade500)),
             ),
             actions: [
-              //   IconButton(onPressed: (){
-              //   Navigator.push(
-              //     context,
-              //     MaterialPageRoute(builder: (context) => Profile()),
-              //   );
-              // }, icon: Icon(Icons.notifications)),
+              BlocBuilder<MentionNotificationCubit, MentionNotificationState>(
+                buildWhen: (previous, current) =>
+                    previous.totalUnreadMentionCount !=
+                    current.totalUnreadMentionCount,
+                builder: (context, mentionState) {
+                  final unreadCount = mentionState.totalUnreadMentionCount;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      IconButton(
+                        onPressed: null,
+                        icon: const Icon(Icons.notifications),
+                      ),
+                      if (unreadCount > 0)
+                        Positioned(
+                          right: 8,
+                          top: 6,
+                          child: Container(
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade600,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              unreadCount > 99
+                                  ? '99+'
+                                  : unreadCount.toString(),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
 

@@ -559,10 +559,26 @@ class MessageRowWrapper extends StatelessWidget {
                 : (hasAvatar
                     ? CircleAvatar(
                         radius: 16,
-                        foregroundImage: cachedAvatarImageProvider ??
-                            CachedNetworkImageProvider(avatarUrl!),
-                        onForegroundImageError: (_, __) {},
-                        child: Avatar(userId: message.authorId),
+                        backgroundColor: Colors.transparent,
+                        child: ClipOval(
+                          child: SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: cachedAvatarImageProvider != null
+                                ? Image(
+                                    image: cachedAvatarImageProvider,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        Avatar(userId: message.authorId),
+                                  )
+                                : CachedNetworkImage(
+                                    imageUrl: avatarUrl!,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (_, __, ___) =>
+                                        Avatar(userId: message.authorId),
+                                  ),
+                          ),
+                        ),
                       )
                     : Avatar(userId: message.authorId)),
           );

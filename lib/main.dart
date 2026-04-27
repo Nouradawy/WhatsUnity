@@ -1,4 +1,3 @@
-import 'package:appwrite/appwrite.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -24,6 +23,7 @@ import 'features/social/presentation/bloc/social_cubit.dart';
 import 'features/profile/presentation/bloc/profile_cubit.dart';
 import 'features/chat/presentation/bloc/chat_details_cubit.dart';
 import 'features/chat/presentation/bloc/message_receipts_cubit.dart';
+import 'features/chat/presentation/bloc/mention_notification_cubit.dart';
 
 import 'Layout/Cubit/cubit.dart';
 import 'features/admin/presentation/bloc/report_cubit.dart';
@@ -125,6 +125,9 @@ class MyApp extends StatelessWidget {
                                   chatMembers: members,
                                 );
                               },
+                            ),
+                            BlocProvider(
+                              create: (context) => MentionNotificationCubit(),
                             ),
                             BlocProvider(
                               create:

@@ -1,20 +1,98 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../../Layout/Cubit/cubit.dart';
 import '../../../../Layout/Cubit/states.dart';
+import '../../../../core/di/app_services.dart';
 import '../../../../core/config/Enums.dart';
 import '../../../admin/presentation/pages/AdminDashboard/AdminDashboard.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../auth/presentation/pages/gatekeeper_user_page.dart';
 import '../../../chat/presentation/pages/building_chat_page.dart';
+import '../../../chat/presentation/bloc/mention_notification_cubit.dart';
 import '../../../profile/presentation/pages/profile_page.dart';
 
 
-class MainScreen extends StatelessWidget {
+class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
+  String? _lastMentionContextKey;
+  int? _lastBottomNavIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    AppServices.messageNotificationLifecycleService.initialize();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    AppServices.messageNotificationLifecycleService.updateLifecycleState(state);
+    super.didChangeAppLifecycleState(state);
+  }
+
+  void _syncMentionNotifications({
+    required AuthState authState,
+    required Roles? role,
+    required int bottomNavIndex,
+  }) {
+    final mentionCubit = context.read<MentionNotificationCubit>();
+    if (authState is! Authenticated) {
+      if (_lastMentionContextKey != null) {
+        _lastMentionContextKey = null;
+        _lastBottomNavIndex = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          mentionCubit.stop();
+          AppServices.messageNotificationLifecycleService.stop();
+          unawaited(AppServices.pushTargetRegistrationService.stop());
+        });
+      }
+      return;
+    }
+
+    final contextKey =
+        '${authState.user.id}_${authState.selectedCompoundId}_${authState.currentUser?.building}_${authState.timestamp}';
+    final isChatsTab = role != Roles.manager && bottomNavIndex == 1;
+    final shouldMarkSeen = isChatsTab && _lastBottomNavIndex != 1;
+    final shouldStart = _lastMentionContextKey != contextKey;
+
+    _lastMentionContextKey = contextKey;
+    _lastBottomNavIndex = bottomNavIndex;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (shouldStart) {
+        mentionCubit.startForAuthState(authState);
+        AppServices.messageNotificationLifecycleService.startForAuthState(
+          authState,
+        );
+        AppServices.pushTargetRegistrationService.startForAuthState(authState);
+      }
+      if (shouldMarkSeen) {
+        mentionCubit.markBuildingMentionsAsSeen(authState);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    context.read<MentionNotificationCubit>().stop();
+    AppServices.messageNotificationLifecycleService.stop();
+    unawaited(AppServices.pushTargetRegistrationService.stop());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +111,11 @@ class MainScreen extends StatelessWidget {
           builder: (context, states) {
             final cubit = AppCubit.get(context);
             final Roles? role = (authState is Authenticated) ? authState.role : null;
+            _syncMentionNotifications(
+              authState: authState,
+              role: role,
+              bottomNavIndex: cubit.bottomNavIndex,
+            );
 
             // ALWAYS mount BuildingChat — never swap it with SizedBox.shrink().
             // IndexedStack keeps every child alive in the tree and only paints
@@ -64,13 +147,104 @@ class MainScreen extends StatelessWidget {
                   items: <BottomNavigationBarItem>[
 
                     BottomNavigationBarItem(
-                        icon: FaIcon(FontAwesomeIcons.house, size: 18),
-                        label: "Home"
+                      icon: BlocBuilder<MentionNotificationCubit,
+                          MentionNotificationState>(
+                        buildWhen: (previous, current) =>
+                            previous.unreadGeneralMentionCount !=
+                            current.unreadGeneralMentionCount,
+                        builder: (context, mentionState) {
+                          final unreadCount =
+                              mentionState.unreadGeneralMentionCount;
+                          return Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              const FaIcon(FontAwesomeIcons.house, size: 18),
+                              if (unreadCount > 0 && cubit.bottomNavIndex != 0)
+                                Positioned(
+                                  right: -8,
+                                  top: -8,
+                                  child: Container(
+                                    constraints: const BoxConstraints(
+                                      minWidth: 16,
+                                      minHeight: 16,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade600,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      unreadCount > 99
+                                          ? '99+'
+                                          : unreadCount.toString(),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                      label: "Home",
                     ),
                     if (role != Roles.manager)
                       BottomNavigationBarItem(
-                          icon: FaIcon(FontAwesomeIcons.solidMessage, size: 18),
-                          label: "Chats"
+                        icon: BlocBuilder<MentionNotificationCubit,
+                            MentionNotificationState>(
+                          buildWhen: (previous, current) =>
+                              previous.unreadBuildingMentionCount !=
+                              current.unreadBuildingMentionCount,
+                          builder: (context, mentionState) {
+                            final unreadCount =
+                                mentionState.unreadBuildingMentionCount;
+                            return Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                const FaIcon(
+                                  FontAwesomeIcons.solidMessage,
+                                  size: 18,
+                                ),
+                                if (unreadCount > 0)
+                                  Positioned(
+                                    right: -8,
+                                    top: -8,
+                                    child: Container(
+                                      constraints: const BoxConstraints(
+                                        minWidth: 16,
+                                        minHeight: 16,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade600,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        unreadCount > 99
+                                            ? '99+'
+                                            : unreadCount.toString(),
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                        label: "Chats",
                       ),
                     // BottomNavigationBarItem(
                     //     icon: Icon(Icons.handyman_outlined),

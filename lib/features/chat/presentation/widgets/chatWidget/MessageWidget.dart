@@ -951,7 +951,15 @@ void openNetworkImageFullScreen(BuildContext context, String url) {
             minScale: 0.5,
             maxScale: 4,
             child: Center(
-              child: Image.network(url, fit: BoxFit.contain),
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.broken_image,
+                  color: Colors.white70,
+                  size: 38,
+                ),
+              ),
             ),
           ),
           Positioned(

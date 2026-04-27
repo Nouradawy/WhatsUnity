@@ -7,6 +7,7 @@ import 'package:WhatsUnity/features/social/presentation/widgets/social_feed_tab.
 
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
+import '../../../chat/presentation/bloc/mention_notification_cubit.dart';
 import '../../../chat/presentation/widgets/chatWidget/GeneralChat/GeneralChat.dart';
 
 class Social extends StatefulWidget {
@@ -18,9 +19,50 @@ class Social extends StatefulWidget {
 
 class _SocialState extends State<Social> {
   final TextEditingController postHead = TextEditingController();
+  TabController? _tabController;
+  String? _lastGeneralSeenKey;
 
   // Avoids missing first fetch when compound is set late on cold start.
   String? _postsFetchedForCompoundId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final controller = DefaultTabController.of(context);
+    if (!identical(_tabController, controller)) {
+      _tabController?.removeListener(_handleTabSelection);
+      _tabController = controller;
+      _tabController?.addListener(_handleTabSelection);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController?.removeListener(_handleTabSelection);
+    postHead.dispose();
+    super.dispose();
+  }
+
+  void _handleTabSelection() {
+    final controller = _tabController;
+    if (controller == null || controller.indexIsChanging || controller.index != 1) {
+      return;
+    }
+    final authState = context.read<AuthCubit>().state;
+    _markGeneralMentionsAsSeenIfNeeded(authState);
+  }
+
+  void _markGeneralMentionsAsSeenIfNeeded(AuthState authState) {
+    if (authState is! Authenticated) return;
+    final selectedCompoundId = authState.selectedCompoundId;
+    if (selectedCompoundId == null || selectedCompoundId.isEmpty) return;
+    final key = '${authState.user.id}_$selectedCompoundId';
+    if (_lastGeneralSeenKey == key) return;
+    _lastGeneralSeenKey = key;
+    context
+        .read<MentionNotificationCubit>()
+        .markGeneralMentionsAsSeen(authState);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +94,12 @@ class _SocialState extends State<Social> {
           return const Center(child: CircularProgressIndicator());
         }
 
+        if ((_tabController?.index ?? 0) == 1) {
+          _markGeneralMentionsAsSeenIfNeeded(authState);
+        } else {
+          _lastGeneralSeenKey = null;
+        }
+
         if (selectedCompoundId != _postsFetchedForCompoundId) {
           _postsFetchedForCompoundId = selectedCompoundId;
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -62,7 +110,55 @@ class _SocialState extends State<Social> {
 
         return Column(
           children: [
-            TabBar(labelColor: Colors.black, unselectedLabelColor: Colors.grey, tabs: [Tab(text: context.loc.socialTab), Tab(text: context.loc.chatTab)]),
+            TabBar(
+              labelColor: Colors.black,
+              unselectedLabelColor: Colors.grey,
+              tabs: [
+                Tab(text: context.loc.socialTab),
+                Tab(
+                  child: BlocBuilder<MentionNotificationCubit,
+                      MentionNotificationState>(
+                    buildWhen: (previous, current) =>
+                        previous.unreadGeneralMentionCount !=
+                        current.unreadGeneralMentionCount,
+                    builder: (context, mentionState) {
+                      final unreadCount = mentionState.unreadGeneralMentionCount;
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(context.loc.chatTab),
+                          if (unreadCount > 0) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade600,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                unreadCount > 99
+                                    ? '99+'
+                                    : unreadCount.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
             Expanded(
               child: TabBarView(
                 physics: const LessSensitivePageScrollPhysics(),

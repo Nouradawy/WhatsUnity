@@ -2,9 +2,11 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.7+-0175C2?logo=dart)](https://dart.dev)
-[![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?logo=supabase)](https://supabase.com)
+[![Appwrite](https://img.shields.io/badge/Appwrite-Backend-F02E65?logo=appwrite)](https://appwrite.io)
 
-> Community-centric residential management for compounds and buildings—chat, operations, and social tools in one Flutter client backed by Supabase.
+> Community-centric residential management for compounds and buildings—chat, operations, and social tools in one Flutter client backed by Appwrite.
+
+> Migration note: some legacy sections below still reference Supabase-era internals and are being incrementally updated to Appwrite-first wording. Notification architecture and current runtime wiring are documented in `docs/technical_notification_system.md`.
 
 ---
 
@@ -12,7 +14,7 @@
 
 **WhatsUnity** helps residents, managers, and administrators collaborate within **multi-compound (community) contexts**: join or switch compounds, participate in **building-wide and general community chat**, submit and track **maintenance, security, and cleaning** requests, browse a **compound social feed**, and use **role-appropriate tools** (for example, manager workflows and an admin dashboard).
 
-The app is built with **Flutter** and uses **Supabase** for authentication, PostgreSQL data access, and **Supabase Realtime** (database change subscriptions over managed infrastructure—not a hand-rolled WebSocket server).
+The app is built with **Flutter** and uses **Appwrite** for authentication, data access, messaging, and realtime subscriptions.
 
 ---
 
@@ -55,7 +57,7 @@ The app is built with **Flutter** and uses **Supabase** for authentication, Post
 |--------|------------|
 | **UI** | Flutter (Material 3), [`google_fonts`](https://pub.dev/packages/google_fonts), localization via `flutter_localizations` / generated `l10n` |
 | **Language** | Dart (^3.7.2) |
-| **Backend** | [Supabase](https://supabase.com) (`supabase_flutter`) — Auth, Postgres, Realtime |
+| **Backend** | [Appwrite](https://appwrite.io) (`appwrite`) — Auth, TablesDB, Realtime, Functions, Messaging |
 | **State management** | **Bloc** / **Cubit** (`flutter_bloc`, `bloc`); [`provider`](https://pub.dev/packages/provider) for narrow cases (e.g. auth readiness) |
 | **Chat UI** | `flutter_chat_ui`, `flutter_chat_core`, Flyer chat message packages |
 | **Media & device** | `image_picker`, `file_picker`, `permission_handler`, `audioplayers`, etc. |
@@ -128,6 +130,55 @@ flowchart LR
   Repo --> Local[(SQLite / sqflite)]
   Remote --> Supabase[(Supabase Auth + DB + Realtime)]
 ```
+
+---
+
+## Notifications wiring (Android + Web)
+
+Message notifications are now wired through a lifecycle-aware service that listens to Appwrite chat realtime and raises local/browser notifications when the app is not active.
+
+### Implemented now
+
+- **Lifecycle observer** in [`MainScreen`](lib/features/home/presentation/pages/main_screen.dart):
+  - Registers `WidgetsBindingObserver`
+  - Forwards lifecycle transitions to the notification service
+  - Starts/stops notification subscriptions with authenticated context
+- **Notification service**: [`MessageNotificationLifecycleService`](lib/core/services/message_notification_lifecycle_service.dart)
+  - Resolves tracked channels (`COMPOUND_GENERAL` and `BUILDING_CHAT`) from Appwrite
+  - Subscribes via existing chat realtime repository
+  - Suppresses notifications while app is in `resumed` state
+  - Shows notifications in background/inactive states
+  - Deduplicates message notifications per user/message using `SharedPreferences`
+- **Android runtime/local notifications**:
+  - Added dependency: `flutter_local_notifications`
+  - Added permission in [`AndroidManifest.xml`](android/app/src/main/AndroidManifest.xml):
+    - `android.permission.POST_NOTIFICATIONS`
+  - Requests notification permission through plugin on supported Android versions
+- **Web browser notifications**:
+  - Conditional notification bridge:
+    - [`browser_notification_bridge.dart`](lib/core/services/browser_notification_bridge.dart)
+    - [`browser_notification_bridge_web.dart`](lib/core/services/browser_notification_bridge_web.dart)
+    - [`browser_notification_bridge_stub.dart`](lib/core/services/browser_notification_bridge_stub.dart)
+  - Uses browser Notification API permission + display on web builds
+
+### Current behavior
+
+- **Foreground (`resumed`)**: no local push (chat UI already updates in realtime).
+- **Background/inactive (process alive)**: local/browser notifications are shown for new incoming messages from other users.
+- **Deduplication**: each message is notified once per user on-device.
+
+### Not covered yet (next step)
+
+Terminated-state push delivery (app fully closed) uses **server-side push + target registration**:
+
+- Configure Appwrite Messaging provider(s) for Android/Web push.
+- Register per-device push targets (`PushTargetRegistrationService`).
+- Trigger push from server function `notify_new_message` on message creation events.
+
+If provider credentials or targets are missing, background local notifications still work, but terminated-state delivery will not.
+
+Technical deep-dive: [`docs/technical_notification_system.md`](docs/technical_notification_system.md)
+Operator runbook: [`docs/notification_setup_runbook.md`](docs/notification_setup_runbook.md)
 
 ---
 

@@ -96,7 +96,7 @@
             "path": "functions/google-native-signin-bridge",
             "entrypoint": "src/main.js",
             "execute": [
-                "any"
+                "users"
             ],
             "enabled": true,
             "logging": true,
@@ -107,6 +107,31 @@
             "scopes": [
                 "users.read",
                 "users.write"
+            ],
+            "buildSpecification": "s-0.5vcpu-512mb",
+            "runtimeSpecification": "s-0.5vcpu-512mb",
+            "deploymentRetention": 0
+        },
+        {
+            "$id": "notify_new_message",
+            "name": "notify_new_message",
+            "runtime": "node-25",
+            "path": "functions/notify-new-message",
+            "entrypoint": "src/main.js",
+            "execute": [
+                "users"
+            ],
+            "enabled": true,
+            "logging": true,
+            "events": [
+                "databases.*.tables.messages.rows.*.create"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "commands": "npm install",
+            "scopes": [
+                "databases.read",
+                "messages.write"
             ],
             "buildSpecification": "s-0.5vcpu-512mb",
             "runtimeSpecification": "s-0.5vcpu-512mb",
