@@ -1,0 +1,12 @@
+{
+  "name": "notify-new-message",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js"
+  },
+  "dependencies": {
+    "node-appwrite": "^20.3.0"
+  }
+}
