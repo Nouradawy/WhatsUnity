@@ -157,13 +157,20 @@ class MessageModel with SyncMetadata {
     final deliveredAt = _parseDate(metadataOut['deliveredAt']);
     final updatedAt = _parseDate(metadataOut['updatedAt']);
     final isSeen = metadataOut['isSeen'] == true;
+    final isSyncClean = syncState == SyncState.clean;
 
     if (deletedAt != null) metadataOut['deletedAt'] = deletedAt!.toIso8601String();
     if (failedAt != null) metadataOut['failedAt'] = failedAt.toIso8601String();
     if (sentAtParsed != null) metadataOut['sentAt'] = sentAtParsed.toIso8601String();
-    if (deliveredAt != null) metadataOut['deliveredAt'] = deliveredAt.toIso8601String();
+    if (deliveredAt != null) {
+      metadataOut['deliveredAt'] = deliveredAt.toIso8601String();
+    } else if (isSyncClean && remoteUpdatedAt != null) {
+      // Clean state means the row reached Appwrite at least once.
+      metadataOut['deliveredAt'] = remoteUpdatedAt!.toIso8601String();
+    }
     if (updatedAt != null) metadataOut['updatedAt'] = updatedAt.toIso8601String();
     metadataOut['isSeen'] = isSeen;
+    metadataOut['syncState'] = syncState.name;
     if (createdAt != null) {
       metadataOut['createdAtMs'] = createdAt!.toUtc().millisecondsSinceEpoch;
     }

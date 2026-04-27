@@ -1,6 +1,7 @@
 // lib/chat/widgets/message_row_wrapper.dart
 
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
@@ -17,11 +18,11 @@ import '../../../bloc/chat_cubit.dart';
 import '../../../../../admin/presentation/bloc/report_cubit.dart';
 
 import '../MessageWidget.dart';
+import '../Details/User_details.dart';
 import '../../../../data/models/chat_member_model.dart';
 
 
 class MessageRowWrapper extends StatelessWidget {
-  static final Set<String> _failedWebAvatarUrls = <String>{};
 
   final types.Message message;
   final int index;
@@ -35,6 +36,7 @@ class MessageRowWrapper extends StatelessWidget {
   final bool isPreviousMessageFromSameUser;
   final Map<String, types.User> userCache;
   final Map<String, ImageProvider<Object>> avatarImageProviderByUserId;
+  final ValueListenable<int> avatarVersionListenable;
   final Future<void> Function(String) resolveUser; // Function to fetch user
   final List<types.Message> localMessages;
   final bool showDateHeaders;
@@ -68,6 +70,7 @@ class MessageRowWrapper extends StatelessWidget {
     required this.isPreviousMessageFromSameUser,
     required this.userCache,
     required this.avatarImageProviderByUserId,
+    required this.avatarVersionListenable,
     required this.resolveUser,
     required this.onVisibilityForHeader,
     required this.localMessages,
@@ -156,19 +159,19 @@ class MessageRowWrapper extends StatelessWidget {
                       if (kIsWeb) {
                         return CircleAvatar(
                           child: ClipOval(
-                            child: Image.network(
-                              rawAvatar,
+                            child: CachedNetworkImage(
+                              imageUrl: rawAvatar,
                               fit: BoxFit.cover,
                               width: 40,
                               height: 40,
-                              errorBuilder: (_, __, ___) =>
+                              errorWidget: (_, __, ___) =>
                                   Text(member.displayName[0]),
                             ),
                           ),
                         );
                       }
                       return CircleAvatar(
-                        backgroundImage: NetworkImage(rawAvatar),
+                        backgroundImage: CachedNetworkImageProvider(rawAvatar),
                       );
                     }(),
                     title: Text(member.displayName,
@@ -197,14 +200,16 @@ class MessageRowWrapper extends StatelessWidget {
                     title: Text(context.loc.viewProfileAction),
                     onTap: () {
                       Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context)
-                        ..hideCurrentSnackBar()
-                        ..showSnackBar(
-                          SnackBar(
-                            behavior: SnackBarBehavior.floating,
-                            content: Text(context.loc.profileLabel(member.displayName)),
+                      showModalBottomSheet<void>(
+                        context: context,
+                        showDragHandle: true,
+                        builder: (_) => SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: UserDetails(userID: member.id),
                           ),
-                        );
+                        ),
+                      );
                     },
                   ),
                   const SizedBox(height: 12),
@@ -514,7 +519,7 @@ class MessageRowWrapper extends StatelessWidget {
       child: contentWidget,
     );
 
-    final member = chatMembers.where((m) => m.id == message.authorId).firstOrNull;
+    final messageAuthorId = message.authorId.trim();
     String? normalizeAvatarUrl(String? raw) {
       if (raw == null) return null;
       final trimmed = raw.trim();
@@ -522,47 +527,47 @@ class MessageRowWrapper extends StatelessWidget {
       return trimmed;
     }
 
-    final avatarUrl = normalizeAvatarUrl(member?.avatarUrl);
-    final cachedAvatarImageProvider = avatarImageProviderByUserId[message.authorId];
-    final shouldShowAvatarForRow = !isPreviousMessageFromSameUser;
-    final isWebAvatarBlocked = kIsWeb &&
-        avatarUrl != null &&
-        _failedWebAvatarUrls.contains(avatarUrl);
-    final hasAvatar = cachedAvatarImageProvider != null ||
-        (avatarUrl != null && !isWebAvatarBlocked);
-
     final List<Widget> messageBody = [
       messageContent,
-      InkResponse(
-          onTapDown: (details) {
-            debugPrint(userRole.toString());
-            _showUserPopup(context,message.authorId);
-          },
-          child: (hasAvatar && shouldShowAvatarForRow)
-              ? (kIsWeb
-                  ? SizedBox(
-                      width: 32,
-                      height: 32,
-                      child: ClipOval(
-                        child: Image(
-                          image: cachedAvatarImageProvider ?? NetworkImage(avatarUrl!),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, error, ___) {
-                            final errorText = error.toString().toLowerCase();
-                            if (errorText.contains('429')) {
-                              _failedWebAvatarUrls.add(avatarUrl!);
-                            }
-                            return Avatar(userId: message.authorId);
-                          },
-                        ),
-                      ),
-                    )
-                  : CircleAvatar(
-                      radius: 16,
-                      backgroundImage:
-                          cachedAvatarImageProvider ?? NetworkImage(avatarUrl!),
-                    ))
-              : Avatar(userId: message.authorId)),
+      ValueListenableBuilder<int>(
+        valueListenable: avatarVersionListenable,
+        builder: (context, _, __) {
+          final authState = context.read<AuthCubit>().state;
+          final member = authState is Authenticated
+              ? authState.chatMembers
+                  .where((chatMember) => chatMember.id.trim() == messageAuthorId)
+                  .firstOrNull
+              : null;
+          final resolvedUserAvatarUrl = normalizeAvatarUrl(
+            userCache[messageAuthorId]?.imageSource,
+          );
+          final memberAvatarUrl = normalizeAvatarUrl(member?.avatarUrl);
+          final avatarUrl = resolvedUserAvatarUrl ?? memberAvatarUrl;
+          final cachedAvatarImageProvider =
+              avatarImageProviderByUserId[messageAuthorId];
+          final shouldShowAvatarForRow = !isPreviousMessageFromSameUser;
+          final hasAvatar =
+              cachedAvatarImageProvider != null || avatarUrl != null;
+
+          return InkResponse(
+            onTapDown: (_) {
+              debugPrint(userRole.toString());
+              _showUserPopup(context, message.authorId);
+            },
+            child: !shouldShowAvatarForRow
+                ? const SizedBox(width: 32, height: 32)
+                : (hasAvatar
+                    ? CircleAvatar(
+                        radius: 16,
+                        foregroundImage: cachedAvatarImageProvider ??
+                            CachedNetworkImageProvider(avatarUrl!),
+                        onForegroundImageError: (_, __) {},
+                        child: Avatar(userId: message.authorId),
+                      )
+                    : Avatar(userId: message.authorId)),
+          );
+        },
+      ),
 
     ];
 

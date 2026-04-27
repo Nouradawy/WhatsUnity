@@ -599,9 +599,12 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       tableId: _kProfilesCollectionId,
       rowId: id,
     );
+    final rawAvatar =
+        doc.data['avatar_url'] ?? doc.data['avatarUrl'] ?? doc.data['avatar'];
     return {
-      'display_name': doc.data['display_name'],
-      'avatar_url': doc.data['avatar_url'],
+      'display_name':
+          doc.data['display_name'] ?? doc.data['displayName'] ?? doc.data['name'],
+      'avatar_url': rawAvatar,
     };
   }
 

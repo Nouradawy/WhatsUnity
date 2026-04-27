@@ -1,6 +1,7 @@
 import '../../../../core/theme/lightTheme.dart';
 import '../../../../features/maintenance/presentation/bloc/maintenance_cubit.dart';
 import '../../../../features/maintenance/presentation/bloc/maintenance_state.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
@@ -20,6 +21,7 @@ import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../auth/presentation/pages/welcome_page.dart';
 import '../../../chat/data/models/chat_member_model.dart';
 import '../../../chat/presentation/widgets/chatWidget/MessageWidget.dart';
+import '../../../security/presentation/pages/security_center_page.dart';
 
 class ManagerHomepage extends StatelessWidget {
   const ManagerHomepage({super.key});
@@ -212,6 +214,14 @@ class ManagerHomepage extends StatelessWidget {
                             onPressed: () async {
                               if(index == 3){
                                 managerCubit.loadAnnouncement();
+                              }else if(index == 1){
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const SecurityCenterPage(),
+                                  ),
+                                );
                               }else{
                                 managerCubit.currentMaintenanceType = MaintenanceReportType.values[index];
                                 final compoundId = currentSelectedCompoundId;
@@ -657,7 +667,9 @@ class MaintenanceReportHeaderTile extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 10,
-                      backgroundImage: member?.avatarUrl != null ? NetworkImage(member!.avatarUrl!) : null,
+                      backgroundImage: member?.avatarUrl != null
+                          ? CachedNetworkImageProvider(member!.avatarUrl!)
+                          : null,
                       child: member?.avatarUrl == null ? const Icon(Icons.person) : null,
                     ),
                     const SizedBox(width: 5),

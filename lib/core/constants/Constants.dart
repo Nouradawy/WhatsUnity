@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
@@ -621,9 +622,12 @@ Widget commentsSection(
                     CircleAvatar(
                       radius: 16,
                       backgroundColor: Colors.grey.shade200,
-                      backgroundImage: currentUserMember?.avatarUrl != null ? NetworkImage(
-                          currentUserMember!.avatarUrl.toString()) : const AssetImage(
-                          "assets/defaultUser.webp") as ImageProvider,
+                      backgroundImage: currentUserMember?.avatarUrl != null
+                          ? CachedNetworkImageProvider(
+                              currentUserMember!.avatarUrl.toString(),
+                            )
+                          : const AssetImage("assets/defaultUser.webp")
+                              as ImageProvider,
                     ),
                     SizedBox(width: 8),
                     Container(
@@ -716,7 +720,9 @@ Widget commentsSection(
                       radius: 13,
                       backgroundColor: Colors.grey.shade200,
                       backgroundImage: commentUser.avatarUrl != null
-                          ? NetworkImage(commentUser.avatarUrl.toString())
+                          ? CachedNetworkImageProvider(
+                              commentUser.avatarUrl.toString(),
+                            )
                           : AssetImage("assets/defaultUser.webp") as ImageProvider,
                     ),
                     SizedBox(width: 9,),
@@ -776,7 +782,9 @@ Widget commentsSectionBrainstorm({
             radius: 16,
             backgroundColor: Colors.grey.shade200,
             backgroundImage: currentUserMember?.avatarUrl != null
-                ? NetworkImage(currentUserMember!.avatarUrl.toString())
+                ? CachedNetworkImageProvider(
+                    currentUserMember!.avatarUrl.toString(),
+                  )
                 : const AssetImage('assets/defaultUser.webp') as ImageProvider,
           ),
           const SizedBox(width: 8),
@@ -870,7 +878,9 @@ Widget commentsSectionBrainstorm({
                     radius: 13,
                     backgroundColor: Colors.grey.shade200,
                     backgroundImage: commentUser.avatarUrl != null
-                        ? NetworkImage(commentUser.avatarUrl.toString())
+                        ? CachedNetworkImageProvider(
+                            commentUser.avatarUrl.toString(),
+                          )
                         : const AssetImage('assets/defaultUser.webp') as ImageProvider,
                   ),
                   const SizedBox(width: 9),

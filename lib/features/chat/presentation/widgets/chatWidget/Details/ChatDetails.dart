@@ -97,10 +97,47 @@ class ChatDetails extends StatelessWidget {
                       )
                     ],
                   ),
-                  SizedBox(height: 10),
-                  Text(context.loc.description),
-                  SizedBox(height: 10),
-                  Text(context.loc.notes),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.loc.description,
+                            style: context.txt.signSubtitle.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'General chat is the shared communication space for your compound. '
+                            'Use it for announcements, quick coordination, and respectful neighbor discussions.',
+                            style: context.txt.signSubtitle,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            context.loc.notes,
+                            style: context.txt.signSubtitle.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text('• Keep messages relevant to the community.'),
+                          const Text('• Be respectful and avoid personal attacks.'),
+                          const Text('• Use polls and suggestions for decisions.'),
+                        ],
+                      ),
+                    ),
+                  ),
                   SizedBox(height: 15),
                   MaterialButton(
                     shape: RoundedRectangleBorder(

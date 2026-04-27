@@ -10,6 +10,7 @@ import 'package:flutter_polls/flutter_polls.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hexcolor/hexcolor.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:WhatsUnity/core/di/app_services.dart';
 import '../../../../../Layout/Cubit/states.dart';
 import '../../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../../auth/presentation/bloc/auth_state.dart';
@@ -17,7 +18,6 @@ import '../../../../social/presentation/bloc/social_cubit.dart';
 import '../../../../social/presentation/bloc/social_state.dart';
 import '../../../../social/domain/entities/brainstorm.dart';
 
-import 'package:WhatsUnity/features/chat/data/datasources/chat_remote_data_source.dart';
 import '../../../../../Layout/Cubit/cubit.dart';
 import '../../../../../core/constants/Constants.dart';
 import 'MessageWidget.dart';
@@ -367,7 +367,7 @@ Future<Map<String, String>> fetchAvatarsForUserIds(BuildContext context, List<Br
 
   if (userIds.isEmpty) return {};
   try {
-    return await context.read<ChatRemoteDataSource>().remote_fetchProfileAvatarUrls(
+    return await AppServices.chatRemoteDataSource.remote_fetchProfileAvatarUrls(
           userIds.toList(),
         );
   } catch (_) {

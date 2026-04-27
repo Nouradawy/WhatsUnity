@@ -1,38 +1,21 @@
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'core/services/database_helper.dart';
-import 'core/sync/sync_engine.dart';
-import 'core/sync/sync_job_local_data_source.dart';
 import 'core/utils/BlocObserver.dart';
-import 'core/config/Enums.dart';
 import 'core/config/appwrite.dart';
 import 'core/media/media_services.dart';
 import 'core/theme/lightTheme.dart';
+import 'core/di/app_services.dart';
 
-import 'features/auth/domain/entities/app_user.dart';
-import 'features/auth/domain/repositories/auth_repository.dart';
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/presentation/bloc/auth_cubit.dart';
-import 'features/chat/data/datasources/chat_local_data_source.dart';
-import 'features/chat/data/datasources/chat_remote_data_source.dart';
-import 'features/chat/data/repositories/chat_repository_impl.dart';
-import 'features/chat/data/repositories/chat_sync_repository_impl.dart';
-import 'features/chat/domain/repositories/chat_repository.dart';
-import 'features/chat/domain/repositories/chat_sync_repository.dart';
 import 'features/chat/presentation/bloc/presence_cubit.dart';
-import 'features/maintenance/data/datasources/maintenance_local_data_source.dart';
-import 'features/maintenance/data/datasources/maintenance_remote_data_source.dart';
 import 'features/maintenance/data/repositories/maintenance_repository_impl.dart';
-import 'features/maintenance/data/repositories/maintenance_sync_repository_impl.dart';
-import 'features/maintenance/domain/repositories/maintenance_sync_repository.dart';
 import 'features/maintenance/presentation/bloc/maintenance_cubit.dart';
 import 'features/maintenance/presentation/bloc/manager_cubit.dart';
 import 'features/social/data/datasources/social_remote_data_source.dart';
@@ -44,10 +27,8 @@ import 'features/chat/presentation/bloc/message_receipts_cubit.dart';
 
 import 'Layout/Cubit/cubit.dart';
 import 'features/admin/presentation/bloc/report_cubit.dart';
+import 'features/admin/presentation/bloc/admin_cubit.dart';
 
-import 'features/admin/data/datasources/admin_remote_data_source.dart';
-import 'features/admin/data/repositories/admin_repository_impl.dart';
-import 'features/admin/domain/repositories/admin_repository.dart';
 import 'features/auth/presentation/pages/signup_page.dart';
 import 'features/auth/data/auth_ready_gate.dart';
 import 'features/ui_ux_prototypes/presentation/pages/uiux_prototype_catalog_page.dart';
@@ -65,8 +46,8 @@ void main() async {
 
   // ── Appwrite (auth primary backend) ───────────────────────────────────────
   await initAppwrite();
-  sendPing();
   initMediaUploadService();
+  AppServices.initialize();
 
   runApp(const MyApp());
 }
@@ -76,68 +57,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RepositoryProvider<ChatLocalDataSource>(
-      create: (_) => ChatLocalDataSourceImpl(DatabaseHelper.instance),
-      child: RepositoryProvider<SyncJobLocalDataSource>(
-        create: (_) => SyncJobLocalDataSourceImpl(DatabaseHelper.instance),
-        child: RepositoryProvider<MaintenanceLocalDataSource>(
-          create:
-              (_) => MaintenanceLocalDataSourceImpl(DatabaseHelper.instance),
-          child: RepositoryProvider<ChatRemoteDataSource>(
-            create:
-                (_) => ChatRemoteDataSourceImpl(
-                  databases: appwriteTables,
-                  realtime: appwriteRealtime,
-                ),
-            child: RepositoryProvider<MaintenanceRemoteDataSource>(
-              create:
-                  (_) => AppwriteMaintenanceRemoteDataSourceImpl(
-                    databases: appwriteTables,
-                  ),
-              child: Provider<SyncEngine>(
-                create: (ctx) {
-                  final engine = SyncEngine(
-                    jobStore: ctx.read<SyncJobLocalDataSource>(),
-                    remote: ctx.read<ChatRemoteDataSource>(),
-                    local: ctx.read<ChatLocalDataSource>(),
-                    maintenanceRemote: ctx.read<MaintenanceRemoteDataSource>(),
-                    maintenanceLocal: ctx.read<MaintenanceLocalDataSource>(),
-                    mediaUpload: mediaUploadService,
-                  );
-                  engine.start();
-                  return engine;
-                },
-                dispose: (_, e) => e.dispose(),
-                child: RepositoryProvider<ChatSyncRepository>(
-                  create:
-                      (ctx) => ChatSyncRepositoryImpl(
-                        local: ctx.read<ChatLocalDataSource>(),
-                        jobStore: ctx.read<SyncJobLocalDataSource>(),
-                        engine: ctx.read<SyncEngine>(),
-                      ),
-                  child: RepositoryProvider<MaintenanceSyncRepository>(
-                    create:
-                        (ctx) => MaintenanceSyncRepositoryImpl(
-                          local: ctx.read<MaintenanceLocalDataSource>(),
-                          jobStore: ctx.read<SyncJobLocalDataSource>(),
-                          engine: ctx.read<SyncEngine>(),
-                        ),
-                    child: RepositoryProvider<AdminRepository>(
-                      create:
-                          (_) => AdminRepositoryImpl(
-                            remoteDataSource: AppwriteAdminRemoteDataSourceImpl(
-                              databases: appwriteTables,
-                            ),
-                          ),
-                      child: RepositoryProvider<ChatRepository>(
-                        create:
-                            (context) => ChatRepositoryImpl(
-                              remoteDataSource:
-                                  context.read<ChatRemoteDataSource>(),
-                              localDataSource:
-                                  context.read<ChatLocalDataSource>(),
-                            ),
-                        child: MultiBlocProvider(
+    return MultiBlocProvider(
                           providers: [
                             BlocProvider(
                               create: (context) {
@@ -173,7 +93,14 @@ class MyApp extends StatelessWidget {
                               create:
                                   (context) => ReportCubit(
                                     adminRepository:
-                                        context.read<AdminRepository>(),
+                                        AppServices.adminRepository,
+                                  ),
+                            ),
+                            BlocProvider(
+                              create:
+                                  (context) => AdminCubit(
+                                    adminRepository:
+                                        AppServices.adminRepository,
                                   ),
                             ),
                             BlocProvider(create: (context) => PresenceCubit()),
@@ -194,7 +121,7 @@ class MyApp extends StatelessWidget {
                                         ? authState.chatMembers
                                         : <ChatMember>[];
                                 return MessageReceiptsCubit(
-                                  context.read<ChatRemoteDataSource>(),
+                                  AppServices.chatRemoteDataSource,
                                   chatMembers: members,
                                 );
                               },
@@ -203,21 +130,12 @@ class MyApp extends StatelessWidget {
                               create:
                                   (context) => MaintenanceCubit(
                                     repository: MaintenanceRepositoryImpl(
-                                      remoteDataSource:
-                                          context
-                                              .read<
-                                                MaintenanceRemoteDataSource
-                                              >(),
+                                      remoteDataSource: AppServices
+                                          .maintenanceRemoteDataSource,
                                       localDataSource:
-                                          context
-                                              .read<
-                                                MaintenanceLocalDataSource
-                                              >(),
+                                          AppServices.maintenanceLocalDataSource,
                                       syncRepository:
-                                          context
-                                              .read<
-                                                MaintenanceSyncRepository
-                                              >(),
+                                          AppServices.maintenanceSyncRepository,
                                     ),
                                   ),
                             ),
@@ -234,14 +152,7 @@ class MyApp extends StatelessWidget {
                             ),
                             BlocProvider(create: (context) => ProfileCubit()),
                           ],
-                          child: ChangeNotifierProvider(
-                            create:
-                                (context) => AuthManager(
-                                  // AuthRepositoryImpl is the same instance held by AuthCubit.
-                                  authRepository:
-                                      context.read<AuthCubit>().repository,
-                                ),
-                            child: ScreenUtilInit(
+                          child: ScreenUtilInit(
                               designSize: const Size(360, 690),
                               minTextAdapt: true,
                               splitScreenMode: true,
@@ -285,6 +196,9 @@ class MyApp extends StatelessWidget {
                                       minTextAdapt: true,
                                       splitScreenMode: true,
                                     );
+                                    if (child == null) {
+                                      return const SizedBox.shrink();
+                                    }
                                     final mq = MediaQuery.of(context);
                                     return MediaQuery(
                                       data: mq.copyWith(
@@ -293,7 +207,7 @@ class MyApp extends StatelessWidget {
                                           maxScaleFactor: 1.3,
                                         ),
                                       ),
-                                      child: child ?? const SizedBox.shrink(),
+                                      child: child,
                                     );
                                   },
                                   home: BlocBuilder<AuthCubit, AuthState>(
@@ -302,109 +216,50 @@ class MyApp extends StatelessWidget {
                                             previous.runtimeType !=
                                             current.runtimeType,
                                     builder: (context, state) {
-                                      final authManager =
-                                          context.watch<AuthManager>();
                                       final authCubit =
                                           context.read<AuthCubit>();
+                                      final authRepository = authCubit.repository;
+                                      return StreamBuilder(
+                                        stream: authRepository.onAuthStateChange,
+                                        initialData: authRepository.currentUser,
+                                        builder: (context, snapshot) {
+                                          final hasResolvedAuthState =
+                                              snapshot.connectionState !=
+                                                  ConnectionState.waiting ||
+                                              snapshot.data != null;
+                                          if (!hasResolvedAuthState) {
+                                            return const Scaffold(
+                                              body: Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              ),
+                                            );
+                                          }
+                                          final isAuthenticated =
+                                              snapshot.data != null;
+                                          if (isAuthenticated &&
+                                              authCubit.signupGoogleEmail ==
+                                                  null &&
+                                              authCubit.signInGoogle == false) {
+                                            // ValueKey(authSessionNonce) guarantees a fresh widget
+                                            // subtree on every new login session — preserves teardown
+                                            // safety for MainScreen / GeneralChat / Social.
+                                            return AuthReadyGate(
+                                              key: ValueKey(
+                                                authCubit.authSessionNonce,
+                                              ),
+                                            );
+                                          }
 
-                                      if (authManager.status ==
-                                          AuthStatus.unknown) {
-                                        return const Scaffold(
-                                          body: Center(
-                                            child: CircularProgressIndicator(),
-                                          ),
-                                        );
-                                      }
-
-                                      if (authManager.status ==
-                                              AuthStatus.authenticated &&
-                                          authCubit.signupGoogleEmail == null &&
-                                          authCubit.signInGoogle == false) {
-                                        // ValueKey(authSessionNonce) guarantees a fresh widget
-                                        // subtree on every new login session — preserves teardown
-                                        // safety for MainScreen / GeneralChat / Social.
-                                        return AuthReadyGate(
-                                          key: ValueKey(
-                                            authCubit.authSessionNonce,
-                                          ),
-                                        );
-                                      }
-
-                                      return SignUp();
+                                          return SignUp();
+                                        },
+                                      );
                                     },
                                   ),
                                 );
                               },
                             ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
 
-/// Observes [AuthRepository.onAuthStateChange] (an [AppUser?] stream backed
-/// by Appwrite) and updates [status] so the widget tree can react.
-///
-/// Replaces the old Supabase [StreamSubscription<supabase_auth.AuthState>].
-class AuthManager extends ChangeNotifier {
-  AuthStatus status = AuthStatus.unknown;
-  StreamSubscription<AppUser?>? _sub;
-
-  AuthManager({required AuthRepository authRepository}) {
-    // Seed synchronously if the repository already has a cached user from
-    // its constructor-time _checkExistingSession call.
-    final cached = authRepository.currentUser;
-    if (cached != null) {
-      status = AuthStatus.authenticated;
-    }
-    // Regardless of sync seed, subscribe so subsequent sign-in / sign-out
-    // events (including the async resolution of _checkExistingSession) are
-    // reflected without a hot-restart.
-    _sub = authRepository.onAuthStateChange.listen((appUser) {
-      final next =
-          appUser != null
-              ? AuthStatus.authenticated
-              : AuthStatus.unauthenticated;
-      if (status != next) {
-        status = next;
-        notifyListeners();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _sub?.cancel();
-    super.dispose();
-  }
-}
-
-void sendPing() async {
-  // 1. Initialize the Client
-  Client client = Client()
-      .setEndpoint('https://fra.cloud.appwrite.io/v1')
-      .setProject('69e96b7d000f7bf9528c');
-
-  // 2. Initialize the Account service using that client
-  Account account = Account(client);
-
-  try {
-    // 3. This is the actual "ping" request
-    // It will likely return an error (401 Unauthorized) because no user is logged in,
-    // BUT the Appwrite server will see the request and verify your app.
-    await account.get();
-    print("Appwrite connection successful");
-  } catch (e) {
-    // Even an error here counts as a successful "ping" to the console
-    print("Appwrite reached! Error (Expected if not logged in): $e");
-  }
-}

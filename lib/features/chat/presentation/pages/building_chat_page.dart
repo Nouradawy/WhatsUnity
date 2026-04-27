@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
-import 'package:WhatsUnity/features/social/presentation/bloc/social_cubit.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,15 +12,10 @@ import 'package:social_media_recorder/screen/social_media_recorder.dart';
 import 'package:uuid/uuid.dart';
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 
-import 'package:WhatsUnity/core/config/appwrite.dart';
 import 'package:WhatsUnity/core/media/media_services.dart';
 import 'package:WhatsUnity/core/media/recorder_upload_bridge.dart';
-import 'package:WhatsUnity/features/admin/domain/repositories/admin_repository.dart';
-import 'package:WhatsUnity/features/admin/presentation/bloc/report_cubit.dart';
-import 'package:WhatsUnity/features/social/data/datasources/social_remote_data_source.dart';
-import 'package:WhatsUnity/features/social/data/repositories/social_repository_impl.dart';
-import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_state.dart';
+import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/AudioWaveformPainter.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/GeneralChat/GeneralChat.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chat_scope.dart';
@@ -58,25 +52,10 @@ class BuildingChat extends StatelessWidget {
       child: Scaffold(
         body: Stack(
           children: [
-            BlocProvider(
+            GeneralChat(
               key: chatKey,
-              create: (context) => ReportCubit(
-                adminRepository: context.read<AdminRepository>(),
-              ),
-              child: BlocProvider(
-                create: (context) => SocialCubit(
-                  repository: SocialRepositoryImpl(
-                    remoteDataSource: SocialRemoteDataSourceImpl(
-                      databases: appwriteTables,
-                    ),
-                  ),
-                ),
-                child: GeneralChat(
-                  key: chatKey,
-                  compoundId: currentCompoundId,
-                  channelName: 'BUILDING_CHAT',
-                ),
-              ),
+              compoundId: currentCompoundId,
+              channelName: 'BUILDING_CHAT',
             ),
             BlocBuilder<ChatCubit, ChatState>(
               builder: (context, state) {

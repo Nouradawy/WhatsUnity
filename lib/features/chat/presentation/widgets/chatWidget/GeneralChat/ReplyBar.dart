@@ -5,11 +5,13 @@ import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 
 class ReplyBar extends StatelessWidget {
   final types.Message repliedMessage;
+  final String repliedAuthorName;
   final VoidCallback onCancel;
 
   const ReplyBar({
     super.key,
     required this.repliedMessage,
+    required this.repliedAuthorName,
     required this.onCancel,
   });
 
@@ -42,8 +44,10 @@ class ReplyBar extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("Replying to User...", // You can pass the user name here
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  'Replying to $repliedAuthorName',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 IconButton(
                   iconSize: 20,
                   padding: EdgeInsets.zero,

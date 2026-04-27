@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:WhatsUnity/core/di/app_services.dart';
 import 'package:WhatsUnity/features/social/presentation/bloc/social_cubit.dart';
 import 'package:WhatsUnity/features/social/presentation/bloc/social_state.dart';
 import 'package:condition_builder/condition_builder.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/material.dart';
@@ -14,9 +16,7 @@ import 'package:http/http.dart' as http;
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:WhatsUnity/features/chat/data/chat_channel_id_cache.dart';
-import 'package:WhatsUnity/features/chat/data/datasources/chat_local_data_source.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_details_cubit.dart';
-import 'package:WhatsUnity/features/chat/domain/repositories/chat_repository.dart';
 import 'package:WhatsUnity/core/config/Enums.dart';
 import 'package:WhatsUnity/core/config/appwrite.dart' show appwriteTables;
 import 'package:WhatsUnity/core/constants/Constants.dart';
@@ -26,7 +26,6 @@ import 'package:WhatsUnity/core/media/media_upload_metadata.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_state.dart';
 import 'package:WhatsUnity/features/chat/presentation/utils/audio_message_playable.dart';
-import 'package:WhatsUnity/features/admin/domain/repositories/admin_repository.dart';
 import 'package:WhatsUnity/features/admin/presentation/bloc/report_cubit.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -38,6 +37,8 @@ import 'package:WhatsUnity/core/time/trusted_utc_now.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/BrainStorming.dart';
 import 'package:WhatsUnity/features/chat/data/models/chat_member_model.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatDetails.dart';
+import 'package:WhatsUnity/features/chat/presentation/bloc/presence_cubit.dart';
+import 'package:WhatsUnity/features/chat/presentation/bloc/presence_state.dart';
 import 'ChatCacheService.dart';
 import 'ReplyBar.dart';
 import 'message_row_wrapper.dart';
@@ -69,6 +70,20 @@ class _VisibleMessage {
   final double fraction;
   final DateTime? createdAt;
   _VisibleMessage(this.index, this.fraction, this.createdAt);
+}
+
+class _MentionSuggestionItem {
+  final String mentionToken;
+  final String displayName;
+  final String? avatarUrl;
+  final bool isSpecial;
+
+  const _MentionSuggestionItem({
+    required this.mentionToken,
+    required this.displayName,
+    this.avatarUrl,
+    this.isSpecial = false,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,18 +165,28 @@ class _GeneralChatState extends State<GeneralChat>
   // ── Message State ──────────────────────────────────────────────────────────
 
   final Map<String, types.User> _userCache = {};
+  final Set<String> _pendingUserResolutions = <String>{};
   final Map<String, ImageProvider<Object>> _avatarImageProviderByUserId = {};
   bool _avatarPrefetchScheduled = false;
+  final ValueNotifier<int> _avatarVersionNotifier = ValueNotifier<int>(0);
 
   /// Maps a placeholder message ID to its current upload progress (0.0–1.0).
   final Map<String, double> _uploadProgressByMessageId = {};
   types.Message? _repliedMessage;
+  final ValueNotifier<List<_MentionSuggestionItem>> _mentionSuggestionsNotifier =
+      ValueNotifier<List<_MentionSuggestionItem>>(
+        const <_MentionSuggestionItem>[],
+      );
 
   // ── Sticky Date Header State ───────────────────────────────────────────────
 
-  DateTime? _stickyHeaderDate;
-  double _stickyHeaderOpacity = 0.0;
+  final ValueNotifier<DateTime?> _stickyHeaderDateNotifier =
+      ValueNotifier<DateTime?>(null);
+  final ValueNotifier<double> _stickyHeaderOpacityNotifier =
+      ValueNotifier<double>(0.0);
   final Map<String, _VisibleMessage> _visibleMessagesForHeader = {};
+  Timer? _typingIdleTimer;
+  bool _typingStatusActive = false;
 
   // ── Audio Processing ───────────────────────────────────────────────────────
 
@@ -232,7 +257,7 @@ class _GeneralChatState extends State<GeneralChat>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _cacheService ??= ChatCacheService(context.read<ChatLocalDataSource>());
+    _cacheService ??= ChatCacheService(AppServices.chatLocalDataSource);
   }
 
   String? _normalizeAvatarUrl(String? rawUrl) {
@@ -269,7 +294,7 @@ class _GeneralChatState extends State<GeneralChat>
             final avatarUrl = _normalizeAvatarUrl(chatMember.avatarUrl);
             if (userId.isEmpty || avatarUrl == null) return;
             if (_avatarImageProviderByUserId.containsKey(userId)) return;
-            final imageProvider = NetworkImage(avatarUrl);
+            final imageProvider = CachedNetworkImageProvider(avatarUrl);
             try {
               await precacheImage(imageProvider, context);
               _avatarImageProviderByUserId[userId] = imageProvider;
@@ -282,13 +307,16 @@ class _GeneralChatState extends State<GeneralChat>
       }
 
       if (mounted && hasNewCachedAvatar) {
-        setState(() {});
+        _avatarVersionNotifier.value = _avatarVersionNotifier.value + 1;
       }
     });
   }
 
   @override
   void dispose() {
+    if (_typingStatusActive) {
+      unawaited(context.read<PresenceCubit>().updatePresenceStatus('online'));
+    }
     // Raise both guards FIRST so every in-flight async continuation bails out
     // before it can touch _chatController or _reactionsController.
     _disposed = true;
@@ -319,7 +347,12 @@ class _GeneralChatState extends State<GeneralChat>
 
     _textInputController.removeListener(_handleTypingStatusChange);
     _textInputController.dispose();
+    _mentionSuggestionsNotifier.dispose();
+    _stickyHeaderDateNotifier.dispose();
+    _stickyHeaderOpacityNotifier.dispose();
+    _avatarVersionNotifier.dispose();
     _scrollIdleTimer?.cancel();
+    _typingIdleTimer?.cancel();
 
     super.dispose();
   }
@@ -556,7 +589,7 @@ class _GeneralChatState extends State<GeneralChat>
 
       String? resolvedChannelId;
       try {
-        resolvedChannelId = await context.read<ChatRepository>().resolveChannelDocumentId(
+        resolvedChannelId = await AppServices.chatRepository.resolveChannelDocumentId(
               compoundId: widget.compoundId.toString(),
               channelType: widget.channelName,
               buildingNameForScopedChat:
@@ -634,6 +667,24 @@ class _GeneralChatState extends State<GeneralChat>
 
   void _handleTypingStatusChange() {
     context.read<ChatCubit>().showHideMic(_textInputController.text.isEmpty);
+    _updateMentionSuggestions();
+    final presenceCubit = context.read<PresenceCubit>();
+    final hasText = _textInputController.text.trim().isNotEmpty;
+    if (hasText) {
+      _typingIdleTimer?.cancel();
+      if (!_typingStatusActive) {
+        _typingStatusActive = true;
+        unawaited(presenceCubit.updatePresenceStatus('typing'));
+      }
+      _typingIdleTimer = Timer(const Duration(seconds: 2), () {
+        _typingStatusActive = false;
+        unawaited(presenceCubit.updatePresenceStatus('online'));
+      });
+    } else if (_typingStatusActive) {
+      _typingStatusActive = false;
+      _typingIdleTimer?.cancel();
+      unawaited(presenceCubit.updatePresenceStatus('online'));
+    }
   }
 
   Future<void> _handleSendPressed(String text) async {
@@ -645,50 +696,135 @@ class _GeneralChatState extends State<GeneralChat>
           userId: _currentUserId,
           repliedMessage: _repliedMessage,
         );
+    _typingStatusActive = false;
+    _typingIdleTimer?.cancel();
+    unawaited(context.read<PresenceCubit>().updatePresenceStatus('online'));
+    _mentionSuggestionsNotifier.value = const <_MentionSuggestionItem>[];
     setState(() => _repliedMessage = null);
   }
 
+  void _updateMentionSuggestions() {
+    final currentText = _textInputController.text;
+    final cursor = _textInputController.selection.baseOffset;
+    final currentSuggestions = _mentionSuggestionsNotifier.value;
+    if (cursor <= 0 || cursor > currentText.length) {
+      if (currentSuggestions.isNotEmpty) {
+        _mentionSuggestionsNotifier.value = const <_MentionSuggestionItem>[];
+      }
+      return;
+    }
+    final leftText = currentText.substring(0, cursor);
+    final mentionMatch = RegExp(r'@([A-Za-z0-9_\\.]*)$').firstMatch(leftText);
+    if (mentionMatch == null) {
+      if (currentSuggestions.isNotEmpty) {
+        _mentionSuggestionsNotifier.value = const <_MentionSuggestionItem>[];
+      }
+      return;
+    }
+    final query = (mentionMatch.group(1) ?? '').toLowerCase();
+    final authState = context.read<AuthCubit>().state;
+    if (authState is! Authenticated) return;
+    final mentionItems = <_MentionSuggestionItem>[
+      const _MentionSuggestionItem(
+        mentionToken: '@everyone',
+        displayName: 'Everyone',
+        isSpecial: true,
+      ),
+      const _MentionSuggestionItem(
+        mentionToken: '@admin',
+        displayName: 'Admins',
+        isSpecial: true,
+      ),
+      ...authState.chatMembers
+          .where((chatMember) => chatMember.displayName.trim().isNotEmpty)
+          .map(
+            (chatMember) => _MentionSuggestionItem(
+              mentionToken:
+                  '@${chatMember.displayName.trim().replaceAll(' ', '_')}',
+              displayName: chatMember.displayName.trim(),
+              avatarUrl: _normalizeAvatarUrl(chatMember.avatarUrl),
+            ),
+          ),
+    ];
+    final filtered = mentionItems
+        .where(
+          (mentionItem) =>
+              mentionItem.mentionToken.toLowerCase().contains(query) ||
+              mentionItem.displayName.toLowerCase().contains(query),
+        )
+        .take(6)
+        .toList(growable: false);
+    final sameLength = currentSuggestions.length == filtered.length;
+    final sameItems = sameLength &&
+        currentSuggestions.asMap().entries.every(
+              (entry) =>
+                  filtered[entry.key].mentionToken == entry.value.mentionToken,
+            );
+    if (sameItems) {
+      return;
+    }
+    _mentionSuggestionsNotifier.value = filtered;
+  }
+
+  void _insertMention(String mention) {
+    final currentText = _textInputController.text;
+    final cursor = _textInputController.selection.baseOffset;
+    if (cursor < 0 || cursor > currentText.length) return;
+    final leftText = currentText.substring(0, cursor);
+    final rightText = currentText.substring(cursor);
+    final mentionMatch = RegExp(r'@([A-Za-z0-9_\\.]*)$').firstMatch(leftText);
+    if (mentionMatch == null) return;
+    final replacementStart = mentionMatch.start;
+    final updatedLeft = leftText.substring(0, replacementStart);
+    final inserted = '$mention ';
+    final nextText = '$updatedLeft$inserted$rightText';
+    _textInputController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: (updatedLeft + inserted).length),
+    );
+    _mentionSuggestionsNotifier.value = const <_MentionSuggestionItem>[];
+  }
+
   void _handleAttachmentTap() {
-
-
-
     showModalBottomSheet<void>(
       context: context,
+      showDragHandle: true,
       builder: (context) => SafeArea(
-        child: SizedBox(
-          height: 144,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _handleImageSelection();
-                },
-                child: const Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text('Photo'),
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _handleFileSelection();
-                },
-                child: const Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text('File'),
-                ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text('Cancel'),
-                ),
-              ),
-            ],
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_outlined),
+              title: const Text('Photo'),
+              onTap: () {
+                Navigator.pop(context);
+                _handleImageSelection();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file_outlined),
+              title: const Text('File'),
+              onTap: () {
+                Navigator.pop(context);
+                _handleFileSelection();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.poll_outlined),
+              title: const Text('Poll'),
+              onTap: () {
+                Navigator.pop(context);
+                _showCreatePollDialog();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.close),
+              title: const Text('Cancel'),
+              onTap: () => Navigator.pop(context),
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
     );
@@ -806,10 +942,17 @@ class _GeneralChatState extends State<GeneralChat>
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextField(
                   controller: questionController,
-                  decoration: const InputDecoration(labelText: 'Question'),
+                  maxLength: 120,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Question',
+                    hintText: 'Ask something clear and specific',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 ...List.generate(optionControllers.length, (i) {
@@ -818,8 +961,12 @@ class _GeneralChatState extends State<GeneralChat>
                       Expanded(
                         child: TextField(
                           controller: optionControllers[i],
-                          decoration:
-                              InputDecoration(labelText: 'Option ${i + 1}'),
+                          maxLength: 60,
+                          textInputAction: TextInputAction.next,
+                          decoration: InputDecoration(
+                            labelText: 'Option ${i + 1}',
+                            border: const OutlineInputBorder(),
+                          ),
                         ),
                       ),
                       if (optionControllers.length > 2)
@@ -856,6 +1003,11 @@ class _GeneralChatState extends State<GeneralChat>
                     ),
                   ],
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  'Tip: keep options short and mutually exclusive for better votes.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
@@ -877,6 +1029,16 @@ class _GeneralChatState extends State<GeneralChat>
                     const SnackBar(
                         content: Text(
                             'Please enter a question and at least 2 options')),
+                  );
+                  return;
+                }
+                final hasDuplicateOptions =
+                    options.toSet().length != options.length;
+                if (hasDuplicateOptions) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Poll options must be unique.'),
+                    ),
                   );
                   return;
                 }
@@ -936,12 +1098,62 @@ class _GeneralChatState extends State<GeneralChat>
   }
 
   Future<void> _resolveUserById(String id) async {
-    if (_userCache.containsKey(id)) return;
+    final normalizedUserId = id.trim();
+    final cachedUser = _userCache[normalizedUserId];
+    final hasCachedAvatar =
+        _normalizeAvatarUrl(cachedUser?.imageSource) != null;
+    if (normalizedUserId.isEmpty ||
+        (cachedUser != null && hasCachedAvatar) ||
+        _pendingUserResolutions.contains(normalizedUserId)) {
+      return;
+    }
+    _pendingUserResolutions.add(normalizedUserId);
     try {
-      final user = await context.read<ChatCubit>().resolveUser(id);
-      if (mounted) setState(() => _userCache[id] = user);
+      var resolvedUser =
+          await context.read<ChatCubit>().resolveUser(normalizedUserId);
+      var normalizedResolvedAvatarUrl =
+          _normalizeAvatarUrl(resolvedUser.imageSource);
+
+      if (normalizedResolvedAvatarUrl == null) {
+        try {
+          final avatarMap = await AppServices.chatRemoteDataSource
+              .remote_fetchProfileAvatarUrls([normalizedUserId]);
+          final fetchedAvatarUrl = _normalizeAvatarUrl(
+            avatarMap[normalizedUserId],
+          );
+          if (fetchedAvatarUrl != null) {
+            resolvedUser = types.User(
+              id: resolvedUser.id,
+              name: resolvedUser.name,
+              imageSource: fetchedAvatarUrl,
+            );
+            normalizedResolvedAvatarUrl = fetchedAvatarUrl;
+          }
+        } catch (_) {
+          // Keep best-effort resolve result.
+        }
+      }
+
+      if (normalizedResolvedAvatarUrl != null &&
+          !_avatarImageProviderByUserId.containsKey(normalizedUserId)) {
+        final imageProvider =
+            CachedNetworkImageProvider(normalizedResolvedAvatarUrl);
+        try {
+          await precacheImage(imageProvider, context);
+          _avatarImageProviderByUserId[normalizedUserId] = imageProvider;
+          _avatarVersionNotifier.value = _avatarVersionNotifier.value + 1;
+        } catch (_) {
+          // Keep runtime fallback path if pre-cache fails.
+        }
+      }
+      if (mounted) {
+        setState(() => _userCache[normalizedUserId] = resolvedUser);
+        _avatarVersionNotifier.value = _avatarVersionNotifier.value + 1;
+      }
     } catch (e) {
       debugPrint('Error resolving user $id: $e');
+    } finally {
+      _pendingUserResolutions.remove(normalizedUserId);
     }
   }
 
@@ -1085,16 +1297,16 @@ class _GeneralChatState extends State<GeneralChat>
       return false;
     }
 
-    if (!_isUserScrolling) setState(() => _isUserScrolling = true);
-    if (_stickyHeaderOpacity != 1.0) setState(() => _stickyHeaderOpacity = 1.0);
+    _isUserScrolling = true;
+    if (_stickyHeaderOpacityNotifier.value != 1.0) {
+      _stickyHeaderOpacityNotifier.value = 1.0;
+    }
 
     _scrollIdleTimer?.cancel();
     _scrollIdleTimer = Timer(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _isUserScrolling = false;
-          _stickyHeaderOpacity = 0.0;
-        });
+      _isUserScrolling = false;
+      if (_stickyHeaderOpacityNotifier.value != 0.0) {
+        _stickyHeaderOpacityNotifier.value = 0.0;
       }
     });
 
@@ -1115,7 +1327,9 @@ class _GeneralChatState extends State<GeneralChat>
     }
 
     if (_visibleMessagesForHeader.isEmpty) {
-      if (mounted) setState(() => _stickyHeaderDate = null);
+      if (_stickyHeaderDateNotifier.value != null) {
+        _stickyHeaderDateNotifier.value = null;
+      }
       return;
     }
 
@@ -1133,8 +1347,8 @@ class _GeneralChatState extends State<GeneralChat>
         bestDate = vm.createdAt;
       }
     }
-    if (mounted && bestDate != _stickyHeaderDate) {
-      setState(() => _stickyHeaderDate = bestDate);
+    if (bestDate != _stickyHeaderDateNotifier.value) {
+      _stickyHeaderDateNotifier.value = bestDate;
     }
   }
 
@@ -1329,29 +1543,64 @@ class _GeneralChatState extends State<GeneralChat>
     _scheduleAvatarPrefetch(authState.chatMembers);
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      appBar: _ChatAppBar(
-        compoundId: widget.compoundId,
-        onTitleTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => BlocProvider(
-              create: (context) => ChatDetailsCubit(
-                authCubit: context.read<AuthCubit>(),
-                databases: appwriteTables,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: BlocBuilder<PresenceCubit, PresenceState>(
+          builder: (context, _) {
+            final typingText = _typingSubtitle(authState);
+            return _ChatAppBar(
+              compoundId: widget.compoundId,
+              typingText: typingText,
+              onTitleTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => BlocProvider(
+                    create: (context) => ChatDetailsCubit(
+                      authCubit: context.read<AuthCubit>(),
+                      databases: appwriteTables,
+                    ),
+                    child: ChatDetails(compoundId: widget.compoundId),
+                  ),
+                ),
               ),
-              child: ChatDetails(compoundId: widget.compoundId),
-            ),
-          ),
+              onToggleBrainStorming: () {
+                context
+                    .read<SocialCubit>()
+                    .getBrainStorms(_channelId!, widget.compoundId);
+                _toggleBrainStorming();
+              },
+            );
+          },
         ),
-        onToggleBrainStorming: () {
-          context
-              .read<SocialCubit>()
-              .getBrainStorms(_channelId!, widget.compoundId);
-          _toggleBrainStorming();
-        },
       ),
       body: _buildChatBody(),
     );
+  }
+
+  String? _typingSubtitle(Authenticated authState) {
+    final presenceState = context.read<PresenceCubit>().state;
+    if (presenceState is! PresenceUpdated) return null;
+    final typingUserIds = <String>{};
+    for (final singleState in presenceState.currentPresence) {
+      for (final presence in singleState.presences) {
+        final status = presence.payload['status']?.toString();
+        final userId = presence.payload['user_id']?.toString();
+        if (status == 'typing' &&
+            userId != null &&
+            userId.isNotEmpty &&
+            userId != authState.user.id) {
+          typingUserIds.add(userId);
+        }
+      }
+    }
+    if (typingUserIds.isEmpty) return null;
+    final typingNames = authState.chatMembers
+        .where((member) => typingUserIds.contains(member.id))
+        .map((member) => member.displayName)
+        .toList();
+    if (typingNames.isEmpty) return 'Someone is typing...';
+    if (typingNames.length == 1) return '${typingNames.first} is typing...';
+    return '${typingNames.length} members are typing...';
   }
 
   Widget _buildChatBody() {
@@ -1363,7 +1612,7 @@ class _GeneralChatState extends State<GeneralChat>
             onNotification: _onScrollNotification,
             child: BlocProvider(
               create: (context) => ReportCubit(
-                adminRepository: context.read<AdminRepository>(),
+                adminRepository: AppServices.adminRepository,
               ),
               child: Chat(
                 key: _chatSurfaceKey,
@@ -1410,9 +1659,75 @@ class _GeneralChatState extends State<GeneralChat>
             left: MediaQuery.of(context).size.width * 0.1,
             child: ReplyBar(
               repliedMessage: _repliedMessage!,
+              repliedAuthorName:
+                  _userCache[_repliedMessage!.authorId]?.name ?? 'User',
               onCancel: () => setState(() => _repliedMessage = null),
             ),
           ),
+        ValueListenableBuilder<List<_MentionSuggestionItem>>(
+          valueListenable: _mentionSuggestionsNotifier,
+          builder: (context, mentionSuggestions, _) {
+            if (mentionSuggestions.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Positioned(
+              bottom: _repliedMessage != null ? 118 : 72,
+              left: 10,
+              right: 10,
+              child: Material(
+                elevation: 3,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: mentionSuggestions.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final mentionItem = mentionSuggestions[index];
+                      return ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        leading: mentionItem.avatarUrl != null
+                            ? CircleAvatar(
+                                radius: 16,
+                                backgroundImage: CachedNetworkImageProvider(
+                                  mentionItem.avatarUrl!,
+                                ),
+                              )
+                            : CircleAvatar(
+                                radius: 16,
+                                child: Icon(
+                                  mentionItem.isSpecial
+                                      ? Icons.campaign_outlined
+                                      : Icons.person_outline,
+                                  size: 16,
+                                ),
+                              ),
+                        title: Text(
+                          mentionItem.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          mentionItem.mentionToken,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        onTap: () => _insertMention(mentionItem.mentionToken),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ],
     );
   }
@@ -1453,25 +1768,35 @@ class _GeneralChatState extends State<GeneralChat>
   }
 
   Widget _buildStickyDateHeader() {
-    if (_stickyHeaderDate == null) return const SizedBox.shrink();
-
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 300),
-      opacity: _stickyHeaderOpacity,
-      child: Center(
-        child: Container(
-          margin: const EdgeInsets.only(top: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.5),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            formatMessageDate(_stickyHeaderDate!),
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-          ),
-        ),
-      ),
+    return ValueListenableBuilder<DateTime?>(
+      valueListenable: _stickyHeaderDateNotifier,
+      builder: (context, stickyHeaderDate, _) {
+        if (stickyHeaderDate == null) return const SizedBox.shrink();
+        return ValueListenableBuilder<double>(
+          valueListenable: _stickyHeaderOpacityNotifier,
+          builder: (context, stickyHeaderOpacity, __) {
+            return AnimatedOpacity(
+              duration: const Duration(milliseconds: 300),
+              opacity: stickyHeaderOpacity,
+              child: Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    formatMessageDate(stickyHeaderDate),
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1484,7 +1809,10 @@ class _GeneralChatState extends State<GeneralChat>
     final authState = context.read<AuthCubit>().state;
     if (authState is! Authenticated) return const SizedBox.shrink();
 
-    if (!_userCache.containsKey(message.authorId)) {
+    final cachedMessageAuthor = _userCache[message.authorId];
+    final hasResolvedAvatar =
+        _normalizeAvatarUrl(cachedMessageAuthor?.imageSource) != null;
+    if (cachedMessageAuthor == null || !hasResolvedAvatar) {
       _resolveUserById(message.authorId);
     }
 
@@ -1503,6 +1831,7 @@ class _GeneralChatState extends State<GeneralChat>
           _chatController.messages[index - 1].authorId == message.authorId,
       userCache: _userCache,
       avatarImageProviderByUserId: _avatarImageProviderByUserId,
+      avatarVersionListenable: _avatarVersionNotifier,
       resolveUser: _resolveUserById,
       onVisibilityForHeader: _onMessageVisibilityChanged,
       localMessages: _chatController.messages,
@@ -1528,11 +1857,13 @@ class _GeneralChatState extends State<GeneralChat>
 /// [onToggleBrainStorming] hides the analytics toggle button entirely.
 class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String compoundId;
+  final String? typingText;
   final VoidCallback? onTitleTap;
   final VoidCallback? onToggleBrainStorming;
 
   const _ChatAppBar({
     required this.compoundId,
+    this.typingText,
     required this.onTitleTap,
     required this.onToggleBrainStorming,
   });
@@ -1542,7 +1873,6 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('[] ${ context.watch<AuthCubit>().state.compoundsLogos}');
     return AppBar(
       title: MaterialButton(
         onPressed: onTitleTap,
@@ -1562,7 +1892,18 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ),
             ),
-            const Text('General Chat'),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('General Chat'),
+                if (typingText != null)
+                  Text(
+                    typingText!,
+                    style: const TextStyle(fontSize: 11, color: Colors.green),
+                  ),
+              ],
+            ),
           ],
         ),
       ),

@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/Enums.dart';
 import '../../../maintenance/presentation/bloc/maintenance_cubit.dart';
 import '../../../maintenance/presentation/pages/maintenance_page.dart';
+import '../../../security/presentation/pages/security_center_page.dart';
 import '../pages/announcement_screen.dart';
 
 SliverAppBar headerServices(context, isEnabledMultiCompound, currentSelectedCompoundId, currentMyCompounds, authCubit, services) {
@@ -63,7 +64,14 @@ SliverAppBar headerServices(context, isEnabledMultiCompound, currentSelectedComp
                         borderRadius: BorderRadius.circular(12),
                       ),
                       onPressed: () {
-                        if (index == 3) {
+                        if (index == 1) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SecurityCenterPage(),
+                            ),
+                          );
+                        } else if (index == 3) {
                           Navigator.push(context, MaterialPageRoute(builder: (context) => AnnouncementScreen()));
                         } else if (currentSelectedCompoundId != null) {
                           context.read<MaintenanceCubit>().getMaintenanceReports(

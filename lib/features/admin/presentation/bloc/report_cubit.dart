@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:WhatsUnity/core/config/Enums.dart';
@@ -87,7 +88,7 @@ class ReportCubit extends Cubit<ReportCubitState> {
                           children: [
                             CircleAvatar(
                               backgroundImage: member.avatarUrl != null
-                                  ? NetworkImage(member.avatarUrl!)
+                                  ? CachedNetworkImageProvider(member.avatarUrl!)
                                   : null,
                               child: member.avatarUrl == null
                                   ? const Icon(Icons.person)

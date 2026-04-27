@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -107,7 +108,7 @@ class _ChatMembersScreenState extends State<ChatMembersScreen> {
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundImage: member.avatarUrl != null
-                          ? NetworkImage(member.avatarUrl!)
+                          ? CachedNetworkImageProvider(member.avatarUrl!)
                           : null,
                       child: member.avatarUrl == null ? const Icon(Icons.person) : null,
                     ),
@@ -314,6 +315,10 @@ class StatusIndicator extends StatelessWidget {
     String statusText;
 
     switch (status) {
+      case 'typing':
+        statusColor = Colors.greenAccent;
+        statusText = 'Typing...';
+        break;
       case 'available':
         statusColor = Colors.green;
         statusText = 'Available';

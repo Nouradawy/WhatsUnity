@@ -98,6 +98,9 @@ dependencies:
   url_launcher: ^6.3.2
   flutter_dotenv: ^6.0.0
   connectivity_plus: ^6.1.4
+  qr_flutter: ^4.1.0
+  share_plus: ^11.1.0
+  cached_network_image: ^3.4.1
 
 dependency_overrides:
    record_linux: ^1.1.1

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:permission_handler/permission_handler.dart';
 
 import '../network/CacheHelper.dart';
@@ -22,6 +23,11 @@ Future<void> requestAppPermissions() async {
   if (_isRequestingPermissions) return;
   _isRequestingPermissions = true;
   try {
+    if (kIsWeb) {
+      // Web does not support photo/storage permission APIs via permission_handler.
+      await [Permission.microphone].request();
+      return;
+    }
     await [
       Permission.camera,
       Permission.photos,

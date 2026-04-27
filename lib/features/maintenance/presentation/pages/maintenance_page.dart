@@ -22,10 +22,14 @@ class Maintenance extends StatelessWidget {
   final TextEditingController issueTitle = TextEditingController();
   final TextEditingController issueCategory = TextEditingController();
   final MaintenanceReportType maintenanceType;
+  final bool embedded;
+  final String? headerTitle;
 
   Maintenance({
     super.key,
     required this.maintenanceType,
+    this.embedded = false,
+    this.headerTitle,
   });
 
   @override
@@ -36,10 +40,41 @@ class Maintenance extends StatelessWidget {
         final reports = cubit.reports;
         final attachments = cubit.attachments;
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(context.loc.maintenance),
-            actions: [
+        final pageHeaderTitle = headerTitle ?? context.loc.maintenance;
+        final addButton = FilledButton(
+          onPressed: () => newReport(
+            context.loc.maintenanceReport,
+            context,
+            issueDescription,
+            issueTitle,
+            issueCategory,
+            maintenanceType,
+          ),
+          style: ButtonStyle(
+            visualDensity: const VisualDensity(vertical: -4),
+            padding: WidgetStateProperty.all<EdgeInsetsGeometry>(
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+            ),
+            backgroundColor:
+                WidgetStateProperty.all<Color>(HexColor("#76b7f5")),
+            fixedSize: WidgetStateProperty.all<Size>(const Size(30, 30)),
+            shape: WidgetStateProperty.all<RoundedRectangleBorder>(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+          child: Row(children: [const Icon(Icons.add), Text(context.loc.add)]),
+        );
+
+        final embeddedHeader = Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  pageHeaderTitle,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
               // IconButton(
               //   onPressed: () {
               //     final authState = context.read<AuthCubit>().state;
@@ -52,55 +87,32 @@ class Maintenance extends StatelessWidget {
               //   },
               //   icon: const Icon(Icons.sync),
               // )
-              Padding(
-                padding: const EdgeInsets.only(right:8.0),
-                child: FilledButton(onPressed: ()=>newReport(
-                  context.loc.maintenanceReport,
-                  context,
-                  issueDescription,
-                  issueTitle,
-                  issueCategory,
-                  maintenanceType,
-                ),
-                 style: ButtonStyle(
-                   visualDensity: const VisualDensity(vertical: -4),
-                   padding: WidgetStateProperty.all<EdgeInsetsGeometry>(EdgeInsets.symmetric(horizontal: 8 , vertical: 0)),
-                   backgroundColor: WidgetStateProperty.all<Color>(HexColor("#76b7f5")),
-                   fixedSize: WidgetStateProperty.all<Size>(Size(30, 30)),
-                   shape: WidgetStateProperty.all<RoundedRectangleBorder>(RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                 ),
-                child: Row(
-                    children: [
-                  Icon(Icons.add),
-                  Text(context.loc.add)
-                ]),
-                ),
-              )
-
+              addButton,
             ],
           ),
+        );
 
-          body: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              children: [
-                Text(context.loc.reportHistory),
-                ListView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  shrinkWrap: true,
-                  itemCount: reports.length,
-                  itemBuilder: (context, index) {
-                    final report = reports[index];
-                    final attachment = attachments.firstWhere(
-                      (attach) => attach.reportId == report.id,
-                      orElse: () => MaintenanceReportsAttachments(
-                        reportId: report.id,
-                        sourceUrl: null,
-                        createdAt: null,
-                      ),
-                    );
+        final reportBody = SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            children: [
+              Text(context.loc.reportHistory),
+              ListView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                itemCount: reports.length,
+                itemBuilder: (context, index) {
+                  final report = reports[index];
+                  final attachment = attachments.firstWhere(
+                    (attach) => attach.reportId == report.id,
+                    orElse: () => MaintenanceReportsAttachments(
+                      reportId: report.id,
+                      sourceUrl: null,
+                      createdAt: null,
+                    ),
+                  );
 
-                    return ListTile(
+                  return ListTile(
                       onTap: () {
                         cubit.expandReport(index);
                       },
@@ -212,12 +224,28 @@ class Maintenance extends StatelessWidget {
                           size: 13,
                         ),
                       ),
-                    );
-                  },
-                ),
-              ],
-            ),
+                  );
+                },
+              ),
+            ],
           ),
+        );
+
+        if (embedded) {
+          return Column(
+            children: [
+              embeddedHeader,
+              Expanded(child: reportBody),
+            ],
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(pageHeaderTitle),
+            actions: [Padding(padding: const EdgeInsets.only(right: 8), child: addButton)],
+          ),
+          body: reportBody,
         );
       },
     );

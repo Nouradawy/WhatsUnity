@@ -9,8 +9,8 @@ import 'package:flutter_chat_core/flutter_chat_core.dart';
 import 'package:flutter_chat_reactions/flutter_chat_reactions.dart';
 import 'package:flutter_polls/flutter_polls.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:WhatsUnity/core/di/app_services.dart';
 import '../../../../../core/config/Enums.dart';
-import 'package:WhatsUnity/features/chat/data/datasources/chat_remote_data_source.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
 import '../../../../../core/constants/Constants.dart';
 import '../../../../auth/presentation/bloc/auth_cubit.dart';
@@ -20,6 +20,42 @@ import 'package:audioplayers/audioplayers.dart';
 import 'AudioWaveformPainter.dart';
 import '../../../data/models/chat_member_model.dart';
 import 'package:WhatsUnity/features/chat/presentation/utils/audio_message_playable.dart';
+
+Widget buildMentionText(String text, Color defaultColor) {
+  final mentionRegex = RegExp(r'(@[A-Za-z0-9_\.]+)');
+  final spans = <InlineSpan>[];
+  int start = 0;
+  for (final match in mentionRegex.allMatches(text)) {
+    if (match.start > start) {
+      spans.add(
+        TextSpan(
+          text: text.substring(start, match.start),
+          style: TextStyle(color: defaultColor),
+        ),
+      );
+    }
+    final mention = match.group(0) ?? '';
+    spans.add(
+      TextSpan(
+        text: mention,
+        style: TextStyle(
+          color: Colors.yellow.shade200,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+    start = match.end;
+  }
+  if (start < text.length) {
+    spans.add(
+      TextSpan(
+        text: text.substring(start),
+        style: TextStyle(color: defaultColor),
+      ),
+    );
+  }
+  return RichText(text: TextSpan(children: spans));
+}
 
 
 class MessageWidget extends StatelessWidget {
@@ -287,12 +323,7 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
   msgTextColor = isReply ? Colors.black : msgTextColor;
 
   if(message is types.TextMessage){
-        return Text(
-          message.text,
-          style: TextStyle(
-            color: msgTextColor,
-          ),
-        );
+        return buildMentionText(message.text, msgTextColor);
       }
       else if(message is types.ImageMessage){
     // 1. Calculate Aspect Ratio from metadata to prevent layout shift
@@ -421,8 +452,6 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
       }
 
 }
-
-
   Future<void> _handlePollVote(BuildContext context, types.Message message, Map<String, dynamic> meta, String optionId) async {
     final authState = context.read<AuthCubit>().state;
     if (authState is! Authenticated) return;
@@ -611,11 +640,9 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
   ) async {
     if (userIds.isEmpty) return {};
     try {
-      return await context
-          .read<ChatRemoteDataSource>()
-          .remote_fetchProfileAvatarUrls(
-            userIds.toList(),
-          );
+      return await AppServices.chatRemoteDataSource.remote_fetchProfileAvatarUrls(
+        userIds.toList(),
+      );
     } catch (_) {
       return {};
     }
@@ -867,18 +894,21 @@ class MessageStatusIcon extends StatelessWidget {
   Widget build(BuildContext context) {
 
     final bool isSeen = message.metadata?['isSeen'] == true;
+    final bool isDelivered = message.metadata?['deliveredAt'] != null ||
+        message.deliveredAt != null ||
+        message.metadata?['syncState'] == 'clean';
+    final bool isSentLocal = message.metadata?['sentAt'] != null;
 
     IconData iconData = Icons.check;
     Color iconColor = Colors.grey;
 
-    // The logic is now much simpler
     if (isSeen) {
       iconData = Icons.done_all;
       iconColor = Colors.blueAccent;
-    } else if (message.metadata?['deliveredAt'] != null) {
+    } else if (isDelivered) {
       iconData = Icons.done_all;
       iconColor = Colors.grey;
-    } else if (message.metadata?['sentAt'] != null) {
+    } else if (isSentLocal) {
       iconData = Icons.check;
     }
 
@@ -995,10 +1025,8 @@ class _PollWithAvatarsState extends State<PollWithAvatars> {
 
   @override
   Widget build(BuildContext context) {
-    _avatarsFuture ??=
-        context.read<ChatRemoteDataSource>().remote_fetchProfileAvatarUrls(
-              widget.allUserIds.toList(),
-            );
+    _avatarsFuture ??= AppServices.chatRemoteDataSource
+        .remote_fetchProfileAvatarUrls(widget.allUserIds.toList());
     final authState = context.read<AuthCubit>().state;
     final currentUserId = (authState is Authenticated) ? authState.user.id : null;
     final question = widget.meta['question']?.toString() ?? '';

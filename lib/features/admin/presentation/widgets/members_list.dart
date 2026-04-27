@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -57,7 +58,7 @@ class MembersList extends StatelessWidget {
                           children: [
                             CircleAvatar(
                               backgroundImage: member.avatarUrl != null
-                                  ? NetworkImage(member.avatarUrl!)
+                                  ? CachedNetworkImageProvider(member.avatarUrl!)
                                   : null,
                               child: member.avatarUrl == null
                                   ? const Icon(Icons.person)

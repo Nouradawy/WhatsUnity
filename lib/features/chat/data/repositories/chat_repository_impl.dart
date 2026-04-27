@@ -228,10 +228,16 @@ class ChatRepositoryImpl implements ChatRepository {
     }
     try {
       final userData = await remoteDataSource.remote_resolveUser(id);
+      final rawAvatar = userData['avatar_url']?.toString().trim();
+      final avatarUrl = (rawAvatar == null ||
+              rawAvatar.isEmpty ||
+              rawAvatar.toLowerCase() == 'null')
+          ? null
+          : rawAvatar;
       return types.User(
         id: id,
-        name: userData['display_name'] ?? 'Unknown',
-        imageSource: userData['avatar_url'],
+        name: userData['display_name']?.toString() ?? 'Unknown',
+        imageSource: avatarUrl,
       );
     } catch (error) {
       return types.User(id: id, name: 'Unknown');
