@@ -72,6 +72,121 @@
   "ownerShipType" : "نوع الملكية",
   "rental" : "مستأجر",
   "owner" : "مالك",
-  "add" : "أضافة"
+  "add" : "أضافة",
+  "retry": "أعد المحاولة",
+  "refresh": "تحديث",
+  "close": "إغلاق",
+  "copyReportDetails": "نسخ تفاصيل البلاغ",
+  "reportDetailsCopied": "تم نسخ تفاصيل البلاغ.",
+  "directMessagingUnavailable": "الرسائل المباشرة غير متاحة حالياً في هذا الإصدار.",
+  "profileLabel": "الملف الشخصي: {name}",
+  "@profileLabel": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "noPostsYet": "لا توجد منشورات بعد.",
+  "noAnnouncementsYet": "لا توجد إعلانات بعد.",
+  "likedPost": "تم تسجيل الإعجاب",
+  "postReferenceCopied": "تم نسخ مرجع المنشور.",
+  "noReportsFound": "لا توجد بلاغات.",
+  "noRequestsFoundForFilter": "لا توجد طلبات لهذا الفلتر.",
+  "createAnnouncement": "إنشاء إعلان",
+  "announcementPublishingSoon": "سيتم إضافة نشر الإعلانات قريباً.",
+  "messageAction": "مراسلة",
+  "viewProfileAction": "عرض الملف الشخصي",
+  "submit": "إرسال",
+  "notes": "ملاحظات",
+  "madeBy": "بواسطة",
+  "reportedUserIdLabel": "معرف المستخدم المُبلغ عنه: {id}",
+  "@reportedUserIdLabel": {
+    "placeholders": {
+      "id": {}
+    }
+  },
+  "reasonLabel": "السبب: {reason}",
+  "@reasonLabel": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "descriptionLabel": "الوصف: {description}",
+  "@descriptionLabel": {
+    "placeholders": {
+      "description": {}
+    }
+  },
+  "dateLabel": "التاريخ: {date}",
+  "@dateLabel": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "noCommunitySelected": "لم يتم اختيار مجتمع.",
+  "microphonePermissionRequired": "يجب السماح بالمايكروفون لتسجيل الصوت.",
+  "brainStormingTitle": "العصف الذهني",
+  "createNew": "إنشاء جديد",
+  "noBrainstormsYet": "لا توجد جلسات عصف ذهني بعد.",
+  "pollNotEnoughOptions": "لا يحتوي هذا التصويت على خيارات كافية للعرض.",
+  "voteBodyRequired": "نص التصويت لا يمكن أن يكون فارغاً",
+  "voteBodyLabel": "نص التصويت",
+  "atLeastTwoOptionsRequired": "يجب إدخال خيارين على الأقل",
+  "thisOptionIsRequired": "هذا الخيار مطلوب",
+  "pleaseFillAtLeastTwoOptions": "يرجى ملء خيارين على الأقل",
+  "generalChatLabel": "الدردشة العامة",
+  "groupLabel": "مجموعة",
+  "membersCountLabel": "{count} عضو",
+  "@membersCountLabel": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "muteNotifications": "كتم الإشعارات",
+  "addNewSuggestion": "إضافة اقتراح جديد",
+  "description": "الوصف",
+  "reports": "البلاغات",
+  "whatsapp": "واتساب",
+  "lastSeenTodayAt": "آخر ظهور اليوم الساعة {time}",
+  "@lastSeenTodayAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "comingSoon": "قريباً",
+  "apply": "تطبيق",
+  "submitAction": "إرسال",
+  "deleteAccountTitle": "حذف الحساب",
+  "deleteAccountMessage": "هل أنت متأكد أنك تريد حذف حسابك؟ سيتم فتح تطبيق البريد لإرسال طلب الحذف.",
+  "cancel": "إلغاء",
+  "delete": "حذف",
+  "supportWhatsUnity": "ادعم واتس يونيتي",
+  "donationMessage": "تبرعاتك تساعدنا على تشغيل الخوادم والحفاظ على التطبيق بدون إعلانات.",
+  "later": "لاحقاً",
+  "donateNow": "تبرع الآن",
+  "donateToCommunity": "تبرع للمجتمع",
+  "logOut": "تسجيل الخروج",
+  "guest": "زائر",
+  "accountSection": "الحساب",
+  "preferencesSection": "التفضيلات",
+  "supportLegalSection": "الدعم والقانون",
+  "editProfile": "تعديل الملف الشخصي",
+  "changePassword": "تغيير كلمة المرور",
+  "notifications": "الإشعارات",
+  "appearance": "المظهر",
+  "helpCenter": "مركز المساعدة",
+  "privacyPolicy": "سياسة الخصوصية",
+  "termsOfUse": "شروط الاستخدام",
+  "dashboardTitle": "لوحة التحكم",
+  "noCompoundSelected": "لم يتم اختيار كمبوند.",
+  "submittedDocuments": "المستندات المرفوعة",
+  "cancelRegistration": "إلغاء التسجيل",
+  "joinCommunity": "الانضمام إلى مجتمع",
+  "unknownState": "حالة غير معروفة",
+  "userManagement": "إدارة المستخدمين",
+  "verificationRequests": "طلبات التحقق",
+  "userReports": "بلاغات المستخدمين",
+  "call": "اتصال",
+  "approve": "قبول",
+  "decline": "رفض"
 
 }

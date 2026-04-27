@@ -288,6 +288,51 @@ class ManagerHomepage extends StatelessWidget {
                             builder: (context, state) {
                               final reports = managerCubit.maintenanceDataFiltered;
                               final attachments = maintenanceCubit.attachments;
+                              if (state is MaintenanceLoading && reports.isEmpty) {
+                                return const Center(child: CircularProgressIndicator());
+                              }
+                              if (state is MaintenanceError && reports.isEmpty) {
+                                return Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(state.message, textAlign: TextAlign.center),
+                                      const SizedBox(height: 8),
+                                      FilledButton(
+                                        onPressed: () async {
+                                          if (currentSelectedCompoundId == null) return;
+                                          await maintenanceCubit.getMaintenanceReports(
+                                            compoundId: currentSelectedCompoundId.toString(),
+                                            type: managerCubit.currentMaintenanceType,
+                                          );
+                                        },
+                                        child: Text(context.loc.retry),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              if (reports.isEmpty) {
+                                return Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(context.loc.noRequestsFoundForFilter),
+                                      const SizedBox(height: 8),
+                                      FilledButton(
+                                        onPressed: () async {
+                                          if (currentSelectedCompoundId == null) return;
+                                          await maintenanceCubit.getMaintenanceReports(
+                                            compoundId: currentSelectedCompoundId.toString(),
+                                            type: managerCubit.currentMaintenanceType,
+                                          );
+                                        },
+                                        child: Text(context.loc.refresh),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
 
                               return ListView.builder(
                                   physics: const BouncingScrollPhysics(),
@@ -370,7 +415,7 @@ class ManagerHomepage extends StatelessWidget {
                                                         }
                                                         notes.clear();
                                                       },
-                                                      child: const Text("submit"),
+                                                      child: Text(context.loc.submit),
                                                     ),
                                                   ],
                                                 ),
@@ -390,17 +435,17 @@ class ManagerHomepage extends StatelessWidget {
                                                           children: [
                                                             if(noteIndex ==0)SizedBox(
                                                               width:MediaQuery.sizeOf(context).width*0.87,
-                                                              child: const Row(
+                                                              child: Row(
                                                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                                 children:[
-                                                                  Text("Notes"),
+                                                                  Text(context.loc.notes),
                                                                   SizedBox(
                                                                     width: 120,
                                                                     child: Row(
                                                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                                       children: [
-                                                                        Text("Date"),
-                                                                        Text("made by"),
+                                                                        Text(context.loc.date),
+                                                                        Text(context.loc.madeBy),
                                                                       ],
                                                                     ),
                                                                   ),
@@ -434,7 +479,7 @@ class ManagerHomepage extends StatelessWidget {
                                                                               letterSpacing: 0.2,
                                                                               color: Colors.grey,
                                                                             )),
-                                                                        Text("made by" ,
+                                                                        Text(context.loc.madeBy ,
                                                                             style: GoogleFonts.plusJakartaSans(
                                                                               fontSize: 12,
                                                                               fontWeight: FontWeight.w600,
@@ -471,8 +516,21 @@ class ManagerHomepage extends StatelessWidget {
                       children: [
                         const SizedBox(height: 60,),
                         SvgPicture.asset("assets/Svg/announcement.svg",height: 130,),
-                        const Text("Announcements"),
-                        const Text("Coming Soon"),
+                        Text(context.loc.announcements),
+                        const SizedBox(height: 8),
+                        Text(context.loc.noAnnouncementsYet),
+                        const SizedBox(height: 8),
+                        FilledButton(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context)
+                              ..hideCurrentSnackBar()
+                              ..showSnackBar(SnackBar(
+                                behavior: SnackBarBehavior.floating,
+                                content: Text(context.loc.announcementPublishingSoon),
+                              ));
+                          },
+                          child: Text(context.loc.createAnnouncement),
+                        ),
                       ],
                     )
                 ],

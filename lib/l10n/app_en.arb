@@ -74,7 +74,123 @@
   "ownerShipType" : "Ownership type",
   "rental" : "Rental",
   "owner" : "Owner",
-  "add" : "New"
+  "add" : "New",
+  "retry": "Retry",
+  "refresh": "Refresh",
+  "close": "Close",
+  "copyReportDetails": "Copy report details",
+  "reportDetailsCopied": "Report details copied.",
+  "directMessagingUnavailable": "Direct messaging is not available yet in this build.",
+  "profileLabel": "Profile: {name}",
+  "@profileLabel": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "noPostsYet": "No posts yet.",
+  "noAnnouncementsYet": "No announcements yet.",
+  "likedPost": "Liked post",
+  "postReferenceCopied": "Post reference copied to clipboard.",
+  "noReportsFound": "No reports found.",
+  "noRequestsFoundForFilter": "No requests found for this filter.",
+  "createAnnouncement": "Create Announcement",
+  "announcementPublishingSoon": "Announcement publishing will be added next.",
+  "messageAction": "Message",
+  "viewProfileAction": "View profile",
+  "submit": "Submit",
+  "notes": "Notes",
+  "madeBy": "Made by",
+  "reportedUserIdLabel": "Reported User ID: {id}",
+  "@reportedUserIdLabel": {
+    "placeholders": {
+      "id": {}
+    }
+  },
+  "reasonLabel": "Reason: {reason}",
+  "@reasonLabel": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "descriptionLabel": "Description: {description}",
+  "@descriptionLabel": {
+    "placeholders": {
+      "description": {}
+    }
+  },
+  "dateLabel": "Date: {date}",
+  "@dateLabel": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "noCommunitySelected": "No community selected",
+  "microphonePermissionRequired": "Microphone permission is required to record audio.",
+  "brainStormingTitle": "Brain Storming",
+  "createNew": "Create New",
+  "noBrainstormsYet": "No Brainstorms yet",
+  "pollNotEnoughOptions": "This poll does not have enough options to display.",
+  "voteBodyRequired": "Vote body cannot be empty",
+  "voteBodyLabel": "Vote body",
+  "atLeastTwoOptionsRequired": "At least 2 options are required",
+  "thisOptionIsRequired": "This option is required",
+  "pleaseFillAtLeastTwoOptions": "Please fill at least 2 options",
+  "generalChatLabel": "GENERAL CHAT",
+  "groupLabel": "Group",
+  "membersCountLabel": "{count} members",
+  "@membersCountLabel": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "muteNotifications": "Mute Notifications",
+  "addNewSuggestion": "Add new suggestion",
+  "description": "Description",
+  "reports": "Reports",
+  "whatsapp": "Whatsapp",
+  "lastSeenTodayAt": "Last Seen today at {time}",
+  "@lastSeenTodayAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "comingSoon": "Coming Soon",
+  "apply": "Apply",
+  "submitAction": "Submit",
+  "deleteAccountTitle": "Delete Account",
+  "deleteAccountMessage": "Are you sure you want to delete your account? This will open your email app to request deletion.",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "supportWhatsUnity": "Support WhatsUnity",
+  "donationMessage": "Your donations help keep our servers running and the app ad-free.",
+  "later": "Later",
+  "donateNow": "Donate Now",
+  "donateToCommunity": "Donate to Community",
+  "logOut": "Log Out",
+  "guest": "Guest",
+  "accountSection": "ACCOUNT",
+  "preferencesSection": "PREFERENCES",
+  "supportLegalSection": "SUPPORT & LEGAL",
+  "editProfile": "Edit Profile",
+  "changePassword": "Change Password",
+  "notifications": "Notifications",
+  "appearance": "Appearance",
+  "helpCenter": "Help Center",
+  "privacyPolicy": "Privacy Policy",
+  "termsOfUse": "Terms of Use"
+  ,
+  "dashboardTitle": "Dashboard",
+  "noCompoundSelected": "No compound selected",
+  "submittedDocuments": "Submitted Documents",
+  "cancelRegistration": "Cancel Registration",
+  "joinCommunity": "Join a Community",
+  "unknownState": "Unknown State",
+  "userManagement": "User Management",
+  "verificationRequests": "Verification Requests",
+  "userReports": "User Reports",
+  "call": "Call",
+  "approve": "Approve",
+  "decline": "Decline"
 
 
 

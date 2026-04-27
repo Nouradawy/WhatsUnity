@@ -47,15 +47,15 @@ class ChatDetails extends StatelessWidget {
                   )
                   ),
                   SizedBox(height: 10),
-                  Text("GENERAL CHAT"),
+                  Text(context.loc.generalChatLabel),
                   SizedBox(height: 5),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text("Group . "),
+                      Text('${context.loc.groupLabel} . '),
                       Text.rich(
                         TextSpan(
-                          text: '$chatMembersCount members',
+                          text: context.loc.membersCountLabel(chatMembersCount),
                           style: context.txt.signSubtitle.copyWith(
                               color: Colors.blue),
                           recognizer:
@@ -85,7 +85,7 @@ class ChatDetails extends StatelessWidget {
                           side: BorderSide(color: Colors.grey.shade300),
                         ),
                         onPressed: () {},
-                        child: Text("Mute Notifications"),
+                        child: Text(context.loc.muteNotifications),
                       ),
                       MaterialButton(
                         shape: RoundedRectangleBorder(
@@ -93,14 +93,14 @@ class ChatDetails extends StatelessWidget {
                           side: BorderSide(color: Colors.grey.shade300),
                         ),
                         onPressed: () {},
-                        child: Text("Add new suggestion"),
+                        child: Text(context.loc.addNewSuggestion),
                       )
                     ],
                   ),
                   SizedBox(height: 10),
-                  Text("Description"),
+                  Text(context.loc.description),
                   SizedBox(height: 10),
-                  Text("Notes"),
+                  Text(context.loc.notes),
                   SizedBox(height: 15),
                   MaterialButton(
                     shape: RoundedRectangleBorder(
@@ -115,7 +115,7 @@ class ChatDetails extends StatelessWidget {
                             builder: (BuildContext context) => Reports(),
                           ));
                     },
-                    child: Text("Reports"),
+                    child: Text(context.loc.reports),
                   ),
 
                 ],

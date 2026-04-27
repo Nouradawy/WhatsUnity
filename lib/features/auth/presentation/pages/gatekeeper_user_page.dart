@@ -1,3 +1,4 @@
+import '../../../../core/theme/lightTheme.dart';
 import 'package:condition_builder/condition_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -154,7 +155,7 @@ class GatekeeperScreen extends StatelessWidget {
                   if (index == 0) {
                     return const ManagerHomepage();
                   }
-                  return const Scaffold(body: Center(child: Text("Unknown State")));
+                  return Scaffold(body: Center(child: Text(context.loc.unknownState)));
                 });
       },
     );

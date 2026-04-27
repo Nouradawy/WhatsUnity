@@ -230,4 +230,264 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get add => 'New';
+
+  @override
+  String get retry => 'Retry';
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get copyReportDetails => 'Copy report details';
+
+  @override
+  String get reportDetailsCopied => 'Report details copied.';
+
+  @override
+  String get directMessagingUnavailable =>
+      'Direct messaging is not available yet in this build.';
+
+  @override
+  String profileLabel(Object name) {
+    return 'Profile: $name';
+  }
+
+  @override
+  String get noPostsYet => 'No posts yet.';
+
+  @override
+  String get noAnnouncementsYet => 'No announcements yet.';
+
+  @override
+  String get likedPost => 'Liked post';
+
+  @override
+  String get postReferenceCopied => 'Post reference copied to clipboard.';
+
+  @override
+  String get noReportsFound => 'No reports found.';
+
+  @override
+  String get noRequestsFoundForFilter => 'No requests found for this filter.';
+
+  @override
+  String get createAnnouncement => 'Create Announcement';
+
+  @override
+  String get announcementPublishingSoon =>
+      'Announcement publishing will be added next.';
+
+  @override
+  String get messageAction => 'Message';
+
+  @override
+  String get viewProfileAction => 'View profile';
+
+  @override
+  String get submit => 'Submit';
+
+  @override
+  String get notes => 'Notes';
+
+  @override
+  String get madeBy => 'Made by';
+
+  @override
+  String reportedUserIdLabel(Object id) {
+    return 'Reported User ID: $id';
+  }
+
+  @override
+  String reasonLabel(Object reason) {
+    return 'Reason: $reason';
+  }
+
+  @override
+  String descriptionLabel(Object description) {
+    return 'Description: $description';
+  }
+
+  @override
+  String dateLabel(Object date) {
+    return 'Date: $date';
+  }
+
+  @override
+  String get noCommunitySelected => 'No community selected';
+
+  @override
+  String get microphonePermissionRequired =>
+      'Microphone permission is required to record audio.';
+
+  @override
+  String get brainStormingTitle => 'Brain Storming';
+
+  @override
+  String get createNew => 'Create New';
+
+  @override
+  String get noBrainstormsYet => 'No Brainstorms yet';
+
+  @override
+  String get pollNotEnoughOptions =>
+      'This poll does not have enough options to display.';
+
+  @override
+  String get voteBodyRequired => 'Vote body cannot be empty';
+
+  @override
+  String get voteBodyLabel => 'Vote body';
+
+  @override
+  String get atLeastTwoOptionsRequired => 'At least 2 options are required';
+
+  @override
+  String get thisOptionIsRequired => 'This option is required';
+
+  @override
+  String get pleaseFillAtLeastTwoOptions => 'Please fill at least 2 options';
+
+  @override
+  String get generalChatLabel => 'GENERAL CHAT';
+
+  @override
+  String get groupLabel => 'Group';
+
+  @override
+  String membersCountLabel(Object count) {
+    return '$count members';
+  }
+
+  @override
+  String get muteNotifications => 'Mute Notifications';
+
+  @override
+  String get addNewSuggestion => 'Add new suggestion';
+
+  @override
+  String get description => 'Description';
+
+  @override
+  String get reports => 'Reports';
+
+  @override
+  String get whatsapp => 'Whatsapp';
+
+  @override
+  String lastSeenTodayAt(Object time) {
+    return 'Last Seen today at $time';
+  }
+
+  @override
+  String get comingSoon => 'Coming Soon';
+
+  @override
+  String get apply => 'Apply';
+
+  @override
+  String get submitAction => 'Submit';
+
+  @override
+  String get deleteAccountTitle => 'Delete Account';
+
+  @override
+  String get deleteAccountMessage =>
+      'Are you sure you want to delete your account? This will open your email app to request deletion.';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get delete => 'Delete';
+
+  @override
+  String get supportWhatsUnity => 'Support WhatsUnity';
+
+  @override
+  String get donationMessage =>
+      'Your donations help keep our servers running and the app ad-free.';
+
+  @override
+  String get later => 'Later';
+
+  @override
+  String get donateNow => 'Donate Now';
+
+  @override
+  String get donateToCommunity => 'Donate to Community';
+
+  @override
+  String get logOut => 'Log Out';
+
+  @override
+  String get guest => 'Guest';
+
+  @override
+  String get accountSection => 'ACCOUNT';
+
+  @override
+  String get preferencesSection => 'PREFERENCES';
+
+  @override
+  String get supportLegalSection => 'SUPPORT & LEGAL';
+
+  @override
+  String get editProfile => 'Edit Profile';
+
+  @override
+  String get changePassword => 'Change Password';
+
+  @override
+  String get notifications => 'Notifications';
+
+  @override
+  String get appearance => 'Appearance';
+
+  @override
+  String get helpCenter => 'Help Center';
+
+  @override
+  String get privacyPolicy => 'Privacy Policy';
+
+  @override
+  String get termsOfUse => 'Terms of Use';
+
+  @override
+  String get dashboardTitle => 'Dashboard';
+
+  @override
+  String get noCompoundSelected => 'No compound selected';
+
+  @override
+  String get submittedDocuments => 'Submitted Documents';
+
+  @override
+  String get cancelRegistration => 'Cancel Registration';
+
+  @override
+  String get joinCommunity => 'Join a Community';
+
+  @override
+  String get unknownState => 'Unknown State';
+
+  @override
+  String get userManagement => 'User Management';
+
+  @override
+  String get verificationRequests => 'Verification Requests';
+
+  @override
+  String get userReports => 'User Reports';
+
+  @override
+  String get call => 'Call';
+
+  @override
+  String get approve => 'Approve';
+
+  @override
+  String get decline => 'Decline';
 }

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/theme/lightTheme.dart';
 import '../../../../core/constants/Constants.dart';
 import '../../../home/presentation/pages/main_screen.dart';
 import '../bloc/auth_cubit.dart';
@@ -56,7 +57,7 @@ class _JoinCommunityState extends State<JoinCommunity> {
   Widget build(BuildContext context) {
     return Scaffold(
         appBar: AppBar(
-          title: const Text("Join a Community"),
+          title: Text(context.loc.joinCommunity),
         ),
         body: BlocBuilder<AuthCubit, AuthState>(
           builder: (context, state) {

@@ -10,6 +10,7 @@ import 'package:visibility_detector/visibility_detector.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../../core/config/Enums.dart';
+import '../../../../../../core/theme/lightTheme.dart';
 import '../../../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../../../auth/presentation/bloc/auth_state.dart';
 import '../../../bloc/chat_cubit.dart';
@@ -180,18 +181,30 @@ class MessageRowWrapper extends StatelessWidget {
                   const Divider(height: 0),
                   ListTile(
                     leading: const Icon(Icons.chat_outlined),
-                    title: const Text('Message'),
+                    title: Text(context.loc.messageAction),
                     onTap: () {
                       Navigator.pop(ctx);
-                      // TODO: Navigate to DM or start thread
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(SnackBar(
+                          behavior: SnackBarBehavior.floating,
+                          content: Text(context.loc.directMessagingUnavailable),
+                        ));
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.info_outline),
-                    title: const Text('View profile'),
+                    title: Text(context.loc.viewProfileAction),
                     onTap: () {
                       Navigator.pop(ctx);
-                      // TODO: Navigate to profile
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          SnackBar(
+                            behavior: SnackBarBehavior.floating,
+                            content: Text(context.loc.profileLabel(member.displayName)),
+                          ),
+                        );
                     },
                   ),
                   const SizedBox(height: 12),

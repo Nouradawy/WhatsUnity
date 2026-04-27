@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
 
 import 'package:WhatsUnity/core/constants/Constants.dart';
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
@@ -37,6 +38,44 @@ class SocialFeedTab extends StatelessWidget {
 
         if (state is SocialLoading && posts.isEmpty) {
           return const Center(child: CircularProgressIndicator());
+        }
+        if (state is SocialError && posts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(state.message, textAlign: TextAlign.center),
+                const SizedBox(height: 8),
+                FilledButton(
+                  onPressed: () => socialCubit.getPosts(selectedCompoundId),
+                  child: Text(context.loc.retry),
+                ),
+              ],
+            ),
+          );
+        }
+        if (posts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.dynamic_feed_outlined, size: 42),
+                const SizedBox(height: 8),
+                Text(context.loc.noPostsYet),
+                const SizedBox(height: 8),
+                _CreatePostLauncher(
+                  currentMember: currentMember,
+                  postHeadController: postHeadController,
+                  selectedCompoundId: selectedCompoundId,
+                ),
+                const SizedBox(height: 8),
+                FilledButton(
+                  onPressed: () => socialCubit.getPosts(selectedCompoundId),
+                  child: Text(context.loc.refresh),
+                ),
+              ],
+            ),
+          );
         }
 
         return RefreshIndicator(
@@ -262,7 +301,16 @@ class _PostCard extends StatelessWidget {
                     _ActionButton(
                       icon: Icons.thumb_up_alt_outlined,
                       label: context.loc.like,
-                      onPressed: () {},
+                      onPressed: () {
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              behavior: SnackBarBehavior.floating,
+                              content: Text(context.loc.likedPost),
+                            ),
+                          );
+                      },
                     ),
                     _ActionButton(
                       icon: Icons.chat_outlined,
@@ -283,7 +331,22 @@ class _PostCard extends StatelessWidget {
                     _ActionButton(
                       icon: Icons.share_rounded,
                       label: context.loc.share,
-                      onPressed: () {},
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(
+                            text: 'Post ${post.id} by ${postUser.displayName}',
+                          ),
+                        );
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              behavior: SnackBarBehavior.floating,
+                              content: Text(context.loc.postReferenceCopied),
+                            ),
+                          );
+                      },
                     ),
                   ],
                 ),

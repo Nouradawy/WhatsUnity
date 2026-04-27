@@ -114,14 +114,14 @@ class MembersList extends StatelessWidget {
                           onPressed: () => launchUrl(
                               Uri.parse("tel:<${memberData.phoneNumber}>")),
                           icon: Icons.phone,
-                          label: "call",
+                          label: context.loc.call,
                         ),
                         _ActionButton(
                           onPressed: () => openWhatsApp(
                               memberData.phoneNumber, "Hello",
                               defaultCountryCode: "20"),
                           icon: FontAwesomeIcons.whatsapp,
-                          label: "Message",
+                          label: context.loc.messageAction,
                           isFontAwesome: true,
                         ),
                       ],
@@ -201,10 +201,10 @@ class _DocumentsSection extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                   color: Colors.white70, borderRadius: BorderRadius.circular(10)),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.keyboard_arrow_right_sharp),
-                  Text("Submitted Documents")
+                  const Icon(Icons.keyboard_arrow_right_sharp),
+                  Text(context.loc.submittedDocuments),
                 ],
               ),
             ),
@@ -217,10 +217,10 @@ class _DocumentsSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.keyboard_arrow_down_sharp),
-                      Text("Submitted Documents")
+                      const Icon(Icons.keyboard_arrow_down_sharp),
+                      Text(context.loc.submittedDocuments)
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -277,14 +277,14 @@ class _StatusActions extends StatelessWidget {
               memberData.authorId, UserState.approved, compoundId!),
           color: Colors.green,
           icon: Icons.check_circle,
-          label: "Approve",
+          label: context.loc.approve,
         ),
         _StatusButton(
           onPressed: () => cubit.updateUserStatus(
               memberData.authorId, UserState.unApproved, compoundId!),
           color: Colors.pink,
           icon: Icons.dangerous_sharp,
-          label: "Decline",
+          label: context.loc.decline,
         ),
       ],
     );

@@ -229,4 +229,263 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get add => 'أضافة';
+
+  @override
+  String get retry => 'أعد المحاولة';
+
+  @override
+  String get refresh => 'تحديث';
+
+  @override
+  String get close => 'إغلاق';
+
+  @override
+  String get copyReportDetails => 'نسخ تفاصيل البلاغ';
+
+  @override
+  String get reportDetailsCopied => 'تم نسخ تفاصيل البلاغ.';
+
+  @override
+  String get directMessagingUnavailable =>
+      'الرسائل المباشرة غير متاحة حالياً في هذا الإصدار.';
+
+  @override
+  String profileLabel(Object name) {
+    return 'الملف الشخصي: $name';
+  }
+
+  @override
+  String get noPostsYet => 'لا توجد منشورات بعد.';
+
+  @override
+  String get noAnnouncementsYet => 'لا توجد إعلانات بعد.';
+
+  @override
+  String get likedPost => 'تم تسجيل الإعجاب';
+
+  @override
+  String get postReferenceCopied => 'تم نسخ مرجع المنشور.';
+
+  @override
+  String get noReportsFound => 'لا توجد بلاغات.';
+
+  @override
+  String get noRequestsFoundForFilter => 'لا توجد طلبات لهذا الفلتر.';
+
+  @override
+  String get createAnnouncement => 'إنشاء إعلان';
+
+  @override
+  String get announcementPublishingSoon => 'سيتم إضافة نشر الإعلانات قريباً.';
+
+  @override
+  String get messageAction => 'مراسلة';
+
+  @override
+  String get viewProfileAction => 'عرض الملف الشخصي';
+
+  @override
+  String get submit => 'إرسال';
+
+  @override
+  String get notes => 'ملاحظات';
+
+  @override
+  String get madeBy => 'بواسطة';
+
+  @override
+  String reportedUserIdLabel(Object id) {
+    return 'معرف المستخدم المُبلغ عنه: $id';
+  }
+
+  @override
+  String reasonLabel(Object reason) {
+    return 'السبب: $reason';
+  }
+
+  @override
+  String descriptionLabel(Object description) {
+    return 'الوصف: $description';
+  }
+
+  @override
+  String dateLabel(Object date) {
+    return 'التاريخ: $date';
+  }
+
+  @override
+  String get noCommunitySelected => 'لم يتم اختيار مجتمع.';
+
+  @override
+  String get microphonePermissionRequired =>
+      'يجب السماح بالمايكروفون لتسجيل الصوت.';
+
+  @override
+  String get brainStormingTitle => 'العصف الذهني';
+
+  @override
+  String get createNew => 'إنشاء جديد';
+
+  @override
+  String get noBrainstormsYet => 'لا توجد جلسات عصف ذهني بعد.';
+
+  @override
+  String get pollNotEnoughOptions =>
+      'لا يحتوي هذا التصويت على خيارات كافية للعرض.';
+
+  @override
+  String get voteBodyRequired => 'نص التصويت لا يمكن أن يكون فارغاً';
+
+  @override
+  String get voteBodyLabel => 'نص التصويت';
+
+  @override
+  String get atLeastTwoOptionsRequired => 'يجب إدخال خيارين على الأقل';
+
+  @override
+  String get thisOptionIsRequired => 'هذا الخيار مطلوب';
+
+  @override
+  String get pleaseFillAtLeastTwoOptions => 'يرجى ملء خيارين على الأقل';
+
+  @override
+  String get generalChatLabel => 'الدردشة العامة';
+
+  @override
+  String get groupLabel => 'مجموعة';
+
+  @override
+  String membersCountLabel(Object count) {
+    return '$count عضو';
+  }
+
+  @override
+  String get muteNotifications => 'كتم الإشعارات';
+
+  @override
+  String get addNewSuggestion => 'إضافة اقتراح جديد';
+
+  @override
+  String get description => 'الوصف';
+
+  @override
+  String get reports => 'البلاغات';
+
+  @override
+  String get whatsapp => 'واتساب';
+
+  @override
+  String lastSeenTodayAt(Object time) {
+    return 'آخر ظهور اليوم الساعة $time';
+  }
+
+  @override
+  String get comingSoon => 'قريباً';
+
+  @override
+  String get apply => 'تطبيق';
+
+  @override
+  String get submitAction => 'إرسال';
+
+  @override
+  String get deleteAccountTitle => 'حذف الحساب';
+
+  @override
+  String get deleteAccountMessage =>
+      'هل أنت متأكد أنك تريد حذف حسابك؟ سيتم فتح تطبيق البريد لإرسال طلب الحذف.';
+
+  @override
+  String get cancel => 'إلغاء';
+
+  @override
+  String get delete => 'حذف';
+
+  @override
+  String get supportWhatsUnity => 'ادعم واتس يونيتي';
+
+  @override
+  String get donationMessage =>
+      'تبرعاتك تساعدنا على تشغيل الخوادم والحفاظ على التطبيق بدون إعلانات.';
+
+  @override
+  String get later => 'لاحقاً';
+
+  @override
+  String get donateNow => 'تبرع الآن';
+
+  @override
+  String get donateToCommunity => 'تبرع للمجتمع';
+
+  @override
+  String get logOut => 'تسجيل الخروج';
+
+  @override
+  String get guest => 'زائر';
+
+  @override
+  String get accountSection => 'الحساب';
+
+  @override
+  String get preferencesSection => 'التفضيلات';
+
+  @override
+  String get supportLegalSection => 'الدعم والقانون';
+
+  @override
+  String get editProfile => 'تعديل الملف الشخصي';
+
+  @override
+  String get changePassword => 'تغيير كلمة المرور';
+
+  @override
+  String get notifications => 'الإشعارات';
+
+  @override
+  String get appearance => 'المظهر';
+
+  @override
+  String get helpCenter => 'مركز المساعدة';
+
+  @override
+  String get privacyPolicy => 'سياسة الخصوصية';
+
+  @override
+  String get termsOfUse => 'شروط الاستخدام';
+
+  @override
+  String get dashboardTitle => 'لوحة التحكم';
+
+  @override
+  String get noCompoundSelected => 'لم يتم اختيار كمبوند.';
+
+  @override
+  String get submittedDocuments => 'المستندات المرفوعة';
+
+  @override
+  String get cancelRegistration => 'إلغاء التسجيل';
+
+  @override
+  String get joinCommunity => 'الانضمام إلى مجتمع';
+
+  @override
+  String get unknownState => 'حالة غير معروفة';
+
+  @override
+  String get userManagement => 'إدارة المستخدمين';
+
+  @override
+  String get verificationRequests => 'طلبات التحقق';
+
+  @override
+  String get userReports => 'بلاغات المستخدمين';
+
+  @override
+  String get call => 'اتصال';
+
+  @override
+  String get approve => 'قبول';
+
+  @override
+  String get decline => 'رفض';
 }

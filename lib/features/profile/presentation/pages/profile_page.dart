@@ -5,7 +5,6 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hexcolor/hexcolor.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../../Layout/Cubit/cubit.dart';
 import '../../../../core/config/Enums.dart';
 import '../../../../core/constants/Constants.dart';
 import '../../../../core/services/PolicyDialog.dart';
@@ -23,10 +22,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final List account = ["Edit Profile", "Change Password"];
-  final List preferences = ["Notifications", "Appearance"];
-  final List support = ["Help Center", "Privacy Policy", "Terms of Use", "Delete Account"];
-
   late final TextEditingController userNameController;
   late final TextEditingController fullNameController;
   late final TextEditingController emailController;
@@ -74,7 +69,7 @@ class _ProfilePageState extends State<ProfilePage> {
           return Scaffold(
               appBar: AppBar(
                 backgroundColor: Colors.white,
-                title: Text("Profile", style: GoogleFonts.plusJakartaSans()),
+                title: Text(context.loc.profile, style: GoogleFonts.plusJakartaSans()),
               ),
               body: SingleChildScrollView(
                 child: Container(
@@ -128,7 +123,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       children: [
         Text(
-          state.currentUser?.displayName ?? "Guest",
+          state.currentUser?.displayName ?? context.loc.guest,
           style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 20),
         ),
         if (state.currentUser != null)
@@ -145,12 +140,20 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildSections(BuildContext context, Authenticated authState) {
+    final account = [context.loc.editProfile, context.loc.changePassword];
+    final preferences = [context.loc.notifications, context.loc.appearance];
+    final support = [
+      context.loc.helpCenter,
+      context.loc.privacyPolicy,
+      context.loc.termsOfUse,
+      context.loc.deleteAccountTitle,
+    ];
     return Column(
       children: [
         _buildSectionGroup(
           context,
           authState,
-          title: "ACCOUNT",
+          title: context.loc.accountSection,
           items: account,
           section: ProfileSection.account,
           googleFilter: true,
@@ -159,7 +162,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _buildSectionGroup(
           context,
           authState,
-          title: "PREFERENCES",
+          title: context.loc.preferencesSection,
           items: preferences,
           section: ProfileSection.preferences,
         ),
@@ -167,7 +170,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _buildSectionGroup(
           context,
           authState,
-          title: "SUPPORT & LEGAL",
+          title: context.loc.supportLegalSection,
           items: support,
           section: ProfileSection.support,
         ),
@@ -212,6 +215,16 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildAccordionItem(BuildContext context, Authenticated authState, ProfileSection section, int index, String title) {
+    int totalForSection(ProfileSection profileSection) {
+      switch (profileSection) {
+        case ProfileSection.account:
+          return 2;
+        case ProfileSection.preferences:
+          return 2;
+        case ProfileSection.support:
+          return 4;
+      }
+    }
 
 
     return BlocBuilder<ProfileCubit, ProfileState>(
@@ -225,13 +238,13 @@ class _ProfilePageState extends State<ProfilePage> {
           duration: const Duration(milliseconds: 500),
           firstChild: InkWell(
             onTap: () => _handleItemTap(context, authState, section, index),
-            child: _buildItemLabel(title, index, (section == ProfileSection.account ? account.length : (section == ProfileSection.preferences ? preferences.length : support.length))),
+            child: _buildItemLabel(title, index, totalForSection(section)),
           ),
           secondChild: Column(
             children: [
               InkWell(
                 onTap: () => profileCubit.toggleSection(section, index),
-                child: _buildItemLabel(title, index, (section == ProfileSection.account ? account.length : (section == ProfileSection.preferences ? preferences.length : support.length))),
+                child: _buildItemLabel(title, index, totalForSection(section)),
               ),
               _buildExpandedContent(context, authState, section, index),
             ],
@@ -281,9 +294,9 @@ class _ProfilePageState extends State<ProfilePage> {
       if (index == 1) return _buildChangePasswordForm(context);
     }
     if (section == ProfileSection.preferences && index == 0) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.all(16.0),
-        child: Text("Coming Soon"),
+        child: Text(context.loc.comingSoon),
       );
     }
     return const SizedBox.shrink();
@@ -334,7 +347,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 onPressed: () => _applyProfileChanges(context, authState),
                 color: Colors.indigoAccent.shade200,
                 textColor: Colors.white,
-                child: const Text("Apply"),
+                child: Text(context.loc.apply),
               ),
             ),
             const SizedBox(height: 10),
@@ -372,7 +385,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 onPressed: () => _updatePassword(context),
                 color: Colors.indigoAccent.shade200,
                 textColor: Colors.white,
-                child: const Text("Submit"),
+                child: Text(context.loc.submitAction),
               ),
             ),
             const SizedBox(height: 10),
@@ -394,7 +407,7 @@ class _ProfilePageState extends State<ProfilePage> {
         fullName: fullNameController.text,
         displayName: userNameController.text,
         ownerType: currentUser!.ownerType!,
-        phoneNumber: currentUser.phoneNumber!,
+        phoneNumber: currentUser.phoneNumber,
       );
     }
 
@@ -427,7 +440,7 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 const FaIcon(FontAwesomeIcons.handHoldingHeart, color: Colors.white, size: 18),
                 const SizedBox(width: 10),
-                Text("Donate to Community", style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w900)),
+                Text(context.loc.donateToCommunity, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w900)),
               ],
             ),
           ),
@@ -443,7 +456,7 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 FaIcon(FontAwesomeIcons.arrowRightFromBracket, color: HexColor("#ae060e"), size: 16),
                 const SizedBox(width: 10),
-                Text("Log Out", style: GoogleFonts.plusJakartaSans(color: HexColor("#ae060e"), fontWeight: FontWeight.w900)),
+                Text(context.loc.logOut, style: GoogleFonts.plusJakartaSans(color: HexColor("#ae060e"), fontWeight: FontWeight.w900)),
               ],
             ),
           ),
@@ -470,10 +483,10 @@ class _ProfilePageState extends State<ProfilePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete Account"),
-        content: const Text("Are you sure you want to delete your account? This will open your email app to request deletion."),
+        title: Text(context.loc.deleteAccountTitle),
+        content: Text(context.loc.deleteAccountMessage),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(context.loc.cancel)),
           TextButton(
             onPressed: () async {
               final Uri emailLaunchUri = Uri(
@@ -482,9 +495,10 @@ class _ProfilePageState extends State<ProfilePage> {
                 query: 'subject=Delete My Account&body=User ID: ${authState.user.id}',
               );
               await launchUrl(emailLaunchUri);
+              if (!context.mounted) return;
               Navigator.pop(context);
             },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+            child: Text(context.loc.delete, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -495,16 +509,16 @@ class _ProfilePageState extends State<ProfilePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Support WhatsUnity"),
-        content: const Text("Your donations help keep our servers running and the app ad-free."),
+        title: Text(context.loc.supportWhatsUnity),
+        content: Text(context.loc.donationMessage),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Later")),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(context.loc.later)),
           TextButton(
             onPressed: () {
               launchUrl(Uri.parse("https://ipn.eg/S/nouradawynbe/instapay/673PPO"), mode: LaunchMode.externalApplication);
               Navigator.pop(context);
             },
-            child: const Text("Donate Now"),
+            child: Text(context.loc.donateNow),
           ),
         ],
       ),

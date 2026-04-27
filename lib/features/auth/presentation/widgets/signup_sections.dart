@@ -714,7 +714,7 @@ Column signInProviders(
             onPressed: () async {
               await cubit.cancelPendingGoogleRegistration();
             },
-            child: const Text("Cancel Registration"),
+            child: Text(context.loc.cancelRegistration),
           ),
         ),
     ],

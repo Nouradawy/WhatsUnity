@@ -290,13 +290,10 @@ class MyApp extends StatelessWidget {
                                       data: mq.copyWith(
                                         textScaler: mq.textScaler.clamp(
                                           minScaleFactor: 0.8,
-                                          maxScaleFactor: 1.0,
+                                          maxScaleFactor: 1.3,
                                         ),
                                       ),
-                                      child: Directionality(
-                                        textDirection: TextDirection.ltr,
-                                        child: child ?? const SizedBox.shrink(),
-                                      ),
+                                      child: child ?? const SizedBox.shrink(),
                                     );
                                   },
                                   home: BlocBuilder<AuthCubit, AuthState>(

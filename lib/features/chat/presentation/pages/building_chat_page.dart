@@ -11,6 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:social_media_recorder/audio_encoder_type.dart';
 import 'package:social_media_recorder/screen/social_media_recorder.dart';
 import 'package:uuid/uuid.dart';
+import 'package:WhatsUnity/core/theme/lightTheme.dart';
 
 import 'package:WhatsUnity/core/config/appwrite.dart';
 import 'package:WhatsUnity/core/media/media_services.dart';
@@ -42,7 +43,7 @@ class BuildingChat extends StatelessWidget {
     final userId = authState.user.id;
 
     if (currentCompoundId == null) {
-      return const Center(child: Text("No community selected"));
+      return Center(child: Text(context.loc.noCommunitySelected));
     }
 
     // The ValueKey forces Flutter to fully destroy and recreate GeneralChat
@@ -103,8 +104,8 @@ class BuildingChat extends StatelessWidget {
                           if (!micStatus.isGranted) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Microphone permission is required to record audio.'),
+                                SnackBar(
+                                  content: Text(context.loc.microphonePermissionRequired),
                                 ),
                               );
                             }

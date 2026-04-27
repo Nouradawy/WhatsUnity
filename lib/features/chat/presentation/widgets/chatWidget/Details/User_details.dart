@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import '../../../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../../../auth/presentation/bloc/auth_state.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -55,7 +56,7 @@ class UserDetails extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     FaIcon(FontAwesomeIcons.whatsapp),
-                    Text("Whatsapp")
+                    Text(context.loc.whatsapp)
                   ],
                 ),
               ),
@@ -72,12 +73,12 @@ class UserDetails extends StatelessWidget {
                   children: [
                     SizedBox(height: 7,),
                     FaIcon(FontAwesomeIcons.exclamation),
-                    Text("Report")
+                    Text(context.loc.report)
                   ],
                 ),
               ),
             ],),
-            Text("Last Seen today at 12:52 AM")
+            Text(context.loc.lastSeenTodayAt('12:52 AM'))
           ],
         );
       },

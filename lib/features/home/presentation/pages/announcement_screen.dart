@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
+import '../../../../core/theme/lightTheme.dart';
 
 class AnnouncementScreen extends StatelessWidget {
   const AnnouncementScreen({super.key});
@@ -14,8 +15,8 @@ class AnnouncementScreen extends StatelessWidget {
           children: [
             // const SizedBox(height: 60,),
             SvgPicture.asset("assets/Svg/announcement.svg",height: 130,),
-            Text("Announcements"),
-            Text("Coming Soon"),
+            Text(context.loc.announcements),
+            Text(context.loc.comingSoon),
           ],
         ),
       ),

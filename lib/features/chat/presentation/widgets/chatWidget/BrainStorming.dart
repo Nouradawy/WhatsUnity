@@ -109,7 +109,7 @@ class _BrainStormingState extends State<BrainStorming> with WidgetsBindingObserv
     final currentCompoundId = authState.selectedCompoundId;
 
     if (currentCompoundId == null) {
-      return const Center(child: Text("No community selected"));
+      return Center(child: Text(context.loc.noCommunitySelected));
     }
 
     return BlocListener<AppCubit,AppCubitStates>(
@@ -123,14 +123,14 @@ class _BrainStormingState extends State<BrainStorming> with WidgetsBindingObserv
       },
       child: Scaffold(
         appBar: AppBar(
-          title:const Text("Brain Storming"),
+          title: Text(context.loc.brainStormingTitle),
           actions:[IconButton(onPressed:widget.onClose, icon: const Icon(Icons.analytics_outlined),)],
         ),
         floatingActionButton: FloatingActionButton.extended(
             onPressed: (){
               newReport(context , widget.channelId, userId, currentCompoundId);
             },
-            label: Text("Create New ",style: GoogleFonts.plusJakartaSans(fontWeight:FontWeight.w600 , color: HexColor("#121416")),),
+            label: Text(context.loc.createNew,style: GoogleFonts.plusJakartaSans(fontWeight:FontWeight.w600 , color: HexColor("#121416")),),
           icon: Icon(Icons.add, color: HexColor("#121416")),
           backgroundColor: HexColor("#dce8f3"),
         ),
@@ -148,7 +148,7 @@ class _BrainStormingState extends State<BrainStorming> with WidgetsBindingObserv
               }
 
               if (brainStorms.isEmpty) {
-                return const Center(child: Text("No Brainstorms yet"));
+                return Center(child: Text(context.loc.noBrainstormsYet));
               }
 
               return Column(
@@ -204,7 +204,7 @@ class _BrainStormingState extends State<BrainStorming> with WidgetsBindingObserv
                                                   children: [
                                                     Text(item.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                                                     const SizedBox(height: 10),
-                                                    const Text("This poll does not have enough options to display.", style: TextStyle(color: Colors.grey)),
+                                                    Text(context.loc.pollNotEnoughOptions, style: const TextStyle(color: Colors.grey)),
                                                   ],
                                                 ),
                                               )
@@ -349,20 +349,18 @@ Future<Map<String, String>> fetchAvatarsForUserIds(BuildContext context, List<Br
   if (brainStorms.isEmpty || currentIndex >= brainStorms.length) {
     return {};
   }
-  final raw = brainStorms[currentIndex].votes;
+  final raw = brainStorms[currentIndex].votes ?? <String, dynamic>{};
   final Map<String, Map<String, bool>> votes = {};
-  if (raw != null && raw is Map) {
-    raw.forEach((k, v) {
-      final key = k.toString();
-      final inner = <String, bool>{};
-      if (v is Map) {
-        v.forEach((vk, vv) {
-          inner[vk.toString()] = vv == true;
-        });
-      }
-      votes[key] = inner;
-    });
-  }
+  raw.forEach((k, v) {
+    final key = k.toString();
+    final inner = <String, bool>{};
+    if (v is Map) {
+      v.forEach((vk, vv) {
+        inner[vk.toString()] = vv == true;
+      });
+    }
+    votes[key] = inner;
+  });
 
   final Set<String> userIds =
   votes.values.expand((m) => m.keys.map((e) => e.toString())).toSet();
@@ -581,7 +579,7 @@ class _CreateBrainstormDialogState extends State<CreateBrainstormDialog> with Wi
                     controller: title,
                     validator: (value){
                       if (value == null || value.trim().isEmpty) {
-                        return "vote body can't be empty";
+                        return context.loc.voteBodyRequired;
                       }
                       return null;
                     },
@@ -589,7 +587,7 @@ class _CreateBrainstormDialogState extends State<CreateBrainstormDialog> with Wi
                     maxLines: 10,
                     decoration: InputDecoration(
                       border: InputBorder.none,
-                      labelText: "vote body",
+                      labelText: context.loc.voteBodyLabel,
                       labelStyle: GoogleFonts.plusJakartaSans(
                         color: HexColor("#60768a"),
                         fontSize: 12,
@@ -611,10 +609,10 @@ class _CreateBrainstormDialogState extends State<CreateBrainstormDialog> with Wi
                       validator: (value){
                       int filledCount = optionControllers.where((c) => c.text.trim().isNotEmpty).length;
                       if (filledCount < 2 && i < 2) {
-                        return "At least 2 options are required";
+                        return context.loc.atLeastTwoOptionsRequired;
                       }
                       if (i < 2 && (value == null || value.trim().isEmpty)) {
-                        return "This option is required";
+                        return context.loc.thisOptionIsRequired;
                       }
                       return null;
                     },
@@ -675,7 +673,7 @@ class _CreateBrainstormDialogState extends State<CreateBrainstormDialog> with Wi
 
                     if (optionsList.length < 2) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Please fill at least 2 options")),
+                        SnackBar(content: Text(context.loc.pleaseFillAtLeastTwoOptions)),
                       );
                       return;
                     }
@@ -689,9 +687,8 @@ class _CreateBrainstormDialogState extends State<CreateBrainstormDialog> with Wi
                       authorId: widget.userId,
                     );
 
-                    if(mounted){
-                      Navigator.pop(context);
-                    }
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
                   },
                   color:Colors.blue,
                   elevation: 0,

@@ -535,6 +535,486 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'New'**
   String get add;
+
+  /// No description provided for @retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retry;
+
+  /// No description provided for @refresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get refresh;
+
+  /// No description provided for @close.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get close;
+
+  /// No description provided for @copyReportDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy report details'**
+  String get copyReportDetails;
+
+  /// No description provided for @reportDetailsCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Report details copied.'**
+  String get reportDetailsCopied;
+
+  /// No description provided for @directMessagingUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct messaging is not available yet in this build.'**
+  String get directMessagingUnavailable;
+
+  /// No description provided for @profileLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile: {name}'**
+  String profileLabel(Object name);
+
+  /// No description provided for @noPostsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No posts yet.'**
+  String get noPostsYet;
+
+  /// No description provided for @noAnnouncementsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No announcements yet.'**
+  String get noAnnouncementsYet;
+
+  /// No description provided for @likedPost.
+  ///
+  /// In en, this message translates to:
+  /// **'Liked post'**
+  String get likedPost;
+
+  /// No description provided for @postReferenceCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Post reference copied to clipboard.'**
+  String get postReferenceCopied;
+
+  /// No description provided for @noReportsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No reports found.'**
+  String get noReportsFound;
+
+  /// No description provided for @noRequestsFoundForFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'No requests found for this filter.'**
+  String get noRequestsFoundForFilter;
+
+  /// No description provided for @createAnnouncement.
+  ///
+  /// In en, this message translates to:
+  /// **'Create Announcement'**
+  String get createAnnouncement;
+
+  /// No description provided for @announcementPublishingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Announcement publishing will be added next.'**
+  String get announcementPublishingSoon;
+
+  /// No description provided for @messageAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get messageAction;
+
+  /// No description provided for @viewProfileAction.
+  ///
+  /// In en, this message translates to:
+  /// **'View profile'**
+  String get viewProfileAction;
+
+  /// No description provided for @submit.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get submit;
+
+  /// No description provided for @notes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get notes;
+
+  /// No description provided for @madeBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Made by'**
+  String get madeBy;
+
+  /// No description provided for @reportedUserIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported User ID: {id}'**
+  String reportedUserIdLabel(Object id);
+
+  /// No description provided for @reasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason: {reason}'**
+  String reasonLabel(Object reason);
+
+  /// No description provided for @descriptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Description: {description}'**
+  String descriptionLabel(Object description);
+
+  /// No description provided for @dateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Date: {date}'**
+  String dateLabel(Object date);
+
+  /// No description provided for @noCommunitySelected.
+  ///
+  /// In en, this message translates to:
+  /// **'No community selected'**
+  String get noCommunitySelected;
+
+  /// No description provided for @microphonePermissionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone permission is required to record audio.'**
+  String get microphonePermissionRequired;
+
+  /// No description provided for @brainStormingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Brain Storming'**
+  String get brainStormingTitle;
+
+  /// No description provided for @createNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Create New'**
+  String get createNew;
+
+  /// No description provided for @noBrainstormsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No Brainstorms yet'**
+  String get noBrainstormsYet;
+
+  /// No description provided for @pollNotEnoughOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'This poll does not have enough options to display.'**
+  String get pollNotEnoughOptions;
+
+  /// No description provided for @voteBodyRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Vote body cannot be empty'**
+  String get voteBodyRequired;
+
+  /// No description provided for @voteBodyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Vote body'**
+  String get voteBodyLabel;
+
+  /// No description provided for @atLeastTwoOptionsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 2 options are required'**
+  String get atLeastTwoOptionsRequired;
+
+  /// No description provided for @thisOptionIsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This option is required'**
+  String get thisOptionIsRequired;
+
+  /// No description provided for @pleaseFillAtLeastTwoOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Please fill at least 2 options'**
+  String get pleaseFillAtLeastTwoOptions;
+
+  /// No description provided for @generalChatLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'GENERAL CHAT'**
+  String get generalChatLabel;
+
+  /// No description provided for @groupLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get groupLabel;
+
+  /// No description provided for @membersCountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} members'**
+  String membersCountLabel(Object count);
+
+  /// No description provided for @muteNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Mute Notifications'**
+  String get muteNotifications;
+
+  /// No description provided for @addNewSuggestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Add new suggestion'**
+  String get addNewSuggestion;
+
+  /// No description provided for @description.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get description;
+
+  /// No description provided for @reports.
+  ///
+  /// In en, this message translates to:
+  /// **'Reports'**
+  String get reports;
+
+  /// No description provided for @whatsapp.
+  ///
+  /// In en, this message translates to:
+  /// **'Whatsapp'**
+  String get whatsapp;
+
+  /// No description provided for @lastSeenTodayAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Last Seen today at {time}'**
+  String lastSeenTodayAt(Object time);
+
+  /// No description provided for @comingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming Soon'**
+  String get comingSoon;
+
+  /// No description provided for @apply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get apply;
+
+  /// No description provided for @submitAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get submitAction;
+
+  /// No description provided for @deleteAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Account'**
+  String get deleteAccountTitle;
+
+  /// No description provided for @deleteAccountMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete your account? This will open your email app to request deletion.'**
+  String get deleteAccountMessage;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @delete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get delete;
+
+  /// No description provided for @supportWhatsUnity.
+  ///
+  /// In en, this message translates to:
+  /// **'Support WhatsUnity'**
+  String get supportWhatsUnity;
+
+  /// No description provided for @donationMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your donations help keep our servers running and the app ad-free.'**
+  String get donationMessage;
+
+  /// No description provided for @later.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get later;
+
+  /// No description provided for @donateNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Donate Now'**
+  String get donateNow;
+
+  /// No description provided for @donateToCommunity.
+  ///
+  /// In en, this message translates to:
+  /// **'Donate to Community'**
+  String get donateToCommunity;
+
+  /// No description provided for @logOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Log Out'**
+  String get logOut;
+
+  /// No description provided for @guest.
+  ///
+  /// In en, this message translates to:
+  /// **'Guest'**
+  String get guest;
+
+  /// No description provided for @accountSection.
+  ///
+  /// In en, this message translates to:
+  /// **'ACCOUNT'**
+  String get accountSection;
+
+  /// No description provided for @preferencesSection.
+  ///
+  /// In en, this message translates to:
+  /// **'PREFERENCES'**
+  String get preferencesSection;
+
+  /// No description provided for @supportLegalSection.
+  ///
+  /// In en, this message translates to:
+  /// **'SUPPORT & LEGAL'**
+  String get supportLegalSection;
+
+  /// No description provided for @editProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Profile'**
+  String get editProfile;
+
+  /// No description provided for @changePassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Change Password'**
+  String get changePassword;
+
+  /// No description provided for @notifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notifications;
+
+  /// No description provided for @appearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get appearance;
+
+  /// No description provided for @helpCenter.
+  ///
+  /// In en, this message translates to:
+  /// **'Help Center'**
+  String get helpCenter;
+
+  /// No description provided for @privacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get privacyPolicy;
+
+  /// No description provided for @termsOfUse.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of Use'**
+  String get termsOfUse;
+
+  /// No description provided for @dashboardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Dashboard'**
+  String get dashboardTitle;
+
+  /// No description provided for @noCompoundSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'No compound selected'**
+  String get noCompoundSelected;
+
+  /// No description provided for @submittedDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted Documents'**
+  String get submittedDocuments;
+
+  /// No description provided for @cancelRegistration.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel Registration'**
+  String get cancelRegistration;
+
+  /// No description provided for @joinCommunity.
+  ///
+  /// In en, this message translates to:
+  /// **'Join a Community'**
+  String get joinCommunity;
+
+  /// No description provided for @unknownState.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown State'**
+  String get unknownState;
+
+  /// No description provided for @userManagement.
+  ///
+  /// In en, this message translates to:
+  /// **'User Management'**
+  String get userManagement;
+
+  /// No description provided for @verificationRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification Requests'**
+  String get verificationRequests;
+
+  /// No description provided for @userReports.
+  ///
+  /// In en, this message translates to:
+  /// **'User Reports'**
+  String get userReports;
+
+  /// No description provided for @call.
+  ///
+  /// In en, this message translates to:
+  /// **'Call'**
+  String get call;
+
+  /// No description provided for @approve.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get approve;
+
+  /// No description provided for @decline.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get decline;
 }
 
 class _AppLocalizationsDelegate

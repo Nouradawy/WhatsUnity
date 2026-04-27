@@ -1,3 +1,4 @@
+import '../../../../../core/theme/lightTheme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,13 +16,13 @@ class AdminDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<String> categories = [
-      "User Management",
-      "Verifications Requests",
-      "User Reports"
+      context.loc.userManagement,
+      context.loc.verificationRequests,
+      context.loc.userReports
     ];
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Dashboard"),
+        title: Text(context.loc.dashboardTitle),
       ),
       body: BlocListener<AuthCubit, AuthState>(
         listener: (context, state) {
@@ -37,7 +38,7 @@ class AdminDashboard extends StatelessWidget {
             }
             final compoundId = authState.selectedCompoundId;
             if (compoundId == null) {
-              return const Center(child: Text("No compound selected"));
+              return Center(child: Text(context.loc.noCompoundSelected));
             }
             return BlocBuilder<AdminCubit, AdminState>(
               builder: (context, state) {
