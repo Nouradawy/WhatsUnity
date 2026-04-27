@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hexcolor/hexcolor.dart';
+import 'package:WhatsUnity/Layout/Cubit/cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:WhatsUnity/features/auth/presentation/pages/otp_screen.dart';
@@ -35,6 +36,7 @@ class SignUp extends StatelessWidget {
             // Root [MyApp] may already have swapped SignUp for [AuthReadyGate];
             // this context is then unmounted and Navigator must not run.
             if (!context.mounted) return;
+            context.read<AppCubit>().bottomNavIndexChange(0);
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -54,6 +56,7 @@ class SignUp extends StatelessWidget {
         if (state is RegistrationSuccess) {
           context.read<AuthCubit>().presetBeforeSignin().then((_) {
             if (!context.mounted) return;
+            context.read<AppCubit>().bottomNavIndexChange(0);
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(

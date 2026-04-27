@@ -1,4 +1,5 @@
 import 'package:appwrite/appwrite.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -49,8 +50,9 @@ import 'features/admin/data/repositories/admin_repository_impl.dart';
 import 'features/admin/domain/repositories/admin_repository.dart';
 import 'features/auth/presentation/pages/signup_page.dart';
 import 'features/auth/data/auth_ready_gate.dart';
+import 'features/ui_ux_prototypes/presentation/pages/uiux_prototype_catalog_page.dart';
 
-import 'features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import 'features/chat/data/models/chat_member_model.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
 import 'l10n/app_localizations.dart';
 import 'l10n/l10n.dart';
@@ -244,10 +246,17 @@ class MyApp extends StatelessWidget {
                               minTextAdapt: true,
                               splitScreenMode: true,
                               builder: (context, child) {
+                                final prototypeRoutes = kDebugMode
+                                    ? {
+                                        '/uiux-prototypes': (_) =>
+                                            const UiUxPrototypeCatalogPage(),
+                                      }
+                                    : <String, WidgetBuilder>{};
                                 return MaterialApp(
                                   title: 'WhatsUnity',
                                   debugShowCheckedModeBanner: false,
                                   theme: myLightTheme(),
+                                  routes: prototypeRoutes,
                                   supportedLocales: L10n.all,
                                   localeResolutionCallback: (
                                     deviceLocale,

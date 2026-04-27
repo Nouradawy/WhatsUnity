@@ -2,7 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/config/Enums.dart';
 import '../../data/datasources/chat_remote_data_source.dart';
-import '../widgets/chatWidget/Details/ChatMember.dart';
+import '../../data/models/chat_member_model.dart';
 import 'message_receipts_state.dart';
 
 class SeenUser {

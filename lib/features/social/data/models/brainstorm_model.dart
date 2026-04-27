@@ -140,15 +140,4 @@ class BrainStormModel extends BrainStorm implements SyncMetadata {
     };
   }
 
-  factory BrainStormModel.fromJson(Map<String, dynamic> json) =>
-      BrainStormModel.fromAppwriteJson(json);
-
-  Map<String, dynamic> toJson() {
-    return {
-      r'$id': id,
-      'id': id,
-      ...toAppwriteJson(),
-      'created_at': createdAt.toIso8601String(),
-    };
-  }
 }

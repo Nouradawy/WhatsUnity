@@ -1,7 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'states.dart';
 import '../../core/config/Enums.dart';
-import '../../features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import '../../features/chat/data/models/chat_member_model.dart';
 
 class AppCubit extends Cubit<AppCubitStates> {
   AppCubit() : super(AppCubitInitialStates());

@@ -6,7 +6,7 @@ import '../../../../core/config/Enums.dart';
 import '../../../../core/config/appwrite.dart' show appwriteDatabaseId;
 import '../../../../core/models/ReportAUser.dart';
 import '../../../admin/presentation/bloc/admin_cubit.dart';
-import '../widgets/chatWidget/Details/ChatMember.dart';
+import '../../data/models/chat_member_model.dart';
 import 'chat_details_state.dart';
 
 import '../../../../features/auth/presentation/bloc/auth_cubit.dart';

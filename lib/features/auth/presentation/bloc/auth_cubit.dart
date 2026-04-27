@@ -12,7 +12,7 @@ import '../../../../core/config/app_directory_types.dart' show Users;
 import '../../../../core/constants/Constants.dart';
 import '../../../../core/models/CompoundsList.dart';
 import '../../../../core/network/CacheHelper.dart';
-import '../../../chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import '../../../chat/data/models/chat_member_model.dart';
 import '../../domain/entities/app_user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import 'auth_state.dart';
@@ -912,7 +912,6 @@ class AuthCubit extends Cubit<AuthState> {
         apartmentNum: apartmentNum,
         compoundId: compoundId,
       );
-
       roleName = Roles.values[roleId - 1];
       selectedCompoundId = compoundId;
       var compoundLabel = compoundId;

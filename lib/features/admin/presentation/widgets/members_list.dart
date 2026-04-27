@@ -8,7 +8,7 @@ import '../../../../core/utils/url_launcher_helper.dart';
 import '../../../../core/theme/lightTheme.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
-import '../../../chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import '../../../chat/data/models/chat_member_model.dart';
 import '../bloc/admin_cubit.dart';
 import '../bloc/admin_state.dart';
 import '../../domain/entities/admin_user.dart';

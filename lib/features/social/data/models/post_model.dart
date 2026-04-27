@@ -121,15 +121,4 @@ class PostModel extends Post implements SyncMetadata {
     };
   }
 
-  factory PostModel.fromJson(Map<String, dynamic> json) =>
-      PostModel.fromAppwriteJson(json);
-
-  Map<String, dynamic> toJson() {
-    return {
-      r'$id': id,
-      'id': id,
-      ...toAppwriteJson(),
-      'created_at': createdAt?.toIso8601String(),
-    };
-  }
 }

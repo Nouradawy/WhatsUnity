@@ -3,7 +3,7 @@ import 'package:WhatsUnity/core/config/Enums.dart';
 import 'package:WhatsUnity/core/config/app_directory_types.dart' show Users;
 import 'package:WhatsUnity/core/models/CompoundsList.dart';
 import 'package:WhatsUnity/features/auth/domain/entities/app_user.dart';
-import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import 'package:WhatsUnity/features/chat/data/models/chat_member_model.dart';
 
 abstract class AuthState {
   final List<Category> categories;

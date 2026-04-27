@@ -1,5 +1,4 @@
-import '../../../../core/models/ReportAUser.dart';
-import '../widgets/chatWidget/Details/ChatMember.dart';
+import '../../data/models/chat_member_model.dart';
 
 abstract class ChatDetailsStates {}
 

@@ -10,7 +10,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:WhatsUnity/core/constants/Constants.dart';
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
-import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import 'package:WhatsUnity/features/chat/data/models/chat_member_model.dart';
 import 'package:WhatsUnity/features/social/presentation/bloc/social_cubit.dart';
 
 import 'social_member_utils.dart';

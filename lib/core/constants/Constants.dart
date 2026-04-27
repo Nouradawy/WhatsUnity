@@ -16,7 +16,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../features/auth/presentation/bloc/auth_cubit.dart';
 import '../../features/auth/presentation/bloc/auth_state.dart';
-import '../../features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import '../../features/chat/data/models/chat_member_model.dart';
 import '../../features/chat/presentation/widgets/chatWidget/MessageWidget.dart';
 import '../../features/social/domain/entities/brainstorm.dart';
 import '../../features/social/presentation/bloc/social_cubit.dart';

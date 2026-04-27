@@ -18,7 +18,7 @@ import '../../../../core/utils/url_launcher_helper.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../auth/presentation/pages/welcome_page.dart';
-import '../../../chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import '../../../chat/data/models/chat_member_model.dart';
 import '../../../chat/presentation/widgets/chatWidget/MessageWidget.dart';
 
 class ManagerHomepage extends StatelessWidget {

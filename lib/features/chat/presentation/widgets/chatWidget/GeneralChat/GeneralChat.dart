@@ -36,7 +36,7 @@ import 'package:uuid/uuid.dart';
 
 import 'package:WhatsUnity/core/time/trusted_utc_now.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/BrainStorming.dart';
-import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import 'package:WhatsUnity/features/chat/data/models/chat_member_model.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatDetails.dart';
 import 'ChatCacheService.dart';
 import 'ReplyBar.dart';

@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:WhatsUnity/core/constants/Constants.dart';
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
-import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import 'package:WhatsUnity/features/chat/data/models/chat_member_model.dart';
 import 'package:WhatsUnity/features/social/domain/entities/post.dart';
 import 'package:WhatsUnity/features/social/presentation/bloc/social_cubit.dart';
 import 'package:WhatsUnity/features/social/presentation/bloc/social_state.dart';

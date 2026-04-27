@@ -93,13 +93,4 @@ class UserReportModel extends UserReport implements SyncMetadata {
     };
   }
 
-  factory UserReportModel.fromJson(Map<String, dynamic> json) =>
-      UserReportModel.fromAppwriteJson(json);
-
-  Map<String, dynamic> toJson() {
-    return {
-      if (id != null) 'id': id,
-      ...toAppwriteJson(),
-    };
-  }
 }

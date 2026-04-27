@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import '../../../core/config/Enums.dart';
 import '../../../core/config/app_directory_types.dart' show CompoundMembersResult, Users;
 import '../../../core/models/CompoundsList.dart';
-import '../../chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import '../../chat/data/models/chat_member_model.dart';
 
 /// Background [Isolate] entry points for [compute] — synchronous only.
 

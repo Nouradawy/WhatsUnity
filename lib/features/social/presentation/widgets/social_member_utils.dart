@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:WhatsUnity/core/config/Enums.dart';
-import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import 'package:WhatsUnity/features/chat/data/models/chat_member_model.dart';
 
 ChatMember fallbackSocialMember(String id) {
   return ChatMember(

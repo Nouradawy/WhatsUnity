@@ -92,14 +92,4 @@ class AdminUserModel extends AdminUser implements SyncMetadata {
     };
   }
 
-  factory AdminUserModel.fromJson(Map<String, dynamic> json) =>
-      AdminUserModel.fromAppwriteJson(json);
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': authorId,
-      ...toAppwriteJson(),
-      'updated_at': updatedAt.toIso8601String(),
-    };
-  }
 }

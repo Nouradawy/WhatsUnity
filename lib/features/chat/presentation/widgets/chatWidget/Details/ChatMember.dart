@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
+import 'package:WhatsUnity/features/chat/data/models/chat_member_model.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_details_cubit.dart';
 
 import 'package:WhatsUnity/features/chat/presentation/bloc/presence_cubit.dart';
@@ -16,100 +17,6 @@ import 'package:WhatsUnity/features/chat/presentation/bloc/presence_state.dart';
 
 import 'package:WhatsUnity/core/config/Enums.dart';
 import 'package:WhatsUnity/core/utils/url_launcher_helper.dart';
-
-
-// A simple data class to hold user information
-class ChatMember {
-  final String id;
-  final String displayName;
-  final String? fullName;
-  final String? avatarUrl;
-  final String building;
-  final String apartment;
-  final UserState? userState;
-  final String phoneNumber;
-  final OwnerTypes? ownerType;
-
-  ChatMember({
-    required this.id,
-    required this.displayName,
-    this.fullName,
-    this.avatarUrl,
-    required this.building,
-    required this.apartment,
-    required this.userState,
-    required this.phoneNumber,
-    required this.ownerType,
-  });
-  factory ChatMember.fromJson(Map<String, dynamic> json) {
-    final String? userStateStr = json['userState'] as String?;
-    final String? ownerTypeStr = json['owner_type'] as String?;
-
-    UserState? parsedUserState;
-    if (userStateStr != null) {
-      parsedUserState = UserState.values.firstWhere(
-        (e) => e.name == userStateStr,
-      );
-    }
-
-    OwnerTypes? parsedOwnerType;
-    if (ownerTypeStr != null) {
-      parsedOwnerType = OwnerTypes.values.firstWhere(
-        (e) => e.name == ownerTypeStr,
-        orElse: () => OwnerTypes.owner,
-      );
-    }
-
-    return ChatMember(
-      id: json['id']?.toString() ?? '',
-      displayName: json['display_name'] as String? ?? '',
-      fullName: json['full_name'] as String?,
-      avatarUrl: json['avatar_url'] as String?,
-      building: json['building_num']?.toString() ?? '',
-      apartment: json['apartment_num']?.toString() ?? '',
-      userState: parsedUserState,
-      phoneNumber: json['phone_number']?.toString() ?? '',
-      ownerType: parsedOwnerType,
-    );
-  }
-  ChatMember copyWithProfileUpdate(Map<String, dynamic> json) {
-    final String? userStateStr = json['userState'] as String?;
-    final String? ownerTypeStr = json['owner_type'] as String?;
-
-    UserState? parsedUserState = userState;
-    if (userStateStr != null) {
-
-      parsedUserState = UserState.values.firstWhere(
-        (e) => e.name == userStateStr,
-      );
-    }
-
-    OwnerTypes? parsedOwnerType = ownerType;
-    if (ownerTypeStr != null) {
-      parsedOwnerType = OwnerTypes.values.firstWhere(
-        (e) => e.name == ownerTypeStr,
-        orElse: () => ownerType ?? OwnerTypes.owner,
-      );
-    }
-
-    return ChatMember(
-      id: id,
-      building: building,
-      apartment: apartment,
-      displayName: (json['display_name'] as String?) ?? displayName,
-      fullName: (json['full_name'] as String?) ?? fullName,
-      avatarUrl: (json['avatar_url'] as String?) ?? avatarUrl,
-      phoneNumber: (json['phone_number'] as String?) ?? phoneNumber,
-      userState: parsedUserState,
-      ownerType: parsedOwnerType,
-    );
-  }
-
-  @override
-  String toString() {
-    return 'ChatMember(id: $id, name: $displayName, building: $building, apartment: $apartment)';
-  }
-}
 
 class ChatMembersScreen extends StatefulWidget {
   final String compoundId;

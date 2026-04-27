@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:WhatsUnity/Layout/Cubit/cubit.dart';
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter/foundation.dart' show compute, debugPrint, kDebugMode;
 import 'package:google_sign_in/google_sign_in.dart';
@@ -147,6 +148,7 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       final googleSignIn = GoogleSignIn();
       await googleSignIn.signOut();
+
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Google signOut cleanup skipped: $e');

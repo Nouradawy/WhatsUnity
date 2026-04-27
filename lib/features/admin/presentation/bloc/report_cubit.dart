@@ -5,7 +5,7 @@ import 'package:WhatsUnity/core/config/Enums.dart';
 import 'package:WhatsUnity/core/models/ReportAUser.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
-import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import 'package:WhatsUnity/features/chat/data/models/chat_member_model.dart';
 import 'package:WhatsUnity/features/admin/domain/entities/user_report.dart';
 import 'package:WhatsUnity/features/admin/domain/repositories/admin_repository.dart';
 

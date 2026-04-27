@@ -16,7 +16,7 @@ import '../../../bloc/chat_cubit.dart';
 import '../../../../../admin/presentation/bloc/report_cubit.dart';
 
 import '../MessageWidget.dart';
-import '../Details/ChatMember.dart';
+import '../../../../data/models/chat_member_model.dart';
 
 
 class MessageRowWrapper extends StatelessWidget {

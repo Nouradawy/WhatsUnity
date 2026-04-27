@@ -1,4 +1,4 @@
-import '../../features/chat/presentation/widgets/chatWidget/Details/ChatMember.dart';
+import '../../features/chat/data/models/chat_member_model.dart';
 
 /// Admin-only verification file metadata loaded with compound members.
 class Users {

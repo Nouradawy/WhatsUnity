@@ -18,7 +18,7 @@ import '../../../../auth/presentation/bloc/auth_state.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 import 'package:audioplayers/audioplayers.dart';
 import 'AudioWaveformPainter.dart';
-import 'Details/ChatMember.dart';
+import '../../../data/models/chat_member_model.dart';
 import 'package:WhatsUnity/features/chat/presentation/utils/audio_message_playable.dart';
 
 
