@@ -1,6 +1,6 @@
 {
-    "name": "WhatsUnity",
-    "short_name": "WhatsUnity",
+    "name": "whatsunity",
+    "short_name": "whatsunity",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
