@@ -140,9 +140,9 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     return Map<String, dynamic>.from(decoded);
   }
 
-  Future<AppUser?> _remote_signInWithGoogleAndroidNative() async {
-    final serverClientId = _googleServerClientId?.trim();
-    if (serverClientId == null || serverClientId.isEmpty) {
+  Future<AppUser?> _remote_signInWithGoogleNative() async {
+    final webClientId = _googleServerClientId?.trim();
+    if (webClientId == null || webClientId.isEmpty) {
       throw Exception(
         'Missing GOOGLE_SERVER_CLIENT_ID at build time '
         '(e.g. --dart-define-from-file=.env). '
@@ -152,7 +152,10 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
     final googleSignIn = GoogleSignIn(
       scopes: const ['email', 'profile', 'openid'],
-      serverClientId: serverClientId,
+      // Web requires 'clientId', Android requires 'serverClientId'.
+      // They both use the EXACT SAME Web Client ID string from Google Cloud.
+      clientId: kIsWeb ? webClientId : null,
+      serverClientId: kIsWeb ? null : webClientId,
     );
 
     final selectedAccount = await googleSignIn.signIn();
@@ -217,22 +220,15 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<AppUser?> remote_signInWithGoogle() async {
-    if (_isAndroid) {
-      return _remote_signInWithGoogleAndroidNative();
+    // Route both Android AND Web to the native token bridge
+    if (_isAndroid || kIsWeb) {
+      return _remote_signInWithGoogleNative();
     }
 
     String? success = oauthSuccessUrl?.trim();
     if (success != null && success.isEmpty) success = null;
     String? failure = oauthFailureUrl?.trim();
     if (failure != null && failure.isEmpty) failure = null;
-
-    if (kIsWeb) {
-      final base = _webOAuthReturnBaseUri();
-      success ??= base.toString();
-      failure ??= base.replace(
-        queryParameters: const {'appwrite_oauth': 'google_failure'},
-      ).toString();
-    }
 
     await _account.createOAuth2Session(
       provider: OAuthProvider.google,
