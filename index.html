@@ -33,6 +33,25 @@
 
   <title>WhatsUnity</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    // Explicitly register the Firebase Messaging Service Worker for GitHub Pages support.
+    // GitHub Pages serves apps from a subpath (e.g. /YourRepoName/), so we must
+    // ensure the browser looks for the SW relative to the current base path.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        // Find the base path from the <base> tag or use current directory
+        var base = document.querySelector('base') ? document.querySelector('base').getAttribute('href') : '/';
+        var swPath = base + 'firebase-messaging-sw.js';
+
+        navigator.serviceWorker.register(swPath).then(function(registration) {
+          console.log('Firebase Service Worker registered with scope:', registration.scope);
+        }).catch(function(err) {
+          console.error('Firebase Service Worker registration failed:', err);
+        });
+      });
+    }
+  </script>
 </head>
 <body>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
