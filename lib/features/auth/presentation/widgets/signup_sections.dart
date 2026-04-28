@@ -555,7 +555,7 @@ Column submitButton(
                 spacing: 10,
                 children: [
                   if (cubit.signingIn)
-                    const SizedBox(width: 20, height: 20, child: CircularProgressIndicator()),
+                    const SizedBox(width: 20, height: 20, child: CircularProgressIndicator.adaptive()),
                   Text(
                     cubit.signInToggler ? buildContext.loc.signIn : buildContext.loc.signUp,
                     style: buildContext.txt.role.copyWith(fontWeight: FontWeight.w600),
@@ -684,7 +684,7 @@ Column signInProviders(
                 const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                 )
               else
               Image.asset("assets/Google_icon-may25.webp", height: 25),

@@ -8,6 +8,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 import 'package:flutter_chat_reactions/flutter_chat_reactions.dart';
@@ -37,6 +38,7 @@ import 'package:uuid/uuid.dart';
 import 'package:WhatsUnity/core/time/trusted_utc_now.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/BrainStorming.dart';
 import 'package:WhatsUnity/features/chat/data/models/chat_member_model.dart';
+import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/Details/ChatDetails.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/presence_cubit.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/presence_state.dart';
@@ -1591,14 +1593,43 @@ class _GeneralChatState extends State<GeneralChat>
     required bool isBrainStorming,
   }) {
     if (_isInitializing) {
-      return Scaffold(
-        appBar: _ChatAppBar(
-          compoundId: widget.compoundId,
-          onTitleTap: null,
-          onToggleBrainStorming: null,
+    if (context.isIOS) {
+      return CupertinoPageScaffold(
+        navigationBar: CupertinoNavigationBar(
+          middle: GestureDetector(
+            onTap: null,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox.square(
+                  dimension: 30,
+                  child: ClipOval(
+                    child: getCompoundPicture(context, widget.compoundId, 28),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text('General Chat', style: TextStyle(fontSize: 15)),
+              ],
+            ),
+          ),
         ),
-        body: const Center(child: CircularProgressIndicator()),
+        child: const Center(
+          child: Material(
+            color: Colors.transparent,
+            child: CircularProgressIndicator.adaptive(),
+          ),
+        ),
       );
+    }
+
+    return Scaffold(
+      appBar: _ChatAppBar(
+        compoundId: widget.compoundId,
+        onTitleTap: null,
+        onToggleBrainStorming: null,
+      ),
+      body: const Center(child: CircularProgressIndicator.adaptive()),
+    );
     }
 
     final member = _currentUserMember(authState);
@@ -1625,6 +1656,73 @@ class _GeneralChatState extends State<GeneralChat>
 
   Widget _buildActiveChatScaffold(Authenticated authState) {
     _scheduleAvatarPrefetch(authState.chatMembers);
+
+    if (context.isIOS) {
+      return BlocBuilder<PresenceCubit, PresenceState>(
+        builder: (context, _) {
+          final typingText = _typingSubtitle(authState);
+          return CupertinoPageScaffold(
+            navigationBar: CupertinoNavigationBar(
+              middle: GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (context) => BlocProvider(
+                      create: (context) => ChatDetailsCubit(
+                        authCubit: context.read<AuthCubit>(),
+                        databases: appwriteTables,
+                      ),
+                      child: ChatDetails(compoundId: widget.compoundId),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox.square(
+                      dimension: 30,
+                      child: ClipOval(
+                        child: getCompoundPicture(context, widget.compoundId, 28),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('General Chat', style: TextStyle(fontSize: 15)),
+                        if (typingText != null)
+                          Text(
+                            typingText,
+                            style: const TextStyle(fontSize: 10, color: Colors.green),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              trailing: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  context
+                      .read<SocialCubit>()
+                      .getBrainStorms(_channelId!, widget.compoundId);
+                  _toggleBrainStorming();
+                },
+                child: const Icon(CupertinoIcons.graph_circle),
+              ),
+            ),
+            child: SafeArea(
+              child: Material(
+                color: Colors.transparent,
+                child: _buildChatBody(),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: PreferredSize(
@@ -1957,6 +2055,45 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (context.isIOS) {
+      return CupertinoNavigationBar(
+        middle: GestureDetector(
+          onTap: onTitleTap,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox.square(
+                dimension: 30,
+                child: ClipOval(
+                  child: getCompoundPicture(context, compoundId, 28),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('General Chat', style: TextStyle(fontSize: 15)),
+                  if (typingText != null)
+                    Text(
+                      typingText!,
+                      style: const TextStyle(fontSize: 10, color: Colors.green),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        trailing: onToggleBrainStorming != null
+            ? CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: onToggleBrainStorming,
+                child: const Icon(CupertinoIcons.graph_circle),
+              )
+            : null,
+      );
+    }
+
     return AppBar(
       title: MaterialButton(
         onPressed: onTitleTap,

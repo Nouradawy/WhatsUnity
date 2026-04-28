@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:dotted_border/dotted_border.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -237,6 +238,29 @@ class Maintenance extends StatelessWidget {
               embeddedHeader,
               Expanded(child: reportBody),
             ],
+          );
+        }
+
+        if (context.isIOS) {
+          return CupertinoPageScaffold(
+            navigationBar: CupertinoNavigationBar(
+              middle: Text(pageHeaderTitle),
+              trailing: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => newReport(
+                  context.loc.maintenanceReport,
+                  context,
+                  issueDescription,
+                  issueTitle,
+                  issueCategory,
+                  maintenanceType,
+                ),
+                child: const Icon(CupertinoIcons.add),
+              ),
+            ),
+            child: SafeArea(child: Material(
+                color: Colors.transparent,
+                child: reportBody)),
           );
         }
 
@@ -641,10 +665,10 @@ class _CreateMaintenanceReportDialogState
                       Text(context.loc.reportSubmission,
                           style: context.txt.reportSubmissionButton),
                       if (isSending)
-                        SizedBox(
+                        const SizedBox(
                             height: 30,
                             width: 30,
-                            child: CircularProgressIndicator()),
+                            child: CircularProgressIndicator.adaptive()),
                     ],
                   ),
                 ),

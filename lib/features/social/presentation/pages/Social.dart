@@ -82,7 +82,7 @@ class _SocialState extends State<Social> {
       },
       builder: (context, authState) {
         if (authState is! Authenticated) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator.adaptive());
         }
 
         final currentMember = authState.currentUser;
@@ -91,7 +91,7 @@ class _SocialState extends State<Social> {
         final selectedCompoundId = authState.selectedCompoundId;
 
         if (selectedCompoundId == null) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator.adaptive());
         }
 
         if ((_tabController?.index ?? 0) == 1) {

@@ -70,7 +70,6 @@ dependencies:
   permission_handler: ^12.0.1
   http: ^1.5.0
   path_provider: ^2.1.5
-  flutter_typeahead: ^5.2.0
   flutter_markdown: ^0.7.1
   material_symbols_icons: ^4.2874.0
   carousel_slider: ^5.1.1
@@ -102,6 +101,8 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   firebase_core: ^3.13.0
   firebase_messaging: ^15.2.5
+  archive: ^4.0.7
+  image: ^4.5.4
 
 dependency_overrides:
    record_linux: ^1.1.1

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'web_token_stub.dart' if (dart.library.js_interop) 'web_token_impl.dart';
 
 import 'package:WhatsUnity/core/config/appwrite.dart';
 import 'package:WhatsUnity/core/config/runtime_env.dart';
@@ -8,6 +9,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 
 /// Registers/updates Appwrite Messaging push targets for the signed-in user.
 ///
@@ -121,13 +123,30 @@ class PushTargetRegistrationService {
         sound: true,
       );
       if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        debugPrint('PushTargetRegistrationService: permission denied');
         return null;
       }
       final webVapidKey = RuntimeEnv.firebaseWebVapidKey;
-      final token = await messaging.getToken(vapidKey: kIsWeb ? webVapidKey : null);
+
+      if (kIsWeb) {
+        debugPrint('PushTargetRegistrationService: fetching web token via JS bridge with VAPID: ${webVapidKey != null ? 'present' : 'null'}');
+        final token = await getWebTokenViaJS(webVapidKey ?? '');
+
+        if (token == null || token.isEmpty) {
+          debugPrint('PushTargetRegistrationService: JS bridge returned null or empty token');
+        } else {
+          debugPrint('PushTargetRegistrationService: web token fetched successfully via JS bridge');
+        }
+        return token;
+      }
+
+      final token = await messaging.getToken(vapidKey: null);
+      if (token == null || token.isEmpty) {
+        debugPrint('PushTargetRegistrationService: token is null or empty');
+      }
       return token?.trim();
-    } catch (e) {
-      debugPrint('PushTargetRegistrationService: token fetch failed: $e');
+    } catch (e, st) {
+      debugPrint('PushTargetRegistrationService: token fetch failed: $e\n$st');
       return null;
     }
   }

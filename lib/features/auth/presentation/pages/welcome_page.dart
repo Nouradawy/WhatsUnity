@@ -65,7 +65,7 @@ class _JoinCommunityState extends State<JoinCommunity> {
             final categories = state.categories;
 
             if (categories.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: CircularProgressIndicator.adaptive());
             }
 
             return Column(

@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:appwrite/appwrite.dart';
+import 'package:archive/archive.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image/image.dart' as img;
 import 'package:mime/mime.dart';
 
 import 'appwrite_function_helpers.dart';
@@ -41,7 +43,11 @@ class CloudflareR2Service {
     String? mimeType,
   }) async {
     final mime = mimeType ?? lookupMimeType(path) ?? 'application/octet-stream';
-    final uploadPayload = await _readUploadPayload(path);
+    final sourcePayload = await _readUploadPayload(path);
+    final uploadPayload = _prepareCompressedUploadPayload(
+      sourceBytes: sourcePayload.bytes,
+      mimeType: mime,
+    );
     final size = uploadPayload.size;
 
     final res = await invokeAppwriteFunctionJson(
@@ -49,7 +55,7 @@ class CloudflareR2Service {
       functionId: _functionId,
       payload: {
         'filename': filename,
-        'mime': mime,
+        'mime': uploadPayload.mimeType,
         'size': size,
       },
     );
@@ -86,14 +92,16 @@ class CloudflareR2Service {
       data: uploadPayload.bytes,
       options: Options(
         headers: <String, Object?>{
-          Headers.contentTypeHeader: mime,
+          Headers.contentTypeHeader: uploadPayload.mimeType,
           Headers.contentLengthHeader: size,
+          if (uploadPayload.contentEncoding != null)
+            Headers.contentEncodingHeader: uploadPayload.contentEncoding,
         },
         validateStatus: (s) => s != null && s >= 200 && s < 300,
       ),
     );
 
-    return R2UploadMetadata(url: publicUrl, mime: mime).toJson();
+    return R2UploadMetadata(url: publicUrl, mime: uploadPayload.mimeType).toJson();
   }
 
   Future<({List<int> bytes, int size})> _readUploadPayload(String path) async {
@@ -119,4 +127,70 @@ class CloudflareR2Service {
     final bytes = await file.readAsBytes();
     return (bytes: bytes, size: bytes.length);
   }
+
+  _CompressedUploadPayload _prepareCompressedUploadPayload({
+    required List<int> sourceBytes,
+    required String mimeType,
+  }) {
+    final imageCompressed = _compressImagePayload(
+      sourceBytes: sourceBytes,
+      mimeType: mimeType,
+    );
+    if (imageCompressed != null) {
+      return imageCompressed;
+    }
+
+    final gzipped = GZipEncoder().encode(sourceBytes);
+    if (gzipped.length + 64 < sourceBytes.length) {
+      return _CompressedUploadPayload(
+        bytes: gzipped,
+        mimeType: mimeType,
+        contentEncoding: 'gzip',
+      );
+    }
+
+    return _CompressedUploadPayload(bytes: sourceBytes, mimeType: mimeType);
+  }
+
+  _CompressedUploadPayload? _compressImagePayload({
+    required List<int> sourceBytes,
+    required String mimeType,
+  }) {
+    if (!mimeType.startsWith('image/')) return null;
+    if (mimeType == 'image/svg+xml' || mimeType == 'image/gif') return null;
+
+    final decoded = img.decodeImage(Uint8List.fromList(sourceBytes));
+    if (decoded == null) return null;
+
+    List<int>? encoded;
+    var targetMime = mimeType;
+
+    if (mimeType == 'image/png') {
+      encoded = img.encodePng(decoded, level: 6);
+    } else {
+      // JPEG/WebP/unknown image payloads are normalized to JPEG for broad
+      // compatibility and predictable byte reduction.
+      encoded = img.encodeJpg(decoded, quality: 82);
+      targetMime = 'image/jpeg';
+    }
+
+    if (encoded.isEmpty) return null;
+    if (encoded.length + 512 >= sourceBytes.length) return null;
+
+    return _CompressedUploadPayload(bytes: encoded, mimeType: targetMime);
+  }
+}
+
+class _CompressedUploadPayload {
+  const _CompressedUploadPayload({
+    required this.bytes,
+    required this.mimeType,
+    this.contentEncoding,
+  });
+
+  final List<int> bytes;
+  final String mimeType;
+  final String? contentEncoding;
+
+  int get size => bytes.length;
 }

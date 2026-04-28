@@ -1,3 +1,5 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hexcolor/hexcolor.dart';
@@ -11,10 +13,23 @@ extension ContextThemeExtension on BuildContext {
   AppTextTheme get txt =>
       Theme.of(this).extension<AppTextThemeExtension>()!.textTheme;
   AppLocalizations get loc => AppLocalizations.of(this)!;
+  
+  /// Returns true if the platform is iOS.
+  /// On Web, it includes iPad Safari (which might report as macOS).
+  bool get isIOS {
+    if (kIsWeb) {
+      // On Web, iPad Safari in "Desktop" mode reports as TargetPlatform.macOS.
+      // We check the platform/target platform to be more inclusive for notifications.
+      final platform = Theme.of(this).platform;
+      return platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+    }
+    return Theme.of(this).platform == TargetPlatform.iOS;
+  }
 }
 
 // Define your light theme
  ThemeData myLightTheme() {
+   final seedColor = HexColor("#dae7f7");
    return ThemeData(
      // 1. Set up the Color Scheme
      // ColorScheme.fromSeed is a great way to generate a full palette
@@ -31,7 +46,7 @@ extension ContextThemeExtension on BuildContext {
 
      ),
      colorScheme: ColorScheme.fromSeed(
-       seedColor: HexColor("#dae7f7"),
+       seedColor: seedColor,
        brightness: Brightness.light, // Specify this is a light theme
      ),
 
@@ -43,6 +58,14 @@ extension ContextThemeExtension on BuildContext {
      extensions: [
        AppTextThemeExtension(AppTextTheme.light()),
      ],
+
+     cupertinoOverrideTheme: CupertinoThemeData(
+       primaryColor: seedColor,
+       textTheme: CupertinoTextThemeData(
+         navActionTextStyle: GoogleFonts.manrope(color: seedColor),
+         navTitleTextStyle: GoogleFonts.manrope(fontWeight: FontWeight.w600, color: Colors.black),
+       ),
+     ),
 
      useMaterial3: true,
    );

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:permission_handler/permission_handler.dart';
 
 import '../network/CacheHelper.dart';
+import 'browser_notification_bridge.dart';
 
 const String _kPermissionsWelcomeKey = 'app_permissions_welcome_completed_v1';
 
@@ -25,7 +26,13 @@ Future<void> requestAppPermissions() async {
   try {
     if (kIsWeb) {
       // Web does not support photo/storage permission APIs via permission_handler.
-      await [Permission.microphone].request();
+      // Notification permission on web requires user gesture (provided by the button click that triggers this).
+      final browserBridge = createBrowserNotificationBridge();
+      await Future.wait([
+        Permission.microphone.request(),
+        Permission.notification.request(),
+        browserBridge.requestPermissionIfNeeded(),
+      ]);
       return;
     }
     await [

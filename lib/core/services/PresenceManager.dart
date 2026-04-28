@@ -15,11 +15,13 @@ class PresenceManager extends StatefulWidget {
 }
 
 class _PresenceManagerState extends State<PresenceManager> with WidgetsBindingObserver {
-  // 1. Create a member variable to hold the PresenceCubit instance.
+  // 1. Create member variables to hold cubit instances.
   late final PresenceCubit _presenceCubit;
+  late final AuthCubit _authCubit;
 
   (String, String)? _resolvePresenceIdentity() {
-    final authState = context.read<AuthCubit>().state;
+    // 2. Use the stored _authCubit instead of context.read().
+    final authState = _authCubit.state;
     if (authState is! Authenticated) return null;
     final userId = authState.user.id.trim();
     final compoundId = (authState.selectedCompoundId ?? '').trim();
@@ -31,8 +33,9 @@ class _PresenceManagerState extends State<PresenceManager> with WidgetsBindingOb
   void initState() {
     super.initState();
 
-    // 2. Get the PresenceCubit instance ONCE and store it in the member variable.
+    // 3. Get the cubit instances ONCE and store them.
     _presenceCubit = context.read<PresenceCubit>();
+    _authCubit = context.read<AuthCubit>();
 
     // Start listening to app lifecycle events
     WidgetsBinding.instance.addObserver(this);
@@ -57,7 +60,7 @@ class _PresenceManagerState extends State<PresenceManager> with WidgetsBindingOb
     // Stop listening to app lifecycle events
     WidgetsBinding.instance.removeObserver(this);
     RealtimeUserService.instance.dispose();
-    // 3. Safely use the stored instance in dispose(). Do NOT use context.read() here.
+    // 4. Safely use the stored instance in dispose().
     _presenceCubit.disconnectPresence();
     super.dispose();
   }
@@ -65,8 +68,9 @@ class _PresenceManagerState extends State<PresenceManager> with WidgetsBindingOb
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    if (!mounted) return;
 
-    // 4. Use the stored instance here as well for consistency and safety.
+    // 5. Use the stored instances here as well.
     if (state == AppLifecycleState.resumed) {
       // App is in the foreground
       final identity = _resolvePresenceIdentity();

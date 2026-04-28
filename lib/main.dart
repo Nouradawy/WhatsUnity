@@ -182,7 +182,7 @@ class MyApp extends StatelessWidget {
                   builder: (context, snapshot) {
                     final hasResolvedAuthState = snapshot.connectionState != ConnectionState.waiting || snapshot.data != null;
                     if (!hasResolvedAuthState) {
-                      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+                      return const Scaffold(body: Center(child: CircularProgressIndicator.adaptive()));
                     }
                     final isAuthenticated = snapshot.data != null;
                     if (isAuthenticated && authCubit.signupGoogleEmail == null && authCubit.signInGoogle == false) {

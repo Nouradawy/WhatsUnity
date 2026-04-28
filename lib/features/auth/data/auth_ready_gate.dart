@@ -41,7 +41,7 @@ class _AuthReadyGateState extends State<AuthReadyGate> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+            body: Center(child: CircularProgressIndicator.adaptive()),
           );
         }
         if (snapshot.hasError) {

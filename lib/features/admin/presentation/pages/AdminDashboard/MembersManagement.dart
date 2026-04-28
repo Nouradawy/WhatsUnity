@@ -47,7 +47,7 @@ class _MembersManagementState extends State<MembersManagement> {
               const SizedBox(height: 12),
               Expanded(
                 child: state is AdminLoading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: CircularProgressIndicator.adaptive())
                     : MembersList(members: cubit.filteredMembers),
               ),
             ],

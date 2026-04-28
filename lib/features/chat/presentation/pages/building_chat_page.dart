@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,7 +32,7 @@ class BuildingChat extends StatelessWidget {
   Widget build(BuildContext context) {
     final authState = context.watch<AuthCubit>().state;
     if (authState is! Authenticated) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator.adaptive());
     }
     final currentCompoundId = authState.selectedCompoundId;
     final userId = authState.user.id;
@@ -45,12 +46,7 @@ class BuildingChat extends StatelessWidget {
     // stale widget state from carrying over between sessions or communities.
     final chatKey = ValueKey('${userId}_${currentCompoundId}_building_chat');
 
-    return ChatScope(
-      compoundId: currentCompoundId,
-      channelScopeId: 'BUILDING_CHAT',
-      userId: userId,
-      child: Scaffold(
-        body: Stack(
+    final body = Stack(
           children: [
             GeneralChat(
               key: chatKey,
@@ -168,8 +164,22 @@ class BuildingChat extends StatelessWidget {
               },
             ),
           ],
-        ),
-      ),
+        );
+
+    return ChatScope(
+      compoundId: currentCompoundId,
+      channelScopeId: 'BUILDING_CHAT',
+      userId: userId,
+      child: context.isIOS
+          ? CupertinoPageScaffold(
+              child: SafeArea(
+                child: Material(
+                  color: Colors.transparent,
+                  child: body,
+                ),
+              ),
+            )
+          : Scaffold(body: body),
     );
   }
 }

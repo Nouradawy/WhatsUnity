@@ -545,7 +545,7 @@ class _OtpScreenState extends State<OtpScreen> {
                               ? const SizedBox(
                                   width: 18,
                                   height: 18,
-                                  child: CircularProgressIndicator(
+                                  child: CircularProgressIndicator.adaptive(
                                     strokeWidth: 2,
                                   ),
                                 )
@@ -566,7 +566,7 @@ class _OtpScreenState extends State<OtpScreen> {
                             ? const SizedBox(
                                 height: 18,
                                 width: 18,
-                                child: CircularProgressIndicator(
+                                child: CircularProgressIndicator.adaptive(
                                   strokeWidth: 2,
                                 ),
                               )

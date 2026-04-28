@@ -207,6 +207,7 @@ Web Firebase vars (used by registration service):
   - `web/firebase-messaging-sw.js`
 - Must contain real Firebase web config (placeholders replaced).
 - App host must serve the service worker file from web root.
+- **iOS Safari Support**: Background notifications (Web Push) on iOS **only work** if the app is **Added to Home Screen** (PWA mode). Regular Safari tabs do not support Web Push in the background.
 
 ## 6.7 Security model
 

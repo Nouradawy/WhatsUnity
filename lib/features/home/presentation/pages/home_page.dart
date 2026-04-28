@@ -4,6 +4,7 @@ import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:WhatsUnity/features/home/presentation/widgets/header_compound_title.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -150,7 +151,7 @@ class HomePage extends StatelessWidget {
                     child: Builder(
                       builder: (context) {
                         if (currentSelectedCompoundId == null) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(child: CircularProgressIndicator.adaptive());
                         }
 
                         // 3. Pass the key to Social, which is now a clean StatelessWidget
@@ -336,11 +337,9 @@ class _TabChangeHandlerState extends State<TabChangeHandler> {
     // Get the controller provided by the parent
     _tabController = DefaultTabController.of(context);
 
-    if(!kIsWeb) {
-      // Remove any previous listener before adding a new one
-      _tabController?.removeListener(_handleTabSelection);
-      _tabController?.addListener(_handleTabSelection);
-    }
+    // Remove any previous listener before adding a new one
+    _tabController?.removeListener(_handleTabSelection);
+    _tabController?.addListener(_handleTabSelection);
 
   }
 

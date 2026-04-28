@@ -1,7 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
 import '../../../../core/theme/lightTheme.dart';
 import '../../../../features/maintenance/presentation/bloc/maintenance_cubit.dart';
 import '../../../../features/maintenance/presentation/bloc/maintenance_state.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
@@ -94,12 +95,7 @@ class ManagerHomepage extends StatelessWidget {
             final currentMyCompounds = (authState is Authenticated) ? authState.myCompounds : context.read<AuthCubit>().myCompounds;
             final enabledMultiCompound = (authState is Authenticated) ? authState.enabledMultiCompound : false;
 
-            return Scaffold(
-              backgroundColor:Colors.white,
-              appBar: AppBar(
-                backgroundColor:Colors.white,
-                leadingWidth: 120,
-                 title:enabledMultiCompound?DropdownMenu(
+            final appBarTitle = enabledMultiCompound?DropdownMenu(
                   initialSelection: currentSelectedCompoundId?.toString(),
                   width: MediaQuery.sizeOf(context).width * 0.55,
                   inputDecorationTheme: InputDecorationTheme(
@@ -168,27 +164,9 @@ class ManagerHomepage extends StatelessWidget {
                      fontSize: 17,
                      fontWeight: FontWeight.w500,
                    ),
-                 ),
-                leading: Container(
-                    alignment: AlignmentDirectional.center,
-                    padding: const EdgeInsets.only(left: 7),
-                    child: Text(
-                      "WhatsUnity",
-                      textScaler: TextScaler.noScaling,
-                      style: GoogleFonts.lobster(fontSize: 20 ,fontWeight: FontWeight.w500 , color: Colors.indigo.shade500 ,),
-                    )),
-                actions:const [
-                //    IconButton(onPressed: (){
-                //   Navigator.push(
-                //     context,
-                //     MaterialPageRoute(builder: (context) => Profile()),
-                //   );
-                // }, icon: Icon(Icons.notifications)),
+                 );
 
-                ],
-
-              ),
-              body: Column(
+            final body = Column(
                 children: [
                   Container(
                     margin:EdgeInsets.only(left:MediaQuery.of(context).size.width*0.075),
@@ -299,7 +277,7 @@ class ManagerHomepage extends StatelessWidget {
                               final reports = managerCubit.maintenanceDataFiltered;
                               final attachments = maintenanceCubit.attachments;
                               if (state is MaintenanceLoading && reports.isEmpty) {
-                                return const Center(child: CircularProgressIndicator());
+                                return const Center(child: CircularProgressIndicator.adaptive());
                               }
                               if (state is MaintenanceError && reports.isEmpty) {
                                 return Center(
@@ -360,7 +338,7 @@ class ManagerHomepage extends StatelessWidget {
                                     final bool isOpen = maintenanceCubit.isExpanded &&
                                         maintenanceCubit.reportIndex == index;
                                     final chatMembers = (authState is Authenticated) ? authState.chatMembers : <ChatMember>[];
-                                    final member = chatMembers.firstWhere((m)=>m.id.trim() == reports[index].userId.trim(), orElse: () => ChatMember(id: '', displayName: 'Unknown', building: '', apartment: '', phoneNumber: '', userState: UserState.banned, ownerType: null));
+                                    final member = chatMembers.firstWhere((m)=>m.id.trim() == reports[index].userId.trim(), orElse: () => ChatMember(id: '', displayName: 'Unknown', building: '', apartment: '', phoneNumber: '', userState: UserState.approved, ownerType: null));
 
                                     return Container(
                                       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -544,7 +522,56 @@ class ManagerHomepage extends StatelessWidget {
                       ],
                     )
                 ],
+              );
+
+            if (context.isIOS) {
+              return CupertinoPageScaffold(
+                navigationBar: CupertinoNavigationBar(
+                  middle: appBarTitle,
+                  leading: Container(
+                      alignment: AlignmentDirectional.center,
+                      padding: const EdgeInsets.only(left: 7),
+                      child: Text(
+                        "WhatsUnity",
+                        textScaler: TextScaler.noScaling,
+                        style: GoogleFonts.lobster(fontSize: 20 ,fontWeight: FontWeight.w500 , color: Colors.indigo.shade500 ,),
+                      )),
+                ),
+                child: SafeArea(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: body,
+                  ),
+                ),
+              );
+            }
+
+            return Scaffold(
+              backgroundColor:Colors.white,
+              appBar: AppBar(
+                backgroundColor:Colors.white,
+                leadingWidth: 120,
+                 title: appBarTitle,
+                leading: Container(
+                    alignment: AlignmentDirectional.center,
+                    padding: const EdgeInsets.only(left: 7),
+                    child: Text(
+                      "WhatsUnity",
+                      textScaler: TextScaler.noScaling,
+                      style: GoogleFonts.lobster(fontSize: 20 ,fontWeight: FontWeight.w500 , color: Colors.indigo.shade500 ,),
+                    )),
+                actions:const [
+                //    IconButton(onPressed: (){
+                //   Navigator.push(
+                //     context,
+                //     MaterialPageRoute(builder: (context) => Profile()),
+                //   );
+                // }, icon: Icon(Icons.notifications)),
+
+                ],
+
               ),
+              body: body,
             );
           },
         );

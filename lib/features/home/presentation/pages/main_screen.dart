@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:WhatsUnity/core/theme/lightTheme.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -180,6 +182,133 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               Future.microtask(() => cubit.bottomNavIndexChange(safeIndex));
             }
 
+            final List<BottomNavigationBarItem> navItems = [
+              BottomNavigationBarItem(
+                icon: BlocBuilder<MentionNotificationCubit,
+                    MentionNotificationState>(
+                  buildWhen: (previous, current) =>
+                      previous.unreadGeneralMentionCount !=
+                      current.unreadGeneralMentionCount,
+                  builder: (context, mentionState) {
+                    final unreadCount =
+                        mentionState.unreadGeneralMentionCount;
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const FaIcon(FontAwesomeIcons.house, size: 18),
+                        if (unreadCount > 0 && cubit.bottomNavIndex != 0)
+                          Positioned(
+                            right: -8,
+                            top: -8,
+                            child: Container(
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade600,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                unreadCount > 99
+                                    ? '99+'
+                                    : unreadCount.toString(),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+                label: "Home",
+              ),
+              if (role != Roles.manager)
+                BottomNavigationBarItem(
+                  icon: BlocBuilder<MentionNotificationCubit,
+                      MentionNotificationState>(
+                    buildWhen: (previous, current) =>
+                        previous.unreadBuildingMentionCount !=
+                        current.unreadBuildingMentionCount,
+                    builder: (context, mentionState) {
+                      final unreadCount =
+                          mentionState.unreadBuildingMentionCount;
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const FaIcon(
+                            FontAwesomeIcons.solidMessage,
+                            size: 18,
+                          ),
+                          if (unreadCount > 0)
+                            Positioned(
+                              right: -8,
+                              top: -8,
+                              child: Container(
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade600,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  unreadCount > 99
+                                      ? '99+'
+                                      : unreadCount.toString(),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                  label: "Chats",
+                ),
+              BottomNavigationBarItem(
+                  icon: FaIcon(FontAwesomeIcons.userLarge
+                      , size: 19),
+                  label: "Profile"
+              ),
+              if (role == Roles.admin)
+                BottomNavigationBarItem(
+                    icon: FaIcon(FontAwesomeIcons.userTie
+                        , size: 19),
+                    label: "Admin dashboard"
+                ),
+            ];
+
+            if (context.isIOS) {
+              return CupertinoTabScaffold(
+                tabBar: CupertinoTabBar(
+                  currentIndex: safeIndex,
+                  onTap: (index) => cubit.bottomNavIndexChange(index),
+                  items: navItems,
+                ),
+                tabBuilder: (context, index) {
+                  return screens[index];
+                },
+              );
+            }
+
             return Scaffold(
               // Let the body shrink with the keyboard so chat/composer stay above it.
               // `false` caused a full-height body + manual padding hacks and a visible gap.
@@ -188,128 +317,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   type: BottomNavigationBarType.fixed,
                   currentIndex: cubit.bottomNavIndex,
                   onTap: (index) => cubit.bottomNavIndexChange(index),
-                  items: <BottomNavigationBarItem>[
-
-                    BottomNavigationBarItem(
-                      icon: BlocBuilder<MentionNotificationCubit,
-                          MentionNotificationState>(
-                        buildWhen: (previous, current) =>
-                            previous.unreadGeneralMentionCount !=
-                            current.unreadGeneralMentionCount,
-                        builder: (context, mentionState) {
-                          final unreadCount =
-                              mentionState.unreadGeneralMentionCount;
-                          return Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              const FaIcon(FontAwesomeIcons.house, size: 18),
-                              if (unreadCount > 0 && cubit.bottomNavIndex != 0)
-                                Positioned(
-                                  right: -8,
-                                  top: -8,
-                                  child: Container(
-                                    constraints: const BoxConstraints(
-                                      minWidth: 16,
-                                      minHeight: 16,
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.shade600,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      unreadCount > 99
-                                          ? '99+'
-                                          : unreadCount.toString(),
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
-                      ),
-                      label: "Home",
-                    ),
-                    if (role != Roles.manager)
-                      BottomNavigationBarItem(
-                        icon: BlocBuilder<MentionNotificationCubit,
-                            MentionNotificationState>(
-                          buildWhen: (previous, current) =>
-                              previous.unreadBuildingMentionCount !=
-                              current.unreadBuildingMentionCount,
-                          builder: (context, mentionState) {
-                            final unreadCount =
-                                mentionState.unreadBuildingMentionCount;
-                            return Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                const FaIcon(
-                                  FontAwesomeIcons.solidMessage,
-                                  size: 18,
-                                ),
-                                if (unreadCount > 0)
-                                  Positioned(
-                                    right: -8,
-                                    top: -8,
-                                    child: Container(
-                                      constraints: const BoxConstraints(
-                                        minWidth: 16,
-                                        minHeight: 16,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red.shade600,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        unreadCount > 99
-                                            ? '99+'
-                                            : unreadCount.toString(),
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
-                        label: "Chats",
-                      ),
-                    // BottomNavigationBarItem(
-                    //     icon: Icon(Icons.handyman_outlined),
-                    //     label: "Services"
-                    // ),
-                    // BottomNavigationBarItem(
-                    //     icon: Icon(Icons.announcement_outlined),
-                    //     label: "announcements"
-                    // ),
-                    BottomNavigationBarItem(
-                        icon: FaIcon(FontAwesomeIcons.userLarge
-                            , size: 19),
-                        label: "Profile"
-                    ),
-                    if (role == Roles.admin)
-                      BottomNavigationBarItem(
-                          icon: FaIcon(FontAwesomeIcons.userTie
-                              , size: 19),
-                          label: "Admin dashboard"
-                      ),
-                  ]),
+                  items: navItems),
               body: IndexedStack(
                 index: safeIndex,
                 children: screens,

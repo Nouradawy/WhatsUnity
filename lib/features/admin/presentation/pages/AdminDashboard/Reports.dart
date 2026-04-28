@@ -48,7 +48,7 @@ class _ReportsState extends State<Reports> {
               const SizedBox(height: 12),
               Expanded(
                 child: state is AdminLoading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: CircularProgressIndicator.adaptive())
                     : state is AdminError
                         ? Center(
                             child: Column(

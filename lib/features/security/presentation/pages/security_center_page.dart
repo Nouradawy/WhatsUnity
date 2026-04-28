@@ -9,8 +9,10 @@ import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:WhatsUnity/features/maintenance/presentation/bloc/maintenance_cubit.dart';
 import 'package:WhatsUnity/features/maintenance/presentation/pages/maintenance_page.dart';
+import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart' as aw_models;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -452,6 +454,49 @@ class _SecurityCenterPageState extends State<SecurityCenterPage>
 
   @override
   Widget build(BuildContext context) {
+    final body = TabBarView(
+      controller: _tabController,
+      children: [
+        _buildVisitorGatePassTab(),
+        Builder(
+          builder: (context) {
+            _ensureSecurityReportsLoaded();
+            return Maintenance(
+              maintenanceType: MaintenanceReportType.security,
+              embedded: true,
+              headerTitle: 'Reporting',
+            );
+          },
+        ),
+        const _InfoPlaceholderTab(
+          title: 'Lost & Found',
+          description:
+              'Track reported lost items and security-found belongings in one place.',
+        ),
+      ],
+    );
+
+    if (context.isIOS) {
+      return CupertinoPageScaffold(
+        navigationBar: CupertinoNavigationBar(
+          middle: const Text('Security Center'),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(kToolbarHeight),
+            child: TabBar(
+              isScrollable: true,
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Gate'),
+                Tab(text: 'Reporting'),
+                Tab(text: 'Lost & Found'),
+              ],
+            ),
+          ),
+        ),
+        child: SafeArea(child: body),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Security Center'),
@@ -465,27 +510,7 @@ class _SecurityCenterPageState extends State<SecurityCenterPage>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildVisitorGatePassTab(),
-          Builder(
-            builder: (context) {
-              _ensureSecurityReportsLoaded();
-              return Maintenance(
-                maintenanceType: MaintenanceReportType.security,
-                embedded: true,
-                headerTitle: 'Reporting',
-              );
-            },
-          ),
-          const _InfoPlaceholderTab(
-            title: 'Lost & Found',
-            description:
-                'Track reported lost items and security-found belongings in one place.',
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 
@@ -576,7 +601,7 @@ class _SecurityCenterPageState extends State<SecurityCenterPage>
                         ? const SizedBox(
                             width: 14,
                             height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                           )
                         : const Icon(Icons.qr_code_2),
                     label: const Text('Generate Gate Pass'),

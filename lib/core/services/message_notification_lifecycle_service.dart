@@ -58,8 +58,6 @@ class MessageNotificationLifecycleService {
             AndroidFlutterLocalNotificationsPlugin
           >()
           ?.requestNotificationsPermission();
-    } else {
-      await _browserBridge.requestPermissionIfNeeded();
     }
   }
 

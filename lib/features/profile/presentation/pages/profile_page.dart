@@ -1,5 +1,7 @@
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -11,6 +13,7 @@ import '../../../../core/services/message_notification_lifecycle_service.dart';
 import '../../../../core/config/Enums.dart';
 import '../../../../core/constants/Constants.dart';
 import '../../../../core/services/PolicyDialog.dart';
+import '../../../../core/services/browser_notification_bridge.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../auth/presentation/pages/otp_screen.dart';
@@ -149,15 +152,8 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (context, authState) {
         if (authState is Authenticated) {
           _initializeControllers(authState);
-          return Scaffold(
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              title: Text(
-                context.loc.profile,
-                style: GoogleFonts.plusJakartaSans(),
-              ),
-            ),
-            body: SingleChildScrollView(
+
+          final body = SingleChildScrollView(
               child: Container(
                 color: HexColor("#f9f9f9"),
                 child: Column(
@@ -172,10 +168,39 @@ class _ProfilePageState extends State<ProfilePage> {
                   ],
                 ),
               ),
+            );
+
+          if (context.isIOS) {
+            return CupertinoPageScaffold(
+              backgroundColor: HexColor("#f9f9f9"),
+              navigationBar: CupertinoNavigationBar(
+                backgroundColor: Colors.white,
+                middle: Text(
+                  context.loc.profile,
+                  style: GoogleFonts.plusJakartaSans(),
+                ),
+              ),
+              child: SafeArea(
+                child: Material(
+                  color: Colors.transparent,
+                  child: body,
+                ),
+              ),
+            );
+          }
+
+          return Scaffold(
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              title: Text(
+                context.loc.profile,
+                style: GoogleFonts.plusJakartaSans(),
+              ),
             ),
+            body: body,
           );
         }
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        return const Scaffold(body: Center(child: CircularProgressIndicator.adaptive()));
       },
     );
   }
@@ -243,6 +268,7 @@ class _ProfilePageState extends State<ProfilePage> {
     ];
     return Column(
       children: [
+        _buildWebNotificationStatus(context, authState),
         _buildSectionGroup(
           context,
           authState,
@@ -268,6 +294,96 @@ class _ProfilePageState extends State<ProfilePage> {
           section: ProfileSection.support,
         ),
       ],
+    );
+  }
+
+  Widget _buildWebNotificationStatus(BuildContext context, Authenticated state) {
+    if (!kIsWeb) return const SizedBox.shrink();
+
+    final bridge = createBrowserNotificationBridge();
+    final permission = bridge.getPermissionStatus();
+    final isStandalone = bridge.isStandalone();
+    final isApple = bridge.isAppleWeb();
+
+    Color statusColor = Colors.orange;
+    String statusText = 'Notifications not configured';
+    String? tip;
+
+    if (permission == 'granted') {
+      if (isApple && !isStandalone) {
+        statusColor = Colors.orange;
+        statusText = 'Notifications enabled (but limited)';
+        tip = 'Add to Home Screen to receive notifications while app is closed.';
+      } else {
+        statusColor = Colors.green;
+        statusText = 'Notifications enabled';
+      }
+    } else if (permission == 'denied') {
+      statusColor = Colors.red;
+      statusText = 'Notifications blocked';
+      tip = 'Please enable notifications in your browser settings.';
+    } else if (permission == 'default') {
+      statusText = 'Notifications not requested';
+      tip = 'Tap "Apply" in Edit Profile or visit the welcome screen to enable.';
+    } else if (permission == 'unsupported') {
+      statusColor = Colors.grey;
+      statusText = 'Notifications not supported';
+      if (isApple && !isStandalone) {
+        statusColor = Colors.orange;
+        statusText = 'Action Required';
+        tip = 'Tap "Share" -> "Add to Home Screen" to enable background notifications on iOS/iPadOS.';
+      } else {
+        tip = 'Your browser does not support web notifications.';
+      }
+    }
+
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.8,
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: statusColor.withAlpha(100)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.notifications_none, color: statusColor, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Web Notification Status',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            statusText,
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              color: statusColor,
+            ),
+          ),
+          if (tip != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              tip,
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w400,
+                fontSize: 11,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -432,7 +548,7 @@ class _ProfilePageState extends State<ProfilePage> {
     if (_isNotificationSettingsLoading) {
       return const Padding(
         padding: EdgeInsets.all(16.0),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: CircularProgressIndicator.adaptive()),
       );
     }
 

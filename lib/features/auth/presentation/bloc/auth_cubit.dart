@@ -1018,20 +1018,43 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   void getSuggestions(TextEditingController controller) {
-    if (controller.text.isEmpty) {
+    final query = controller.text.trim().toLowerCase();
+    if (query.isEmpty) {
       compoundSuggestions = [];
     } else {
-      compoundSuggestions = state.categories.where((category) {
-        return category.name
-            .toLowerCase()
-            .contains(controller.text.toLowerCase());
-      }).toList();
+      compoundSuggestions = state.categories.map((category) {
+        // Check if category name matches
+        final categoryNameMatches = category.name.toLowerCase().contains(query);
+
+        // Filter compounds that match
+        final matchingCompounds = category.compounds.where((compound) {
+          return compound.name.toLowerCase().contains(query) ||
+              (compound.developer?.toLowerCase().contains(query) ?? false);
+        }).toList();
+
+        if (categoryNameMatches) {
+          // If category matches, show all its compounds
+          return category;
+        } else if (matchingCompounds.isNotEmpty) {
+          // If only specific compounds match, return category with only those compounds
+          return Category(
+            id: category.id,
+            name: category.name,
+            compounds: matchingCompounds,
+          );
+        }
+        return null;
+      }).whereType<Category>().toList();
     }
     if (state is Authenticated) {
-      emit((state as Authenticated).copyWith());
+      emit((state as Authenticated)
+          .copyWith(timestamp: DateTime.now().millisecondsSinceEpoch));
     } else {
       emit(AuthInitial(
-          categories: state.categories, compoundsLogos: state.compoundsLogos));
+        categories: state.categories,
+        compoundsLogos: state.compoundsLogos,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+      ));
     }
   }
 

@@ -34,7 +34,7 @@ class AdminDashboard extends StatelessWidget {
         child: BlocBuilder<AuthCubit, AuthState>(
           builder: (context, authState) {
             if (authState is! Authenticated) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: CircularProgressIndicator.adaptive());
             }
             final compoundId = authState.selectedCompoundId;
             if (compoundId == null) {

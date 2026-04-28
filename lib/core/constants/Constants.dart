@@ -164,7 +164,7 @@ class _DriveImageMessageState extends State<DriveImageMessage> {
       future: _downloadFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator.adaptive());
         }
         if (!snapshot.hasData || snapshot.data == null) {
           return const Center(child: Icon(Icons.error, color: Colors.red));

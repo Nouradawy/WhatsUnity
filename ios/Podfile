@@ -50,7 +50,7 @@ post_install do |installer|
 
         # Enable Photos
         'PERMISSION_PHOTOS=1',
-
+        'PERMISSION_NOTIFICATIONS=1',
         # Enable Media Library
         'PERMISSION_MEDIA_LIBRARY=1',
 
