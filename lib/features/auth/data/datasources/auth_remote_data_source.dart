@@ -228,8 +228,14 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
     if (kIsWeb) {
       final base = _webOAuthReturnBaseUri();
-      success ??= base.toString();
-      failure ??= base.replace(
+
+      // Ensure we point specifically to the auth.html file
+      final String baseUrlString = base.toString();
+      final String separator = baseUrlString.endsWith('/') ? '' : '/';
+      final authUrl = '$baseUrlString${separator}auth.html';
+
+      success ??= authUrl;
+      failure ??= Uri.parse(authUrl).replace(
         queryParameters: const {'appwrite_oauth': 'google_failure'},
       ).toString();
     }

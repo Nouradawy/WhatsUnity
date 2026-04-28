@@ -29,7 +29,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   String? _lastMentionContextKey;
   int? _lastBottomNavIndex;
-
+  late final MentionNotificationCubit _mentionCubit;
   /// Prevents the shell from rebuilding on every [Authenticated] emit (e.g. [timestamp]
   /// bumps and realtime [copyWith] churn), which otherwise re-runs [_syncMentionNotifications]
   /// and can make the UI feel like it is stuck flickering / looping.
@@ -59,6 +59,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _mentionCubit = context.read<MentionNotificationCubit>();
     WidgetsBinding.instance.addObserver(this);
     AppServices.messageNotificationLifecycleService.initialize();
   }
@@ -133,7 +134,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    context.read<MentionNotificationCubit>().stop();
+    _mentionCubit.stop();
     AppServices.messageNotificationLifecycleService.stop();
     unawaited(AppServices.pushTargetRegistrationService.stop());
     super.dispose();
