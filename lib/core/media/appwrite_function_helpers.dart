@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/enums.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:WhatsUnity/core/config/runtime_env.dart';
 
 import 'media_upload_exception.dart';
 
@@ -24,7 +24,8 @@ Future<Map<String, dynamic>> invokeAppwriteFunctionJson({
       throw MediaUploadException(
         'Appwrite function not found (id=$functionId). '
         'Use the function \$id from the console, not its name. '
-        'Set APPWRITE_FUNCTION_GET_R2_SIGNED_URL / APPWRITE_FUNCTION_CREATE_GUMLET_ASSET in .env.',
+        'Set APPWRITE_FUNCTION_GET_R2_SIGNED_URL / APPWRITE_FUNCTION_CREATE_GUMLET_ASSET '
+        'via --dart-define-from-file (or individual --dart-define).',
         e,
       );
     }
@@ -106,9 +107,9 @@ Map<String, dynamic> _parseExecutionResponse(dynamic execution) {
   return Map<String, dynamic>.from(decoded);
 }
 
-/// Resolve function **$id** from [.env] or [defaultId] (must be the Appwrite function document id).
+/// Resolve function **$id** from a compile-time define or [defaultId] (must be the Appwrite function document id).
 String resolveFunctionId(String envKey, String defaultId) {
-  final v = dotenv.env[envKey];
+  final v = RuntimeEnv.functionOverrideForEnvKey(envKey);
   if (v != null && v.isNotEmpty) return v.trim();
   return defaultId;
 }

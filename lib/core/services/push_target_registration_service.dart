@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:WhatsUnity/core/config/appwrite.dart';
+import 'package:WhatsUnity/core/config/runtime_env.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:appwrite/appwrite.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Registers/updates Appwrite Messaging push targets for the signed-in user.
@@ -71,13 +71,16 @@ class PushTargetRegistrationService {
       }
 
       if (kIsWeb) {
-        final apiKey = dotenv.env['FIREBASE_WEB_API_KEY'];
-        final appId = dotenv.env['FIREBASE_WEB_APP_ID'];
-        final projectId = dotenv.env['FIREBASE_WEB_PROJECT_ID'];
-        final messagingSenderId = dotenv.env['FIREBASE_WEB_MESSAGING_SENDER_ID'];
+        final apiKey = RuntimeEnv.firebaseWebApiKey;
+        final appId = RuntimeEnv.firebaseWebAppId;
+        final projectId = RuntimeEnv.firebaseWebProjectId;
+        final messagingSenderId = RuntimeEnv.firebaseWebMessagingSenderId;
         if ([apiKey, appId, projectId, messagingSenderId].any((v) => v == null || v.isEmpty)) {
           debugPrint(
-            'PushTargetRegistrationService: missing web Firebase env, skip web token registration.',
+            'PushTargetRegistrationService: missing web Firebase compile-time '
+            'defines (FIREBASE_WEB_*). Run with --dart-define-from-file=.env, e.g. '
+            'flutter run -d chrome --dart-define-from-file=.env. '
+            'For the service worker, run: dart run tool/sync_firebase_web_push_env.dart',
           );
           _firebaseReady = false;
           return;
@@ -88,9 +91,9 @@ class PushTargetRegistrationService {
             appId: appId!,
             projectId: projectId!,
             messagingSenderId: messagingSenderId!,
-            authDomain: dotenv.env['FIREBASE_WEB_AUTH_DOMAIN'],
-            storageBucket: dotenv.env['FIREBASE_WEB_STORAGE_BUCKET'],
-            measurementId: dotenv.env['FIREBASE_WEB_MEASUREMENT_ID'],
+            authDomain: RuntimeEnv.firebaseWebAuthDomain,
+            storageBucket: RuntimeEnv.firebaseWebStorageBucket,
+            measurementId: RuntimeEnv.firebaseWebMeasurementId,
           ),
         );
       } else {
@@ -120,7 +123,7 @@ class PushTargetRegistrationService {
       if (settings.authorizationStatus == AuthorizationStatus.denied) {
         return null;
       }
-      final webVapidKey = dotenv.env['FIREBASE_WEB_VAPID_KEY'];
+      final webVapidKey = RuntimeEnv.firebaseWebVapidKey;
       final token = await messaging.getToken(vapidKey: kIsWeb ? webVapidKey : null);
       return token?.trim();
     } catch (e) {
@@ -140,7 +143,7 @@ class PushTargetRegistrationService {
 
     final targetIdKey = '$_kPushTargetIdKeyPrefix$userId';
     final savedTargetId = prefs.getString(targetIdKey);
-    final providerId = dotenv.env['APPWRITE_PUSH_PROVIDER_ID']?.trim();
+    final providerId = RuntimeEnv.appwritePushProviderId?.trim();
 
     try {
       if (savedTargetId != null && savedTargetId.isNotEmpty) {

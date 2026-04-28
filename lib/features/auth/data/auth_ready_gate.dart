@@ -44,6 +44,23 @@ class _AuthReadyGateState extends State<AuthReadyGate> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
+        if (snapshot.hasError) {
+          debugPrint(
+            'AuthReadyGate: presetBeforeSignin failed: ${snapshot.error}\n'
+            '${snapshot.stackTrace}',
+          );
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: SelectableText(
+                  'Startup failed:\n${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          );
+        }
         if (!_scheduledPermissionsWelcome) {
           _scheduledPermissionsWelcome = true;
           _maybeShowPermissionsWelcome();

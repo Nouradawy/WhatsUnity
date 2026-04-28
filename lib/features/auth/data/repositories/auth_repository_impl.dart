@@ -79,9 +79,17 @@ class AuthRepositoryImpl implements AuthRepository {
 
   /// Async session probe fired from the constructor so [AuthManager] and
   /// the cubit receive an event without needing to await construction.
+  ///
+  /// Errors must not escape as unhandled async errors (common on web when
+  /// Appwrite returns non-401 failures, CORS blocks, or the endpoint/project is wrong).
   Future<void> _checkExistingSession() async {
-    final user = await remoteDataSource.remote_getCurrentUser();
-    _notify(user);
+    try {
+      final user = await remoteDataSource.remote_getCurrentUser();
+      _notify(user);
+    } catch (e, st) {
+      debugPrint('AuthRepositoryImpl._checkExistingSession: $e\n$st');
+      _notify(null);
+    }
   }
 
   @override

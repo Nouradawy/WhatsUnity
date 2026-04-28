@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../../core/config/runtime_env.dart';
 import '../../../../core/config/Enums.dart';
 import '../../../../core/config/appwrite.dart';
 import '../../../../core/services/PresenceManager.dart';
@@ -22,7 +22,7 @@ import '../../../home/presentation/pages/main_screen.dart';
 ///   [Account.createSession] and would cause `user_invalid_token` here).
 ///
 /// Requires a whitelisted `APPWRITE_EMAIL_VERIFICATION_URL` (or
-/// `APPWRITE_OAUTH_SUCCESS`) in `.env` for the send step.
+/// `APPWRITE_OAUTH_SUCCESS`) at compile time ([RuntimeEnv]) for the send step.
 class OtpScreen extends StatefulWidget {
   const OtpScreen({super.key, this.email, this.isProfile});
 
@@ -128,9 +128,9 @@ class _OtpScreenState extends State<OtpScreen> {
 
   /// Whitelisted platform URL for [Account.createEmailVerification] (not optional).
   String? get _emailVerificationRedirectUrl {
-    final direct = dotenv.env['APPWRITE_EMAIL_VERIFICATION_URL']?.trim();
+    final direct = RuntimeEnv.appwriteEmailVerificationUrl?.trim();
     if (direct != null && direct.isNotEmpty) return direct;
-    final oauth = dotenv.env['APPWRITE_OAUTH_SUCCESS']?.trim();
+    final oauth = RuntimeEnv.appwriteOauthSuccess?.trim();
     if (oauth != null && oauth.isNotEmpty) return oauth;
     return null;
   }
@@ -229,9 +229,10 @@ class _OtpScreenState extends State<OtpScreen> {
     final url = _emailVerificationRedirectUrl;
     if (url == null) {
       throw StateError(
-        'Set APPWRITE_EMAIL_VERIFICATION_URL (or APPWRITE_OAUTH_SUCCESS) in .env '
-        'to a URL allowed under your project platforms, e.g. your app custom '
-        'scheme for deep link (myapp://verify) or an https app link.',
+        'Set APPWRITE_EMAIL_VERIFICATION_URL (or APPWRITE_OAUTH_SUCCESS) at build time '
+        '(e.g. flutter run --dart-define-from-file=.env) to a URL allowed under your '
+        'project platforms, e.g. your app custom scheme for deep link (myapp://verify) '
+        'or an https app link.',
       );
     }
     await appwriteAccount.createEmailVerification(url: url);

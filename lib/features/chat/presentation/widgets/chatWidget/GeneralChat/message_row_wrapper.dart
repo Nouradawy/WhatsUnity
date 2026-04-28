@@ -86,6 +86,15 @@ class MessageRowWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: avatarVersionListenable,
+      builder: (context, _, __) => _rowBody(context),
+    );
+  }
+
+  /// Rebuilt only when [avatarVersionListenable] ticks for this row's author,
+  /// so resolving one user's avatar does not rebuild every message in chat.
+  Widget _rowBody(BuildContext context) {
     final user = userCache[message.authorId];
     // 👇 THIS IS THE CORRECTED LINE
     final userNameString = user?.name ?? '...';
@@ -527,64 +536,58 @@ class MessageRowWrapper extends StatelessWidget {
       return trimmed;
     }
 
+    final authState = context.read<AuthCubit>().state;
+    final member = authState is Authenticated
+        ? authState.chatMembers
+            .where((chatMember) => chatMember.id.trim() == messageAuthorId)
+            .firstOrNull
+        : null;
+    final resolvedUserAvatarUrl = normalizeAvatarUrl(
+      userCache[messageAuthorId]?.imageSource,
+    );
+    final memberAvatarUrl = normalizeAvatarUrl(member?.avatarUrl);
+    final avatarUrl = resolvedUserAvatarUrl ?? memberAvatarUrl;
+    final cachedAvatarImageProvider =
+        avatarImageProviderByUserId[messageAuthorId];
+    final shouldShowAvatarForRow = !isPreviousMessageFromSameUser;
+    final hasAvatar =
+        cachedAvatarImageProvider != null || avatarUrl != null;
+
     final List<Widget> messageBody = [
       messageContent,
-      ValueListenableBuilder<int>(
-        valueListenable: avatarVersionListenable,
-        builder: (context, _, __) {
-          final authState = context.read<AuthCubit>().state;
-          final member = authState is Authenticated
-              ? authState.chatMembers
-                  .where((chatMember) => chatMember.id.trim() == messageAuthorId)
-                  .firstOrNull
-              : null;
-          final resolvedUserAvatarUrl = normalizeAvatarUrl(
-            userCache[messageAuthorId]?.imageSource,
-          );
-          final memberAvatarUrl = normalizeAvatarUrl(member?.avatarUrl);
-          final avatarUrl = resolvedUserAvatarUrl ?? memberAvatarUrl;
-          final cachedAvatarImageProvider =
-              avatarImageProviderByUserId[messageAuthorId];
-          final shouldShowAvatarForRow = !isPreviousMessageFromSameUser;
-          final hasAvatar =
-              cachedAvatarImageProvider != null || avatarUrl != null;
-
-          return InkResponse(
-            onTapDown: (_) {
-              debugPrint(userRole.toString());
-              _showUserPopup(context, message.authorId);
-            },
-            child: !shouldShowAvatarForRow
-                ? const SizedBox(width: 32, height: 32)
-                : (hasAvatar
-                    ? CircleAvatar(
-                        radius: 16,
-                        backgroundColor: Colors.transparent,
-                        child: ClipOval(
-                          child: SizedBox(
-                            width: 32,
-                            height: 32,
-                            child: cachedAvatarImageProvider != null
-                                ? Image(
-                                    image: cachedAvatarImageProvider,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
-                                        Avatar(userId: message.authorId),
-                                  )
-                                : CachedNetworkImage(
-                                    imageUrl: avatarUrl!,
-                                    fit: BoxFit.cover,
-                                    errorWidget: (_, __, ___) =>
-                                        Avatar(userId: message.authorId),
-                                  ),
-                          ),
-                        ),
-                      )
-                    : Avatar(userId: message.authorId)),
-          );
+      InkResponse(
+        onTapDown: (_) {
+          debugPrint(userRole.toString());
+          _showUserPopup(context, message.authorId);
         },
+        child: !shouldShowAvatarForRow
+            ? const SizedBox(width: 32, height: 32)
+            : (hasAvatar
+                ? CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Colors.transparent,
+                    child: ClipOval(
+                      child: SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: cachedAvatarImageProvider != null
+                            ? Image(
+                                image: cachedAvatarImageProvider,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    Avatar(userId: message.authorId),
+                              )
+                            : CachedNetworkImage(
+                                imageUrl: avatarUrl!,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) =>
+                                    Avatar(userId: message.authorId),
+                              ),
+                      ),
+                    ),
+                  )
+                : Avatar(userId: message.authorId)),
       ),
-
     ];
 
     return VisibilityDetector(

@@ -95,7 +95,6 @@ dependencies:
       url: https://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@github.com/Nouradawy/super_app.git
       ref: flutter_polls
   url_launcher: ^6.3.2
-  flutter_dotenv: ^6.0.0
   connectivity_plus: ^6.1.4
   qr_flutter: ^4.1.0
   share_plus: ^11.1.0
@@ -149,7 +148,6 @@ flutter:
     - assets/Svg/
     - assets/Privacy and policy/
     - assets/compoundsLogo/
-    - .env
   #   - images/a_dot_ham.jpeg
 
   # To add assets to your application, add an assets section, like this:

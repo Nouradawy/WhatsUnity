@@ -43,6 +43,10 @@ class SignUp extends StatelessWidget {
                 builder: (context) => PresenceManager(child: MainScreen()),
               ),
             );
+          }).catchError((Object e, StackTrace st) {
+            debugPrint(
+              'SignUp: presetBeforeSignin after Authenticated failed: $e\n$st',
+            );
           });
         }
         if (state is SignUpSuccess) {
@@ -62,6 +66,11 @@ class SignUp extends StatelessWidget {
               MaterialPageRoute(
                 builder: (context) => PresenceManager(child: MainScreen()),
               ),
+            );
+          }).catchError((Object e, StackTrace st) {
+            debugPrint(
+              'SignUp: presetBeforeSignin after RegistrationSuccess failed: '
+              '$e\n$st',
             );
           });
         }

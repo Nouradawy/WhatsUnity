@@ -1,5 +1,6 @@
 import 'package:appwrite/appwrite.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'runtime_env.dart';
 
 /// Appwrite client singletons — initialised in [main] before [runApp].
 ///
@@ -23,13 +24,14 @@ late final Realtime appwriteRealtime;
 late final Functions appwriteFunctions;
 
 /// The Appwrite database that holds all collections (profiles, user_roles, …).
-/// Read from APPWRITE_DATABASE_ID in .env.
+/// Read from compile-time `APPWRITE_DATABASE_ID` (see [RuntimeEnv]).
 late final String appwriteDatabaseId;
 
 Future<void> initAppwrite() async {
-  final endpoint = dotenv.env['APPWRITE_ENDPOINT'] ?? 'https://cloud.appwrite.io/v1';
-  final projectId = dotenv.env['APPWRITE_PROJECT_ID']!;
-  appwriteDatabaseId = dotenv.env['APPWRITE_DATABASE_ID']!;
+  final endpoint =
+      RuntimeEnv.appwriteEndpoint ?? 'https://cloud.appwrite.io/v1';
+  final projectId = RuntimeEnv.appwriteProjectId;
+  appwriteDatabaseId = RuntimeEnv.appwriteDatabaseId;
 
   appwriteClient = Client()
       .setEndpoint(endpoint)

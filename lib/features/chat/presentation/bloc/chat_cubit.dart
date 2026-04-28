@@ -60,6 +60,51 @@ class ChatCubit extends Cubit<ChatState> {
   String? channelId;
   bool isBrainStorming = false;
 
+  /// Skips redundant [ChatMessagesLoaded] emits: [ChatMessagesLoaded.props] omits the
+  /// message list and [copyWith] always bumps [_version], so every emit was treated as
+  /// a full state change and rebuilt [Chat] / [ChatAnimatedList] even when nothing
+  /// changed (e.g. remote sync re-delivering the same page).
+  int? _lastEmittedLoadedSignature;
+
+  static int _messagePayloadHash(types.Message m) {
+    if (m is types.TextMessage) {
+      return Object.hash(m.text, m.metadata);
+    }
+    if (m is types.ImageMessage) {
+      return Object.hash(m.source, m.size, m.metadata);
+    }
+    if (m is types.FileMessage) {
+      return Object.hash(m.source, m.name, m.size, m.metadata);
+    }
+    if (m is types.AudioMessage) {
+      return Object.hash(m.source, m.size, m.duration, m.metadata);
+    }
+    return 0;
+  }
+
+  static int _fingerprintMessageList(List<types.Message> list) {
+    var h = list.length;
+    for (final m in list) {
+      h = Object.hash(
+        h,
+        m.id,
+        m.createdAt?.millisecondsSinceEpoch ?? 0,
+        _messagePayloadHash(m),
+      );
+    }
+    return h;
+  }
+
+  int _loadedShellSignature() {
+    return Object.hash(
+      _fingerprintMessageList(_messages),
+      _hasMore,
+      isChatInputEmpty,
+      isRecording,
+      isBrainStorming,
+    );
+  }
+
   static bool _connectivityLooksOnline(List<ConnectivityResult> results) {
     if (results.isEmpty) return false;
     return results.any(
@@ -87,6 +132,9 @@ class ChatCubit extends Cubit<ChatState> {
 
   void _emitChatMessagesLoadedIfReady() {
     if (state is! ChatMessagesLoaded) return;
+    final sig = _loadedShellSignature();
+    if (_lastEmittedLoadedSignature == sig) return;
+    _lastEmittedLoadedSignature = sig;
     final s = state as ChatMessagesLoaded;
     emit(
       s.copyWith(
@@ -102,7 +150,10 @@ class ChatCubit extends Cubit<ChatState> {
   void showHideMic(bool isEmpty) {
     isChatInputEmpty = isEmpty;
     if (state is ChatMessagesLoaded) {
-      emit((state as ChatMessagesLoaded).copyWith(isChatInputEmpty: isEmpty));
+      final s = state as ChatMessagesLoaded;
+      if (s.isChatInputEmpty == isEmpty) return;
+      emit(s.copyWith(isChatInputEmpty: isEmpty));
+      _lastEmittedLoadedSignature = _loadedShellSignature();
     } else {
       emit(ChatInputState(isEmpty));
     }
@@ -112,6 +163,7 @@ class ChatCubit extends Cubit<ChatState> {
     isRecording = !isRecording;
     if (state is ChatMessagesLoaded) {
       emit((state as ChatMessagesLoaded).copyWith(isRecording: isRecording));
+      _lastEmittedLoadedSignature = _loadedShellSignature();
     } else {
       emit(ChatRecordingState(isRecording));
     }
@@ -122,6 +174,7 @@ class ChatCubit extends Cubit<ChatState> {
     if (state is ChatMessagesLoaded) {
       final currentState = state as ChatMessagesLoaded;
       emit(currentState.copyWith(isBrainStorming: isBrainStorming));
+      _lastEmittedLoadedSignature = _loadedShellSignature();
     } else {
       emit(ChatBrainStormingState(isBrainStorming));
     }
@@ -132,6 +185,7 @@ class ChatCubit extends Cubit<ChatState> {
     _currentPage = 0;
     _messages = [];
     _hasMore = true;
+    _lastEmittedLoadedSignature = null;
     emit(ChatLoading());
     try {
       final pageRequested = _currentPage;
@@ -165,6 +219,7 @@ class ChatCubit extends Cubit<ChatState> {
           isRecording: isRecording,
         ),
       );
+      _lastEmittedLoadedSignature = _loadedShellSignature();
     } catch (e) {
       emit(ChatError(e.toString()));
     }

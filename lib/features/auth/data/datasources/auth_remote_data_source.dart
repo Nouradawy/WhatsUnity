@@ -29,9 +29,13 @@ abstract class AuthRemoteDataSource {
   /// Future resolves once the system deep-link redirect is received.
   ///
   /// **Platform setup required** (see MIGRATION_PLAN.md §4):
-  ///   • `.env` APPWRITE_OAUTH_SUCCESS and APPWRITE_OAUTH_FAILURE URL-scheme values
-  ///   • Android: intent-filter with the scheme in AndroidManifest.xml
-  ///   • iOS: CFBundleURLTypes entry in Info.plist
+  ///   • **Web:** Appwrite opens Google in another tab/window (`flutter_web_auth_2`);
+  ///     that is expected. Set `APPWRITE_OAUTH_SUCCESS` / `APPWRITE_OAUTH_FAILURE`
+  ///     to your deployed **https** URLs (must match Appwrite Auth → Platforms and
+  ///     Google OAuth redirect allowlists). If unset on web, the app uses the
+  ///     current page origin + path as return URLs.
+  ///   • **Android:** intent-filter with the URL scheme in AndroidManifest.xml
+  ///   • **iOS:** CFBundleURLTypes entry in Info.plist
   Future<AppUser?> remote_signInWithGoogle();
 
   /// Creates an Appwrite account and an email session. Provisioning prefs for
@@ -80,12 +84,20 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   static const String _kDefaultNativeGoogleBridgeFunctionId =
       'google_native_signin_bridge';
 
-  /// Deep-link URLs used by [signInWithGoogle].
-  /// Falls back to Appwrite's built-in callback when null.
+  /// Deep-link URLs used by [signInWithGoogle] (non-web and optional overrides on web).
+  /// On web, when null, [remote_signInWithGoogle] uses [Uri.base] without query/fragment.
   final String? oauthSuccessUrl;
   final String? oauthFailureUrl;
 
   bool get _isAndroid => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  /// OAuth return base for web: current location without query or fragment so Appwrite
+  /// can redirect back with `userId` / `secret` query params on success.
+  Uri _webOAuthReturnBaseUri() {
+    final b = Uri.base;
+    final path = b.path.isEmpty ? '/' : b.path;
+    return b.replace(path: path, query: '', fragment: '');
+  }
 
   // ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -132,7 +144,8 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     final serverClientId = _googleServerClientId?.trim();
     if (serverClientId == null || serverClientId.isEmpty) {
       throw Exception(
-        'Missing GOOGLE_SERVER_CLIENT_ID in .env. '
+        'Missing GOOGLE_SERVER_CLIENT_ID at build time '
+        '(e.g. --dart-define-from-file=.env). '
         'Use your Google Cloud "Web application" client ID.',
       );
     }
@@ -208,10 +221,23 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       return _remote_signInWithGoogleAndroidNative();
     }
 
+    String? success = oauthSuccessUrl?.trim();
+    if (success != null && success.isEmpty) success = null;
+    String? failure = oauthFailureUrl?.trim();
+    if (failure != null && failure.isEmpty) failure = null;
+
+    if (kIsWeb) {
+      final base = _webOAuthReturnBaseUri();
+      success ??= base.toString();
+      failure ??= base.replace(
+        queryParameters: const {'appwrite_oauth': 'google_failure'},
+      ).toString();
+    }
+
     await _account.createOAuth2Session(
       provider: OAuthProvider.google,
-      success: oauthSuccessUrl,
-      failure: oauthFailureUrl,
+      success: success,
+      failure: failure,
     );
     return await remote_getCurrentUser();
   }

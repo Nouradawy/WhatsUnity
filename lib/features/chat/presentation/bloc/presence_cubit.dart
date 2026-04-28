@@ -14,14 +14,40 @@ class PresenceCubit extends Cubit<PresenceState> {
   RealtimeSubscription? _presenceSubscription;
   String? _currentUserId;
   String? _currentCompoundId;
+  int? _lastEmittedPresenceFingerprint;
 
   static const String _kPresenceTableId = 'presence_sessions';
+
+  int _fingerprintPresenceRows(List<SinglePresenceState> list) {
+    var h = list.length;
+    final parts = <String>[];
+    for (final s in list) {
+      for (final p in s.presences) {
+        final pl = p.payload;
+        parts.add(
+          '${pl['user_id']}|${pl['status']}|${pl['last_seen_at']}',
+        );
+      }
+    }
+    parts.sort();
+    for (final part in parts) {
+      h = Object.hash(h, part);
+    }
+    return h;
+  }
+
+  void _emitPresenceIfChanged(List<SinglePresenceState> next) {
+    final fp = _fingerprintPresenceRows(next);
+    if (_lastEmittedPresenceFingerprint == fp) return;
+    _lastEmittedPresenceFingerprint = fp;
+    emit(PresenceUpdated(next));
+  }
 
   Future<void> _refreshPresenceRows() async {
     final compoundId = _currentCompoundId;
     if (compoundId == null || compoundId.isEmpty) {
       currentPresence = [];
-      emit(PresenceUpdated(currentPresence));
+      _emitPresenceIfChanged(currentPresence);
       return;
     }
     try {
@@ -43,7 +69,7 @@ class PresenceCubit extends Cubit<PresenceState> {
         };
         return SinglePresenceState([PresencePayloadEntry(payload)]);
       }).toList();
-      emit(PresenceUpdated(currentPresence));
+      _emitPresenceIfChanged(currentPresence);
     } catch (_) {
       // Presence is non-critical; keep UX graceful on transient failures.
     }
@@ -115,7 +141,8 @@ class PresenceCubit extends Cubit<PresenceState> {
 
   void disconnectPresence() {
     currentPresence = [];
-    emit(PresenceUpdated(currentPresence));
+    _lastEmittedPresenceFingerprint = null;
+    _emitPresenceIfChanged(currentPresence);
     _presenceSubscription?.close();
     _presenceSubscription = null;
     _currentUserId = null;

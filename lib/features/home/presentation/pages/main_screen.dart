@@ -28,6 +28,32 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   String? _lastMentionContextKey;
   int? _lastBottomNavIndex;
 
+  /// Prevents the shell from rebuilding on every [Authenticated] emit (e.g. [timestamp]
+  /// bumps and realtime [copyWith] churn), which otherwise re-runs [_syncMentionNotifications]
+  /// and can make the UI feel like it is stuck flickering / looping.
+  bool _shouldRebuildMainScreenForAuth(AuthState prev, AuthState curr) {
+    if (prev.runtimeType != curr.runtimeType) return true;
+    if (prev is! Authenticated || curr is! Authenticated) {
+      return prev != curr;
+    }
+    final p = prev;
+    final c = curr;
+    if (p.user.id != c.user.id ||
+        p.selectedCompoundId != c.selectedCompoundId ||
+        p.role != c.role ||
+        p.enabledMultiCompound != c.enabledMultiCompound) {
+      return true;
+    }
+    final pc = p.currentUser;
+    final cc = c.currentUser;
+    if ((pc?.id ?? '') != (cc?.id ?? '')) return true;
+    if ((pc?.building ?? '').trim() != (cc?.building ?? '').trim()) return true;
+    if ((pc?.displayName ?? '').trim() != (cc?.displayName ?? '').trim()) {
+      return true;
+    }
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -61,14 +87,28 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       return;
     }
 
+    // Stable identity only — do **not** include [Authenticated.timestamp]. That field
+    // updates on many emits (realtime refresh, copyWith, …) and would restart push +
+    // notification + mention subscriptions on almost every frame (very costly on web,
+    // especially mobile browsers).
     final contextKey =
-        '${authState.user.id}_${authState.selectedCompoundId}_${authState.currentUser?.building}_${authState.timestamp}';
+        '${authState.user.id}_${authState.selectedCompoundId}_${authState.currentUser?.building ?? ''}';
+    final isHomeTab = bottomNavIndex == 0;
     final isChatsTab = role != Roles.manager && bottomNavIndex == 1;
-    final shouldMarkSeen = isChatsTab && _lastBottomNavIndex != 1;
+    final shouldMarkGeneralSeen = isHomeTab && _lastBottomNavIndex != 0;
+    final shouldMarkBuildingSeen = isChatsTab && _lastBottomNavIndex != 1;
     final shouldStart = _lastMentionContextKey != contextKey;
 
     _lastMentionContextKey = contextKey;
     _lastBottomNavIndex = bottomNavIndex;
+
+    // Profile/role can load after the shell key is stable; without this,
+    // [MentionNotificationCubit] keeps an empty displayName for @mention matching.
+    mentionCubit.syncMentionDetectionFromAuth(authState);
+
+    if (!shouldStart && !shouldMarkGeneralSeen && !shouldMarkBuildingSeen) {
+      return;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -79,7 +119,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         );
         AppServices.pushTargetRegistrationService.startForAuthState(authState);
       }
-      if (shouldMarkSeen) {
+      if (shouldMarkGeneralSeen) {
+        mentionCubit.markGeneralMentionsAsSeen(authState);
+      }
+      if (shouldMarkBuildingSeen) {
         mentionCubit.markBuildingMentionsAsSeen(authState);
       }
     });
@@ -99,6 +142,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
 
     return BlocBuilder<AuthCubit, AuthState>(
+      buildWhen: _shouldRebuildMainScreenForAuth,
       builder: (context, authState) {
         return BlocBuilder<AppCubit, AppCubitStates>(
           // Only rebuild when something that affects the screens list or nav bar

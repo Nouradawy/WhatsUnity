@@ -7,6 +7,7 @@ import 'package:condition_builder/condition_builder.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 import 'package:flutter_chat_reactions/flutter_chat_reactions.dart';
@@ -168,7 +169,7 @@ class _GeneralChatState extends State<GeneralChat>
   final Set<String> _pendingUserResolutions = <String>{};
   final Map<String, ImageProvider<Object>> _avatarImageProviderByUserId = {};
   bool _avatarPrefetchScheduled = false;
-  final ValueNotifier<int> _avatarVersionNotifier = ValueNotifier<int>(0);
+  final Map<String, ValueNotifier<int>> _avatarVersionByUserId = {};
 
   /// Maps a placeholder message ID to its current upload progress (0.0–1.0).
   final Map<String, double> _uploadProgressByMessageId = {};
@@ -267,6 +268,27 @@ class _GeneralChatState extends State<GeneralChat>
     return trimmedUrl;
   }
 
+  static final ValueNotifier<int> _kEmptyAvatarVersion = ValueNotifier<int>(0);
+
+  ValueListenable<int> _avatarVersionListenableForUser(String userId) {
+    final id = userId.trim();
+    if (id.isEmpty) return _kEmptyAvatarVersion;
+    return _avatarVersionByUserId.putIfAbsent(
+      id,
+      () => ValueNotifier<int>(0),
+    );
+  }
+
+  void _bumpAvatarVersionForUser(String userId) {
+    final id = userId.trim();
+    if (id.isEmpty) return;
+    final n = _avatarVersionByUserId.putIfAbsent(
+      id,
+      () => ValueNotifier<int>(0),
+    );
+    n.value++;
+  }
+
   void _scheduleAvatarPrefetch(List<ChatMember> chatMembers) {
     if (_avatarPrefetchScheduled) return;
     _avatarPrefetchScheduled = true;
@@ -282,7 +304,6 @@ class _GeneralChatState extends State<GeneralChat>
       if (uncachedMembers.isEmpty) return;
 
       const int prefetchBatchSize = 6;
-      bool hasNewCachedAvatar = false;
       for (var start = 0; start < uncachedMembers.length; start += prefetchBatchSize) {
         final end = (start + prefetchBatchSize > uncachedMembers.length)
             ? uncachedMembers.length
@@ -298,16 +319,12 @@ class _GeneralChatState extends State<GeneralChat>
             try {
               await precacheImage(imageProvider, context);
               _avatarImageProviderByUserId[userId] = imageProvider;
-              hasNewCachedAvatar = true;
+              if (mounted) _bumpAvatarVersionForUser(userId);
             } catch (_) {
               // Ignore prefetch failures and keep the runtime fallback path.
             }
           }),
         );
-      }
-
-      if (mounted && hasNewCachedAvatar) {
-        _avatarVersionNotifier.value = _avatarVersionNotifier.value + 1;
       }
     });
   }
@@ -350,7 +367,10 @@ class _GeneralChatState extends State<GeneralChat>
     _mentionSuggestionsNotifier.dispose();
     _stickyHeaderDateNotifier.dispose();
     _stickyHeaderOpacityNotifier.dispose();
-    _avatarVersionNotifier.dispose();
+    for (final n in _avatarVersionByUserId.values) {
+      n.dispose();
+    }
+    _avatarVersionByUserId.clear();
     _scrollIdleTimer?.cancel();
     _typingIdleTimer?.cancel();
 
@@ -462,6 +482,10 @@ class _GeneralChatState extends State<GeneralChat>
 
     final merged = _sortedByCreatedAt([...dedupedServer, ...deviceOnlyMessages]);
 
+    if (_chatMessageListsEqual(merged, _chatController.messages)) {
+      return;
+    }
+
     try {
       final needsClearFirst = _wouldProduceContentChanges(merged);
       if (needsClearFirst) {
@@ -496,6 +520,14 @@ class _GeneralChatState extends State<GeneralChat>
   /// Returns `true` if calling [setMessages] with [newMessages] would produce
   /// a `change` diff operation (same ID, different content). These crash
   /// `flutter_chat_ui`'s `_onChanged` implementation.
+  bool _chatMessageListsEqual(List<types.Message> a, List<types.Message> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   bool _wouldProduceContentChanges(List<types.Message> newMessages) {
     final oldMap = <String, types.Message>{
       for (final m in _chatController.messages) m.id: m,
@@ -1141,14 +1173,13 @@ class _GeneralChatState extends State<GeneralChat>
         try {
           await precacheImage(imageProvider, context);
           _avatarImageProviderByUserId[normalizedUserId] = imageProvider;
-          _avatarVersionNotifier.value = _avatarVersionNotifier.value + 1;
         } catch (_) {
           // Keep runtime fallback path if pre-cache fails.
         }
       }
       if (mounted) {
-        setState(() => _userCache[normalizedUserId] = resolvedUser);
-        _avatarVersionNotifier.value = _avatarVersionNotifier.value + 1;
+        _userCache[normalizedUserId] = resolvedUser;
+        _bumpAvatarVersionForUser(normalizedUserId);
       }
     } catch (e) {
       debugPrint('Error resolving user $id: $e');
@@ -1393,6 +1424,48 @@ class _GeneralChatState extends State<GeneralChat>
     );
   }
 
+  /// Stable digest of member rows that affect chat chrome (names/avatars/roles in rows).
+  static int _chatMembersLayoutDigest(Authenticated a) {
+    var h = a.chatMembers.length;
+    for (final m in a.chatMembers) {
+      h = Object.hash(
+        h,
+        m.id,
+        m.displayName.trim(),
+        m.avatarUrl,
+        m.building.trim(),
+      );
+    }
+    return h;
+  }
+
+  /// Avoid rebuilding the entire [Chat] / message list on every [Authenticated.timestamp]
+  /// or unrelated [AuthCubit] tick — that was causing hundreds of [MessageRowWrapper]
+  /// rebuilds per second in DevTools.
+  static bool _shouldRebuildGeneralChatForAuth(AuthState prev, AuthState curr) {
+    if (prev.runtimeType != curr.runtimeType) return true;
+    if (prev is! Authenticated || curr is! Authenticated) {
+      return prev != curr;
+    }
+    final p = prev;
+    final c = curr;
+    if (p.user.id != c.user.id ||
+        p.selectedCompoundId != c.selectedCompoundId ||
+        p.role != c.role ||
+        p.enabledMultiCompound != c.enabledMultiCompound) {
+      return true;
+    }
+    final pc = p.currentUser;
+    final cc = c.currentUser;
+    if ((pc?.id ?? '') != (cc?.id ?? '')) return true;
+    if ((pc?.building ?? '').trim() != (cc?.building ?? '').trim()) return true;
+    if ((pc?.displayName ?? '').trim() != (cc?.displayName ?? '').trim()) {
+      return true;
+    }
+    if (_chatMembersLayoutDigest(p) != _chatMembersLayoutDigest(c)) return true;
+    return false;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Build
   // ─────────────────────────────────────────────────────────────────────────
@@ -1401,103 +1474,114 @@ class _GeneralChatState extends State<GeneralChat>
   Widget build(BuildContext context) {
     super.build(context); // required by AutomaticKeepAliveClientMixin
 
-    final authState = context.watch<AuthCubit>().state;
-
-    if (authState is! Authenticated) {
-      _raiseTeardownGuard();
-      return const SizedBox.shrink();
-    }
-
-    _tearingDown = false;
-
-    // ── Offstage awareness ──────────────────────────────────────────────────
-    // IndexedStack sets TickerMode to false for offstage children. We use this
-    // to (a) defer _initializeChat until the tab is first shown and (b) block
-    // the sync queue while offstage so no SliverAnimatedList mutations happen
-    // on a list whose render object may not be fully active.
-    final tickersEnabled = TickerMode.of(context);
-    final wasOffstage = _offstage;
-    _offstage = !tickersEnabled;
-
-    if (tickersEnabled && !_chatInitialized) {
-      _chatInitialized = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_disposed && !_tearingDown && mounted) {
-          _initializeChat();
+    return BlocBuilder<AuthCubit, AuthState>(
+      buildWhen: _shouldRebuildGeneralChatForAuth,
+      builder: (context, authState) {
+        if (authState is! Authenticated) {
+          _raiseTeardownGuard();
+          return const SizedBox.shrink();
         }
-      });
-    } else if (tickersEnabled && wasOffstage) {
-      // Returning from offstage → force-recreate the Chat widget.
-      //
-      // flutter_chat_ui's _ChatAnimatedListState._processOperationsQueue has
-      // no try/catch. If ANY insertItem/removeItem threw while offstage (or
-      // during a race), _oldList is permanently desynced from the
-      // SliverAnimatedList — every future operation crashes. A new UniqueKey
-      // makes Flutter unmount the old Chat and mount a fresh one whose _oldList
-      // is re-synced from _chatController.messages. This is the programmatic
-      // equivalent of the "open BrainStorming, close it" manual fix.
-      _chatSurfaceKey = UniqueKey();
 
-      // Also catch up with any messages that arrived while offstage.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_disposed || _tearingDown || !mounted || _offstage) return;
-        final cubitState = context.read<ChatCubit>().state;
-        if (cubitState is ChatMessagesLoaded) {
-          _enqueueSyncFromCubit(cubitState);
+        _tearingDown = false;
+
+        // ── Offstage awareness ──────────────────────────────────────────────
+        // IndexedStack sets TickerMode to false for offstage children. We use this
+        // to (a) defer _initializeChat until the tab is first shown and (b) block
+        // the sync queue while offstage so no SliverAnimatedList mutations happen
+        // on a list whose render object may not be fully active.
+        final tickersEnabled = TickerMode.of(context);
+        final wasOffstage = _offstage;
+        _offstage = !tickersEnabled;
+
+        if (tickersEnabled && !_chatInitialized) {
+          _chatInitialized = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!_disposed && !_tearingDown && mounted) {
+              _initializeChat();
+            }
+          });
+        } else if (tickersEnabled && wasOffstage) {
+          // Returning from offstage → force-recreate the Chat widget.
+          //
+          // flutter_chat_ui's _ChatAnimatedListState._processOperationsQueue has
+          // no try/catch. If ANY insertItem/removeItem threw while offstage (or
+          // during a race), _oldList is permanently desynced from the
+          // SliverAnimatedList — every future operation crashes. A new UniqueKey
+          // makes Flutter unmount the old Chat and mount a fresh one whose _oldList
+          // is re-synced from _chatController.messages. This is the programmatic
+          // equivalent of the "open BrainStorming, close it" manual fix.
+          _chatSurfaceKey = UniqueKey();
+
+          // Also catch up with any messages that arrived while offstage.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_disposed || _tearingDown || !mounted || _offstage) return;
+            final cubitState = context.read<ChatCubit>().state;
+            if (cubitState is ChatMessagesLoaded) {
+              _enqueueSyncFromCubit(cubitState);
+            }
+          });
         }
-      });
-    }
 
-    return BlocListener<ChatCubit, ChatState>(
-      listenWhen: (prev, curr) {
-        if (curr is! ChatMessagesLoaded) return false;
-        if (prev is! ChatMessagesLoaded) return true;
-        return !identical(prev.messages, curr.messages);
-      },
-      listener: (context, state) {
-        // Block sync while offstage — the SliverAnimatedList's render object
-        // may not be ready to process insert/remove operations.
-        if (_disposed || _tearingDown || !mounted || _offstage) return;
-        _enqueueSyncFromCubit(state as ChatMessagesLoaded);
-      },
-      child: BlocBuilder<ChatCubit, ChatState>(
-        // Only rebuild when the brainstorming mode toggles; message content
-        // changes are handled via the sync queue without triggering a rebuild.
-        buildWhen: (prev, curr) {
-          if (prev is ChatMessagesLoaded && curr is ChatMessagesLoaded) {
-            return prev.isBrainStorming != curr.isBrainStorming;
-          }
-          return prev.runtimeType != curr.runtimeType;
-        },
-        builder: (context, chatState) {
-          // Guard #1 (ChatCubit rebuild path): BlocBuilder<ChatCubit> has its
-          // own Flutter element and can be called by the framework independently
-          // of _GeneralChatState.build(). If auth is gone or we are disposed,
-          // never build Chat/ChatAnimatedList.
-          if (_tearingDown || _disposed) return const SizedBox.shrink();
-
-          final isBrainStorming = chatState is ChatMessagesLoaded
-              ? chatState.isBrainStorming
-              : context.read<ChatCubit>().isBrainStorming;
-
-          // BlocBuilder<SocialCubit> provides Guard #2: a *third* independent
-          // Flutter element with its own rebuild path. SocialCubit emits during
-          // sign-out (brainstorm state is cleared), which can schedule this
-          // builder AFTER _raiseTeardownGuard() has already raised _tearingDown
-          // but BEFORE Flutter deactivates the element. Without this guard that
-          // independent rebuild would reach _buildCurrentView and attempt to
-          // build SliverAnimatedList while _tearingDown is true — causing:
-          //   "child == null || indexOf(child) > index" assertion
-          //   Duplicate GlobalKey (stale Hero / VisibilityDetector keys)
-          return BlocBuilder<SocialCubit, SocialState>(
-            builder: (context, _) {
-              // Guard #2 (SocialCubit independent rebuild path).
-              if (_tearingDown || _disposed) return const SizedBox.shrink();
-              return _buildCurrentView(authState, isBrainStorming: isBrainStorming);
+        return BlocListener<ChatCubit, ChatState>(
+          listenWhen: (prev, curr) {
+            if (curr is! ChatMessagesLoaded) return false;
+            if (prev is! ChatMessagesLoaded) return true;
+            return !identical(prev.messages, curr.messages);
+          },
+          listener: (context, state) {
+            // Block sync while offstage — the SliverAnimatedList's render object
+            // may not be ready to process insert/remove operations.
+            if (_disposed || _tearingDown || !mounted || _offstage) return;
+            _enqueueSyncFromCubit(state as ChatMessagesLoaded);
+          },
+          child: BlocBuilder<ChatCubit, ChatState>(
+            // Only rebuild when the brainstorming mode toggles; message content
+            // changes are handled via the sync queue without triggering a rebuild.
+            buildWhen: (prev, curr) {
+              if (prev is ChatMessagesLoaded && curr is ChatMessagesLoaded) {
+                return prev.isBrainStorming != curr.isBrainStorming;
+              }
+              return prev.runtimeType != curr.runtimeType;
             },
-          );
-        },
-      ),
+            builder: (context, chatState) {
+              // Guard #1 (ChatCubit rebuild path): BlocBuilder<ChatCubit> has its
+              // own Flutter element and can be called by the framework independently
+              // of _GeneralChatState.build(). If auth is gone or we are disposed,
+              // never build Chat/ChatAnimatedList.
+              if (_tearingDown || _disposed) return const SizedBox.shrink();
+
+              final isBrainStorming = chatState is ChatMessagesLoaded
+                  ? chatState.isBrainStorming
+                  : context.read<ChatCubit>().isBrainStorming;
+
+              // BlocBuilder<SocialCubit> provides Guard #2: a *third* independent
+              // Flutter element with its own rebuild path. SocialCubit emits during
+              // sign-out (brainstorm state is cleared), which can schedule this
+              // builder AFTER _raiseTeardownGuard() has already raised _tearingDown
+              // but BEFORE Flutter deactivates the element. Without this guard that
+              // independent rebuild would reach _buildCurrentView and attempt to
+              // build SliverAnimatedList while _tearingDown is true — causing:
+              //   "child == null || indexOf(child) > index" assertion
+              //   Duplicate GlobalKey (stale Hero / VisibilityDetector keys)
+              return BlocBuilder<SocialCubit, SocialState>(
+                // Social feed / brainstorm emits must not rebuild this subtree: the
+                // builder only needs a stable shell while [ChatCubit] listener syncs
+                // messages. Rebuilding here recreated every [MessageRowWrapper] on
+                // each [PostsLoaded] / comment tick.
+                buildWhen: (previous, current) => false,
+                builder: (context, _) {
+                  // Guard #2 (SocialCubit independent rebuild path).
+                  if (_tearingDown || _disposed) return const SizedBox.shrink();
+                  return _buildCurrentView(
+                    authState,
+                    isBrainStorming: isBrainStorming,
+                  );
+                },
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -1831,7 +1915,7 @@ class _GeneralChatState extends State<GeneralChat>
           _chatController.messages[index - 1].authorId == message.authorId,
       userCache: _userCache,
       avatarImageProviderByUserId: _avatarImageProviderByUserId,
-      avatarVersionListenable: _avatarVersionNotifier,
+      avatarVersionListenable: _avatarVersionListenableForUser(message.authorId),
       resolveUser: _resolveUserById,
       onVisibilityForHeader: _onMessageVisibilityChanged,
       localMessages: _chatController.messages,

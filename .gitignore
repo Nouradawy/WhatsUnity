@@ -51,6 +51,12 @@ ios/Runner/GoogleService-Info.plist
 firebase.json
 android/app/google-service.json
 
+# Local env for --dart-define-from-file (never commit real values)
+.env
+
+# Generated for web FCM service worker (from .env via tool/sync_firebase_web_push_env.dart)
+web/firebase-web-push-env.js
+
 # Infrastructure secrets/state
 whatsunity-infra/terraform.tfvars
 whatsunity-infra/*.tfstate

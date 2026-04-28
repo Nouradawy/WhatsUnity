@@ -48,33 +48,42 @@ class AuthCubit extends Cubit<AuthState> {
   AuthCubit({required this.repository}) : super(AuthInitial()) {
     // Listen to the Appwrite-backed auth stream.
     // Emits AppUser? — non-null means signed in, null means signed out.
-    repository.onAuthStateChange.listen((appUser) {
-      if (appUser != null) {
-        _attachRealtimeUserObservers(appUser.id);
-        authSessionNonce = DateTime.now().microsecondsSinceEpoch;
-        if (state is Authenticated) {
-          // Preserve all loaded data (chatMembers, compounds, etc.);
-          // only refresh the user object itself.
-          emit((state as Authenticated).copyWith(user: appUser));
-        } else {
-          emit(Authenticated(
-            user: appUser,
-            enabledMultiCompound: enabledMultiCompound,
-            googleUser: googleUser,
-            categories: state.categories,
-            compoundsLogos: state.compoundsLogos,
-          ));
+    repository.onAuthStateChange.listen(
+      (appUser) {
+        try {
+          if (appUser != null) {
+            _attachRealtimeUserObservers(appUser.id);
+            authSessionNonce = DateTime.now().microsecondsSinceEpoch;
+            if (state is Authenticated) {
+              // Preserve all loaded data (chatMembers, compounds, etc.);
+              // only refresh the user object itself.
+              emit((state as Authenticated).copyWith(user: appUser));
+            } else {
+              emit(Authenticated(
+                user: appUser,
+                enabledMultiCompound: enabledMultiCompound,
+                googleUser: googleUser,
+                categories: state.categories,
+                compoundsLogos: state.compoundsLogos,
+              ));
+            }
+          } else {
+            _detachRealtimeUserObservers();
+            authSessionNonce = DateTime.now().microsecondsSinceEpoch;
+            signInToggler = true;
+            emit(Unauthenticated(
+              categories: state.categories,
+              compoundsLogos: state.compoundsLogos,
+            ));
+          }
+        } catch (e, st) {
+          debugPrint('[AuthCubit] onAuthStateChange handler failed: $e\n$st');
         }
-      } else {
-        _detachRealtimeUserObservers();
-        authSessionNonce = DateTime.now().microsecondsSinceEpoch;
-        signInToggler = true;
-        emit(Unauthenticated(
-          categories: state.categories,
-          compoundsLogos: state.compoundsLogos,
-        ));
-      }
-    });
+      },
+      onError: (Object e, StackTrace st) {
+        debugPrint('[AuthCubit] onAuthStateChange stream error: $e\n$st');
+      },
+    );
   }
 
   bool enabledMultiCompound = false;
@@ -214,10 +223,10 @@ class AuthCubit extends Cubit<AuthState> {
           timestamp: DateTime.now().microsecondsSinceEpoch,
         ));
       }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[AuthCubit] _refreshAuthenticatedStateFromRemote failed: $e');
-      }
+    } catch (e, st) {
+      debugPrint(
+        '[AuthCubit] _refreshAuthenticatedStateFromRemote failed: $e\n$st',
+      );
     } finally {
       _refreshFromRealtimeInProgress = false;
     }
@@ -232,41 +241,67 @@ class AuthCubit extends Cubit<AuthState> {
     _detachRealtimeUserObservers();
     _realtimeObservedUserId = userId;
 
-    final profileChannels = <String>[
-      'databases.$appwriteDatabaseId.collections.profiles.documents.$userId',
-    ];
-    _profilesRealtimeSubscription = appwriteRealtime.subscribe(profileChannels);
-    _profilesRealtimeSubscription!.stream.listen((_) {
-      _refreshAuthenticatedStateFromRemote();
-    });
+    try {
+      final profileChannels = <String>[
+        'databases.$appwriteDatabaseId.collections.profiles.documents.$userId',
+      ];
+      _profilesRealtimeSubscription =
+          appwriteRealtime.subscribe(profileChannels);
+      _profilesRealtimeSubscription!.stream.listen(
+        (_) {
+          unawaited(_refreshAuthenticatedStateFromRemote());
+        },
+        onError: (Object e, StackTrace st) {
+          debugPrint('[AuthCubit] profiles realtime stream error: $e\n$st');
+        },
+      );
 
-    final userRoleChannels = <String>[
-      'databases.$appwriteDatabaseId.collections.user_roles.documents',
-      'databases.$appwriteDatabaseId.tables.user_roles.rows',
-    ];
-    _userRolesRealtimeSubscription = appwriteRealtime.subscribe(userRoleChannels);
-    _userRolesRealtimeSubscription!.stream.listen((message) {
-      final payload = Map<String, dynamic>.from(message.payload);
-      final eventUserId = (payload['user_id'] ?? payload[r'$id'] ?? '')
-          .toString()
-          .trim();
-      if (eventUserId != userId) return;
+      final userRoleChannels = <String>[
+        'databases.$appwriteDatabaseId.collections.user_roles.documents',
+        'databases.$appwriteDatabaseId.tables.user_roles.rows',
+      ];
+      _userRolesRealtimeSubscription =
+          appwriteRealtime.subscribe(userRoleChannels);
+      _userRolesRealtimeSubscription!.stream.listen(
+        (message) {
+          try {
+            final payload = Map<String, dynamic>.from(message.payload);
+            final eventUserId = (payload['user_id'] ?? payload[r'$id'] ?? '')
+                .toString()
+                .trim();
+            if (eventUserId != userId) return;
 
-      final roleFromPayload = _resolveRoleFromRoleId(payload['role_id']);
-      if (roleFromPayload != null && state is Authenticated) {
-        final currentState = state as Authenticated;
-        unawaited(_persistCachedRoleId(
-          userId: currentState.user.id,
-          email: currentState.user.email,
-          role: roleFromPayload,
-        ));
-        emit((state as Authenticated).copyWith(
-          role: roleFromPayload,
-          timestamp: DateTime.now().microsecondsSinceEpoch,
-        ));
-      }
-      _refreshAuthenticatedStateFromRemote();
-    });
+            final roleFromPayload = _resolveRoleFromRoleId(payload['role_id']);
+            if (roleFromPayload != null && state is Authenticated) {
+              final currentState = state as Authenticated;
+              unawaited(
+                _persistCachedRoleId(
+                  userId: currentState.user.id,
+                  email: currentState.user.email,
+                  role: roleFromPayload,
+                ),
+              );
+              emit((state as Authenticated).copyWith(
+                role: roleFromPayload,
+                timestamp: DateTime.now().microsecondsSinceEpoch,
+              ));
+            }
+            unawaited(_refreshAuthenticatedStateFromRemote());
+          } catch (e, st) {
+            debugPrint(
+              '[AuthCubit] user_roles realtime message handler failed: $e\n$st',
+            );
+          }
+        },
+        onError: (Object e, StackTrace st) {
+          debugPrint('[AuthCubit] user_roles realtime stream error: $e\n$st');
+        },
+      );
+    } catch (e, st) {
+      debugPrint('[AuthCubit] _attachRealtimeUserObservers failed: $e\n$st');
+      _detachRealtimeUserObservers();
+      _realtimeObservedUserId = null;
+    }
   }
 
   void _detachRealtimeUserObservers() {

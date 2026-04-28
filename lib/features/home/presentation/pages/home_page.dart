@@ -335,9 +335,13 @@ class _TabChangeHandlerState extends State<TabChangeHandler> {
     super.didChangeDependencies();
     // Get the controller provided by the parent
     _tabController = DefaultTabController.of(context);
-    // Remove any previous listener before adding a new one
-    _tabController?.removeListener(_handleTabSelection);
-    _tabController?.addListener(_handleTabSelection);
+
+    if(!kIsWeb) {
+      // Remove any previous listener before adding a new one
+      _tabController?.removeListener(_handleTabSelection);
+      _tabController?.addListener(_handleTabSelection);
+    }
+
   }
 
   @override

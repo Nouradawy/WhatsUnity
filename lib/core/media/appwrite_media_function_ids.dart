@@ -1,6 +1,6 @@
 /// Default Appwrite **function $id** values (not names/slugs) for this repo.
 ///
-/// Keep in sync with [appwrite.config.json](../../appwrite.config.json). Override via `.env`:
+/// Keep in sync with [appwrite.config.json](../../appwrite.config.json). Override via compile-time defines:
 /// - `APPWRITE_FUNCTION_GET_R2_SIGNED_URL`
 /// - `APPWRITE_FUNCTION_CREATE_GUMLET_ASSET`
 abstract final class AppwriteMediaFunctionIds {

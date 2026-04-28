@@ -62,6 +62,28 @@ class MentionNotificationCubit extends Cubit<MentionNotificationState> {
   static const Duration _refreshInterval = Duration(seconds: 20);
   static const int _kPerChannelMessageScanLimit = 80;
 
+  /// Refreshes mention matching when [Authenticated.currentUser] profile fields
+  /// or [Authenticated.role] change without altering the stable shell key
+  /// (user / compound / building). Otherwise [_activeSnapshot] stays stale,
+  /// [_isMentioningCurrentUser] never sees @displayName, and badges stay at 0.
+  void syncMentionDetectionFromAuth(Authenticated authState) {
+    final uid = authState.user.id.trim();
+    final cid = authState.selectedCompoundId?.trim();
+    if (uid.isEmpty || cid == null || cid.isEmpty) return;
+    if (_activeUserId == null || _activeCompoundId == null) return;
+    if (uid != _activeUserId || cid != _activeCompoundId) return;
+
+    final nextSnapshot = _MentionAuthSnapshot.fromAuthState(authState);
+    final prev = _activeSnapshot;
+    final detectionChanged = prev == null ||
+        prev.currentUserDisplayName != nextSnapshot.currentUserDisplayName ||
+        prev.role != nextSnapshot.role;
+    _activeSnapshot = nextSnapshot;
+    if (detectionChanged) {
+      unawaited(_refreshUnreadMentionsFromSnapshot(nextSnapshot));
+    }
+  }
+
   /// Starts mention polling for the current authenticated context.
   Future<void> startForAuthState(Authenticated authState) async {
     final nextUserId = authState.user.id.trim();
@@ -75,12 +97,19 @@ class MentionNotificationCubit extends Cubit<MentionNotificationState> {
     final contextChanged = _activeUserId != nextUserId ||
         _activeCompoundId != nextCompoundId ||
         _activeBuilding != nextBuilding;
+    final prevSnapshot = _activeSnapshot;
+    final nextSnapshot = _MentionAuthSnapshot.fromAuthState(authState);
+    final mentionDetectionChanged = prevSnapshot == null ||
+        prevSnapshot.currentUserDisplayName !=
+            nextSnapshot.currentUserDisplayName ||
+        prevSnapshot.role != nextSnapshot.role;
+
     _activeUserId = nextUserId;
     _activeCompoundId = nextCompoundId;
     _activeBuilding = nextBuilding;
-    _activeSnapshot = _MentionAuthSnapshot.fromAuthState(authState);
+    _activeSnapshot = nextSnapshot;
 
-    if (contextChanged) {
+    if (contextChanged || mentionDetectionChanged) {
       await refreshUnreadMentions(authState);
     }
 
@@ -107,7 +136,8 @@ class MentionNotificationCubit extends Cubit<MentionNotificationState> {
 
     _isRefreshInProgress = true;
     final requestToken = ++_refreshRequestToken;
-    emit(state.copyWith(isLoading: true));
+    // Silent poll: do not emit isLoading toggles — they fire BlocObserver onChange twice
+    // every [_refreshInterval] even when counts are unchanged (no Equatable on state).
     final nowUtc = DateTime.now().toUtc();
     try {
       final countByScope = await _remote_countUnreadMentions(
@@ -115,17 +145,20 @@ class MentionNotificationCubit extends Cubit<MentionNotificationState> {
         nowUtc: nowUtc,
       );
       if (requestToken != _refreshRequestToken) return;
-      emit(
-        state.copyWith(
-          unreadGeneralMentionCount:
-              countByScope['COMPOUND_GENERAL'] ?? 0,
-          unreadBuildingMentionCount: countByScope['BUILDING_CHAT'] ?? 0,
-          isLoading: false,
-        ),
-      );
+      final nextGeneral = countByScope['COMPOUND_GENERAL'] ?? 0;
+      final nextBuilding = countByScope['BUILDING_CHAT'] ?? 0;
+      if (state.unreadGeneralMentionCount != nextGeneral ||
+          state.unreadBuildingMentionCount != nextBuilding) {
+        emit(
+          state.copyWith(
+            unreadGeneralMentionCount: nextGeneral,
+            unreadBuildingMentionCount: nextBuilding,
+            isLoading: false,
+          ),
+        );
+      }
     } catch (_) {
       if (requestToken != _refreshRequestToken) return;
-      emit(state.copyWith(isLoading: false));
     } finally {
       _isRefreshInProgress = false;
     }
@@ -146,7 +179,9 @@ class MentionNotificationCubit extends Cubit<MentionNotificationState> {
       ),
       nowIso,
     );
-    emit(state.copyWith(unreadGeneralMentionCount: 0));
+    if (state.unreadGeneralMentionCount != 0) {
+      emit(state.copyWith(unreadGeneralMentionCount: 0));
+    }
   }
 
   Future<void> markBuildingMentionsAsSeen(Authenticated authState) async {
@@ -167,7 +202,9 @@ class MentionNotificationCubit extends Cubit<MentionNotificationState> {
         nowIso,
       );
     }
-    emit(state.copyWith(unreadBuildingMentionCount: 0));
+    if (state.unreadBuildingMentionCount != 0) {
+      emit(state.copyWith(unreadBuildingMentionCount: 0));
+    }
   }
 
   void stop() {
