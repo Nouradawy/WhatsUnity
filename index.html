@@ -34,10 +34,15 @@
   <title>WhatsUnity</title>
   <link rel="manifest" href="manifest.json">
 
+ <script src="firebase-web-push-env.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+
   <script>
     // Explicitly register the Firebase Messaging Service Worker for GitHub Pages support.
     // GitHub Pages serves apps from a subpath (e.g. /YourRepoName/), so we must
     // ensure the browser looks for the SW relative to the current base path.
+    let messagingRegistration = null;
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
         // Find the base path from the <base> tag or use current directory
@@ -46,11 +51,35 @@
 
         navigator.serviceWorker.register(swPath).then(function(registration) {
           console.log('Firebase Service Worker registered with scope:', registration.scope);
+          messagingRegistration = registration;
         }).catch(function(err) {
           console.error('Firebase Service Worker registration failed:', err);
         });
       });
     }
+
+    // JS Bridge to fetch FCM token using the correct relative service worker registration.
+    // This bypasses a bug in the flutter firebase_messaging plugin that fails on GitHub Pages subpaths.
+    window.getWhatsUnityFCMToken = function(vapidKey) {
+      return new Promise((resolve, reject) => {
+        if (!messagingRegistration) {
+           reject("Service worker registration not ready yet.");
+           return;
+        }
+        try {
+          if (!firebase.apps.length) {
+            firebase.initializeApp(window.__WHATSUNITY_FIREBASE_WEB_CONFIG__);
+          }
+          const messaging = firebase.messaging();
+          messaging.getToken({
+            serviceWorkerRegistration: messagingRegistration,
+            vapidKey: vapidKey
+          }).then(resolve).catch(reject);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    };
   </script>
 </head>
 <body>
