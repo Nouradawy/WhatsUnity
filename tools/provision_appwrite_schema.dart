@@ -112,21 +112,24 @@ Future<void> _ensureCollection(Databases d, String db, String col, String name) 
 Future<void> _ensureAttr(Databases d, String db, String col, List<dynamic> row) async {
   final t = row[0] as String;
   final k = row[1] as String;
-  final req = (row[3] as num) == 1;
   try {
     if (t == "s") {
         final size = (row[2] as num).toInt();
+        final req = (row[3] as num) == 1;
         await d.createStringAttribute(
             databaseId: db, collectionId: col, key: k, size: size, xrequired: req);
     } else if (t == "x") {
+        final req = (row[3] as num) == 1;
         await d.createTextAttribute(
             databaseId: db, collectionId: col, key: k, xrequired: req);
     } else if (t == "i") {
+        final req = (row[3] as num) == 1;
         int? def;
         if (row.length > 4 && row[4] != null) def = (row[4] as num).toInt();
         await d.createIntegerAttribute(
             databaseId: db, collectionId: col, key: k, xrequired: req, xdefault: def);
     } else if (t == "b") {
+        final req = (row[3] as num) == 1;
         bool? defb;
         if (row.length > 4 && row[4] is bool) defb = row[4] as bool?;
         await d.createBooleanAttribute(
@@ -135,10 +138,41 @@ Future<void> _ensureAttr(Databases d, String db, String col, List<dynamic> row) 
         final dreq = row.length > 3 ? (row[3] as num) == 1 : (row[2] as num) == 1;
         await d.createDatetimeAttribute(
             databaseId: db, collectionId: col, key: k, xrequired: dreq);
+    } else if (t == "r") {
+        final related = row[2] as String;
+        final relType = _relT(row[3] as String);
+        final onDel = _onDT(row[4] as String);
+        await d.createRelationshipAttribute(
+          databaseId: db,
+          collectionId: col,
+          relatedCollectionId: related,
+          type: relType,
+          key: k,
+          onDelete: onDel,
+        );
     }
   } on AppwriteException catch (e) {
     if (e.code != 409) rethrow;
   }
+}
+
+enums.RelationshipType _relT(String t) {
+  return switch (t) {
+    "oneToOne" => enums.RelationshipType.oneToOne,
+    "manyToOne" => enums.RelationshipType.manyToOne,
+    "oneToMany" => enums.RelationshipType.oneToMany,
+    "manyToMany" => enums.RelationshipType.manyToMany,
+    _ => enums.RelationshipType.oneToOne,
+  };
+}
+
+enums.RelationMutate _onDT(String t) {
+  return switch (t.toLowerCase()) {
+    "cascade" => enums.RelationMutate.cascade,
+    "restrict" => enums.RelationMutate.restrict,
+    "setnull" => enums.RelationMutate.setNull,
+    _ => enums.RelationMutate.cascade,
+  };
 }
 
 Future<void> _waitAttr(Databases d, String db, String col, String key) async {

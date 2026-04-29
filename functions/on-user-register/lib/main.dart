@@ -238,6 +238,7 @@ Future<void> _createOrReplaceUserRole(
   int roleId,
 ) async {
   final row = {
+    'profile': userId,
     'user_id': userId,
     'role_id': roleId,
     'version': 0,
@@ -490,6 +491,7 @@ Future<dynamic> main(final context) async {
           collectionId: _kColUserApartments,
           documentId: ID.unique(),
           data: {
+            'profile': uid,
             'user_id': uid,
             'compound_id': compound,
             'building_num': bn,

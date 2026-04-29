@@ -4,6 +4,7 @@ const COLLECTION_MESSAGES = "messages";
 const COLLECTION_CHANNELS = "channels";
 const COLLECTION_BUILDINGS = "buildings";
 const COLLECTION_USER_APARTMENTS = "user_apartments";
+const COLLECTION_NOTIFICATION_PREFERENCES = "notification_preferences";
 
 function parseBody(raw) {
   if (raw == null || raw === "") return {};
@@ -195,8 +196,9 @@ module.exports = async (context) => {
 
     const channelDoc = await databases.getDocument(databaseId, COLLECTION_CHANNELS, channelId);
     const recipientUserIds = await resolveRecipientUserIds(databases, databaseId, channelDoc);
-    const targetUsers = [...new Set(recipientUserIds)].filter((userId) => userId && userId !== authorId);
-    if (targetUsers.length === 0) {
+    const uniqueRecipients = [...new Set(recipientUserIds)].filter((userId) => userId && userId !== authorId);
+
+    if (uniqueRecipients.length === 0) {
       return context.res.json(
         { ok: true, skipped: true, reason: "no_recipients_after_filter" },
         200
@@ -209,6 +211,41 @@ module.exports = async (context) => {
       notificationFallbackBody,
       notificationChannel,
     } = resolveNotificationProfile(channelType);
+
+    // Filter recipients based on their server-synced notification preferences.
+    const targetUsers = [];
+    const preferenceField = {
+      "COMPOUND_GENERAL": "general_chat_enabled",
+      "BUILDING_CHAT": "building_chat_enabled",
+      "ADMIN_NOTIFICATION": "admin_notifications_enabled",
+      "MAINTENANCE_NOTIFICATION": "maintenance_notifications_enabled",
+    }[channelType] || "general_chat_enabled";
+
+    await Promise.all(
+      uniqueRecipients.map(async (uid) => {
+        try {
+          const prefs = await databases.getDocument(
+            databaseId,
+            COLLECTION_NOTIFICATION_PREFERENCES,
+            uid
+          );
+          if (prefs[preferenceField] !== false) {
+            targetUsers.push(uid);
+          }
+        } catch (e) {
+          // If preference document doesn't exist, default to enabled.
+          targetUsers.push(uid);
+        }
+      })
+    );
+
+    if (targetUsers.length === 0) {
+      return context.res.json(
+        { ok: true, skipped: true, reason: "all_recipients_muted" },
+        200
+      );
+    }
+
     const bodyText = truncateText(messageRow.text) || notificationFallbackBody;
 
     await messaging.createPush(

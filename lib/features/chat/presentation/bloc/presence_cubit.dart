@@ -110,6 +110,7 @@ class PresenceCubit extends Cubit<PresenceState> {
         tableId: _kPresenceTableId,
         rowId: userId,
         data: {
+          'profile': userId,
           'user_id': userId,
           'compound_id': compoundId,
           'status': status,
@@ -123,6 +124,7 @@ class PresenceCubit extends Cubit<PresenceState> {
           tableId: _kPresenceTableId,
           rowId: userId,
           data: {
+            'profile': userId,
             'user_id': userId,
             'compound_id': compoundId,
             'status': status,

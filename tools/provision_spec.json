@@ -125,6 +125,13 @@
           "deleted_at",
           0,
           0
+        ],
+        [
+          "r",
+          "profile",
+          "profiles",
+          "manyToOne",
+          "cascade"
         ]
       ],
       "indexes": [
@@ -177,6 +184,13 @@
           "deleted_at",
           0,
           0
+        ],
+        [
+          "r",
+          "profile",
+          "profiles",
+          "manyToOne",
+          "cascade"
         ]
       ],
       "indexes": [
@@ -983,6 +997,13 @@
           "deleted_at",
           0,
           0
+        ],
+        [
+          "r",
+          "profile",
+          "profiles",
+          "manyToOne",
+          "cascade"
         ]
       ],
       "indexes": [
@@ -1005,6 +1026,69 @@
           "t": "k",
           "a": [
             "last_seen_at"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "notification_preferences",
+      "name": "Notification preferences",
+      "attributes": [
+        [
+          "s",
+          "user_id",
+          36,
+          1
+        ],
+        [
+          "b",
+          "general_chat_enabled",
+          0,
+          0,
+          true
+        ],
+        [
+          "b",
+          "building_chat_enabled",
+          0,
+          0,
+          true
+        ],
+        [
+          "b",
+          "admin_notifications_enabled",
+          0,
+          0,
+          true
+        ],
+        [
+          "b",
+          "maintenance_notifications_enabled",
+          0,
+          0,
+          true
+        ],
+        [
+          "i",
+          "version",
+          0,
+          0,
+          0
+        ],
+        [
+          "r",
+          "profile",
+          "profiles",
+          "manyToOne",
+          "cascade"
+        ]
+      ],
+      "indexes": [
+        {
+          "key": "idx_notif_pref_user",
+          "t": "u",
+          "a": [
+            "user_id"
           ]
         }
       ]

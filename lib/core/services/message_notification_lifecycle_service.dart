@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:WhatsUnity/core/config/appwrite.dart';
 import 'package:WhatsUnity/core/di/app_services.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:WhatsUnity/features/chat/data/datasources/chat_realtime_handle.dart';
+import 'package:appwrite/appwrite.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
@@ -22,8 +26,6 @@ class MessageNotificationLifecycleService {
 
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
-  final BrowserNotificationBridge _browserBridge =
-      createBrowserNotificationBridge();
   final List<ChatRealtimeHandle> _realtimeHandles = <ChatRealtimeHandle>[];
 
   AppLifecycleState _currentLifecycleState = AppLifecycleState.resumed;
@@ -42,6 +44,8 @@ class MessageNotificationLifecycleService {
   static const int _kBuildingChatNotificationId = 1102;
   static const int _kAdminNotificationId = 1103;
   static const int _kMaintenanceNotificationId = 1104;
+
+  static const String _kNotificationPrefsCollectionId = 'notification_preferences';
 
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -122,6 +126,9 @@ class MessageNotificationLifecycleService {
     final authorId = message.authorId.toString().trim();
     if (authorId.isEmpty || authorId == currentUserId) return;
     if (_currentLifecycleState == AppLifecycleState.resumed) return;
+
+    // Check user preference for this specific notification channel.
+    // This is honored on ALL platforms (including Web).
     final isChannelEnabled = await fetchIsNotificationChannelEnabled(
       userId: currentUserId,
       notificationPreferenceChannel:
@@ -190,6 +197,64 @@ class MessageNotificationLifecycleService {
       notificationPreferenceChannel: notificationPreferenceChannel,
     );
     await prefs.setBool(preferenceKey, isEnabled);
+
+    // Sync to Appwrite so server-side push (FCM) honors the preference.
+    unawaited(_syncRemoteNotificationPreferences(trimmedUserId));
+  }
+
+  /// Pushes all local notification toggles to the Appwrite `notification_preferences`
+  /// collection so Cloud Functions can honor them in terminated states.
+  Future<void> _syncRemoteNotificationPreferences(String userId) async {
+    try {
+      final general = await fetchIsNotificationChannelEnabled(
+        userId: userId,
+        notificationPreferenceChannel: NotificationPreferenceChannel.generalChat,
+      );
+      final building = await fetchIsNotificationChannelEnabled(
+        userId: userId,
+        notificationPreferenceChannel: NotificationPreferenceChannel.buildingChat,
+      );
+      final admin = await fetchIsNotificationChannelEnabled(
+        userId: userId,
+        notificationPreferenceChannel: NotificationPreferenceChannel.adminNotification,
+      );
+      final maintenance = await fetchIsNotificationChannelEnabled(
+        userId: userId,
+        notificationPreferenceChannel: NotificationPreferenceChannel.maintenanceNotification,
+      );
+
+      final data = {
+        'profile': userId,
+        'user_id': userId,
+        'general_chat_enabled': general,
+        'building_chat_enabled': building,
+        'admin_notifications_enabled': admin,
+        'maintenance_notifications_enabled': maintenance,
+        'version': 0, // Server sync / LWW
+      };
+
+      try {
+        await appwriteTables.updateRow(
+          databaseId: appwriteDatabaseId,
+          tableId: _kNotificationPrefsCollectionId,
+          rowId: userId,
+          data: data,
+        );
+      } on AppwriteException catch (e) {
+        if (e.code == 404 || e.type == 'document_not_found') {
+          await appwriteTables.createRow(
+            databaseId: appwriteDatabaseId,
+            tableId: _kNotificationPrefsCollectionId,
+            rowId: userId,
+            data: data,
+          );
+        } else {
+          rethrow;
+        }
+      }
+    } catch (e, st) {
+      debugPrint('Failed to sync notification preferences to server: $e\n$st');
+    }
   }
 
   String _resolveNotificationBody(types.Message message) {

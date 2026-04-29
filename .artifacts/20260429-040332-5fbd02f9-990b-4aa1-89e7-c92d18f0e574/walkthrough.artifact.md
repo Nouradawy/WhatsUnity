@@ -1,37 +1,38 @@
-# PWA Background & Sync Improvements Walkthrough
+# Unified Notification Sync Walkthrough
 
-I have implemented several improvements to the PWA (Web) version of the app to address synchronization issues when resuming the app and to improve background notification reliability. These changes are strictly guarded to only affect the Web platform, ensuring no performance impact on the Android version.
+I have implemented a comprehensive synchronization system for notification preferences. This ensures that when a user disables a channel (e.g., BuildingChat) in the Profile Page, they stop receiving notifications for that channel across all platforms (Android & Web) and all app states (Open, Closed, or Killed).
 
-## Key Changes
+## Key Components
 
-### 1. Sync on Resume (Web-Only)
-When the PWA is backgrounded, the browser often suspends its WebSocket connections. I added a lifecycle observer to re-fetch the latest messages when the app resumes on Web.
+### 1. Database Schema (`notification_preferences`)
+Added a new collection to Appwrite to persist user-specific toggles on the server.
+- **Document ID**: Matches the User's ID.
+- **Attributes**: `general_chat_enabled`, `building_chat_enabled`, `admin_notifications_enabled`, `maintenance_notifications_enabled`.
 
-- **[ChatCubit](file:///H:/Repo/WhatsUnity%20-%20Appwrite/lib/features/chat/presentation/bloc/chat_cubit.dart)**: Added `refreshMessages()` to pull the first page of messages from the server and merge them into the local state.
-- **[MentionNotificationCubit](file:///H:/Repo/WhatsUnity%20-%20Appwrite/lib/features/chat/presentation/bloc/mention_notification_cubit.dart)**: Added `refreshUnreadMentionsForce()` to ensure unread mention counts are updated on resume.
-- **[GeneralChat](file:///H:/Repo/WhatsUnity%20-%20Appwrite/lib/features/chat/presentation/widgets/chatWidget/GeneralChat/GeneralChat.dart)** & **[BuildingChat](file:///H:/Repo/WhatsUnity%20-%20Appwrite/lib/features/chat/presentation/pages/building_chat_page.dart)**: Added `WidgetsBindingObserver` to trigger the refresh when the app state transitions to `resumed`, guarded by `if (kIsWeb)`.
-- **[MainScreen](file:///H:/Repo/WhatsUnity%20-%20Appwrite/lib/features/home/presentation/pages/main_screen.dart)**: Triggers a mention refresh on resume for the Web version.
+### 2. Flutter App Sync
+Updated `MessageNotificationLifecycleService` to push local preference changes to the server.
+- Whenever a toggle is changed in the **Profile Page**, the app triggers an asynchronous sync to the Appwrite collection.
+- This bridges the gap between local `SharedPreferences` and the server's push logic.
 
-### 2. Improved PWA Notifications
-Enhanced the service worker to make notifications more interactive and reliable.
+### 3. Smart Cloud Function (`notify-new-message`)
+Enhanced the `notify_new_message` function to be "preference-aware".
+- **Recipient Filtering**: Before sending a push message via FCM/Web Push, the function now fetches the `notification_preferences` for each recipient.
+- **Mute Enforcement**: If a user has disabled the corresponding channel type on the server, the function skips sending them a push notification.
 
-- **[firebase-messaging-sw.js](file:///H:/Repo/WhatsUnity%20-%20Appwrite/web/firebase-messaging-sw.js)**:
-    - Added a `notificationclick` listener that focuses the existing app window or opens a new one when a notification is tapped.
-    - Added support for data-only payloads and custom icons.
-- **[index.html](file:///H:/Repo/WhatsUnity%20-%20Appwrite/web/index.html)**: Added `gcm_sender_id` as a fallback for older browsers to support Web Push notifications.
+## Platform Impact
+
+| State | Web (PWA) | Android |
+| :--- | :--- | :--- |
+| **Open (Active)** | Handled by Realtime (Suppressed by UI). | Handled by Realtime (Suppressed by UI). |
+| **Background (Alive)** | Handled by `MessageNotificationLifecycleService`. Checks local prefs. | Handled by `MessageNotificationLifecycleService`. Checks local prefs. |
+| **Closed / Killed** | Handled by FCM + Cloud Function. **Now checks server prefs.** | Handled by FCM + Cloud Function. **Now checks server prefs.** |
+
+## Critical Action Required
+To enable this feature, you must deploy the updated schema:
+```bash
+dart run tools/provision_appwrite_schema.dart
+```
 
 ## Verification Summary
-
-### Static Analysis
-- Ran `flutter analyze` and verified that no new errors or regressions were introduced in the chat features.
-- Fixed a missing `kIsWeb` import in `GeneralChat`.
-
-### Manual Logic Verification
-- Confirmed that all lifecycle-based refresh triggers are wrapped in `kIsWeb` checks.
-- Verified that `BuildingChat` correctly uses a lifecycle manager to access the `ChatCubit` provided by its scope.
-- Confirmed that the service worker handles both `notification` and `data` fields in FCM payloads for maximum compatibility.
-
-## Critical Rules Followed
-- **Web-Only**: All Flutter-side lifecycle changes are platform-guarded.
-- **No Android Impact**: The Android app logic remains identical to its previous state.
-- **Architecture**: Logic remains in Cubits/Repositories; UI only triggers actions based on platform state.
+- **Static Analysis**: Ran `flutter analyze` and verified no regressions in the sync logic.
+- **Architecture**: Adhered to "One-Job Rule" by delegating background filtering to the Cloud Function, keeping the client lightweight.
