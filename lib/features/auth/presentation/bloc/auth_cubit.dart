@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:WhatsUnity/core/config/runtime_env.dart';
 import 'package:appwrite/appwrite.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode ,kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -46,12 +47,58 @@ class AuthCubit extends Cubit<AuthState> {
   Map<String, dynamic> myCompounds = {'0': "Add New Community"};
 
   AuthCubit({required this.repository}) : super(AuthInitial()) {
+
+
+    if (kIsWeb) {
+      // 1. Initialize the singleton with your Web Client ID
+      GoogleSignIn.instance.initialize(clientId: RuntimeEnv.googleServerClientId);
+
+      // 2. Listen to the new v7 event stream!
+      GoogleSignIn.instance.authenticationEvents.listen((event) async {
+
+        // Check if the event is a successful login
+        if (event is GoogleSignInAuthenticationEventSignIn) {
+          try {
+            print("🚀 [WEB GOOGLE] Account caught! Fetching token...");
+
+            // Extract the user account from the new event object
+            final account = event.user;
+            final auth = await account.authentication;
+
+            if (auth.idToken != null) {
+              print("🚀 [WEB GOOGLE] Token found! Sending to backend bridge...");
+              await repository.completeWebGoogleLogin(auth.idToken!);
+              print("🚀 [WEB GOOGLE] Bridge complete!");
+            }
+          } catch (e) {
+            print("❌ [WEB GOOGLE] SILENT CRASH: $e");
+          }
+        }
+      });
+
+      // 3. Kickstart using the new v7 lightweight method!
+    // --- THE FIX: PROPER ASYNC ERROR CATCHING ---
+    GoogleSignIn.instance.attemptLightweightAuthentication()?.catchError((error) {
+    // This safely swallows the FedCM 'canceled' error so Dart doesn't crash!
+    print("ℹ️ [WEB GOOGLE] Lightweight auth skipped (Normal behavior): $error");
+    });
+    }
     // Listen to the Appwrite-backed auth stream.
     // Emits AppUser? — non-null means signed in, null means signed out.
     repository.onAuthStateChange.listen(
       (appUser) {
         try {
           if (appUser != null) {
+            final isProfileIncomplete = appUser.userMetadata == null || appUser.userMetadata!['role_id'] == null;
+
+            if (isProfileIncomplete) {
+              // FORCE them to the completion form instead of logging them in!
+              signupGoogleEmail = appUser.email;
+              signupGoogleUserName = appUser.userMetadata?['full_name'] ?? appUser.userMetadata?['name'];
+              signInToggler = false;
+              emit(GoogleSignupState());
+              return;
+            }
             _attachRealtimeUserObservers(appUser.id);
             authSessionNonce = DateTime.now().microsecondsSinceEpoch;
             if (state is Authenticated) {
@@ -729,13 +776,20 @@ class AuthCubit extends Cubit<AuthState> {
         currentUserAuth.userMetadata?["role_id"],
       );
       final Roles? userRole = roleFromUserRoles ?? roleFromPrefs;
-      if (userRole != null) {
-        await _persistCachedRoleId(
-          userId: userId,
-          email: currentUserAuth.email,
-          role: userRole,
-        );
+      if (userRole == null) {
+        // The profile is incomplete! Stop all loading and show the form.
+        signupGoogleEmail = currentUserAuth.email;
+        signupGoogleUserName = currentUserAuth.userMetadata?['full_name'] ?? currentUserAuth.userMetadata?['name'];
+        emit(GoogleSignupState());
+        return;
       }
+
+      await _persistCachedRoleId(
+        userId: userId,
+        email: currentUserAuth.email,
+        role: userRole,
+      );
+
 
       List<ChatMember> chatMembers = [];
       List<Users> membersData = [];

@@ -154,7 +154,7 @@ class AuthRepositoryImpl implements AuthRepository {
     await remoteDataSource.remote_signOut();
     // Best-effort native Google session cleanup (mainly Android native sign-in path).
     try {
-      final googleSignIn = GoogleSignIn();
+      final googleSignIn = GoogleSignIn.instance;
       await googleSignIn.signOut();
 
     } catch (e) {
@@ -166,6 +166,17 @@ class AuthRepositoryImpl implements AuthRepository {
     await CacheHelper.removeData(CacheHelper.lastActiveUserIdKey);
     await CacheHelper.removeData("MyCompounds");
     _notify(null);
+  }
+
+  @override
+  Future<AppUser?> completeWebGoogleLogin(String idToken) async {
+    // Note: Ensure completeWebGoogleLogin is also added to your
+    // AuthRemoteDataSource abstract class if you haven't already!
+    final user = await remoteDataSource.completeWebGoogleLogin(idToken);
+
+    // This updates your app's global stream!
+    _notify(user);
+    return user;
   }
 
   // ── Profile / account management ─────────────────────────────────────────

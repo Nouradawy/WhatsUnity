@@ -7,7 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/config/runtime_env.dart';
 import '../../../../core/media/media_services.dart';
 import '../../domain/entities/app_user.dart';
 
@@ -56,6 +58,8 @@ abstract class AuthRemoteDataSource {
     required String userId,
     required void Function(int index, double progress) onProgress,
   });
+
+  Future<AppUser?> completeWebGoogleLogin(String idToken);
 }
 
 // ── Appwrite implementation ────────────────────────────────────────────────────
@@ -150,12 +154,13 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       );
     }
 
-    final googleSignIn = GoogleSignIn(
-      scopes: const ['email', 'profile', 'openid'],
+    final googleSignIn = GoogleSignIn.instance;
+    // 1. You MUST call initialize() before authenticating in v7+
+    await googleSignIn.initialize(
       serverClientId: serverClientId,
     );
 
-    final selectedAccount = await googleSignIn.signIn();
+    final selectedAccount = await googleSignIn.authenticate();
     if (selectedAccount == null) return null; // User cancelled picker.
 
     final auth = await selectedAccount.authentication;
@@ -221,30 +226,25 @@ class AppwriteAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       return _remote_signInWithGoogleAndroidNative();
     }
 
-    String? success = oauthSuccessUrl?.trim();
-    if (success != null && success.isEmpty) success = null;
-    String? failure = oauthFailureUrl?.trim();
-    if (failure != null && failure.isEmpty) failure = null;
-
     if (kIsWeb) {
-      final base = _webOAuthReturnBaseUri();
-
-      // Ensure we point specifically to the auth.html file
-      final String baseUrlString = base.toString();
-      final String separator = baseUrlString.endsWith('/') ? '' : '/';
-      final authUrl = '$baseUrlString${separator}auth.html';
-
-      success ??= authUrl;
-      failure ??= Uri.parse(authUrl).replace(
-        queryParameters: const {'appwrite_oauth': 'google_failure'},
-      ).toString();
+      // Do nothing! The Google HTML button handles the click natively on web.
+      return null;
     }
+    // iOS Appwrite Fallback
+    await _account.createOAuth2Session(provider: OAuthProvider.google);
+    return await remote_getCurrentUser();
+  }
 
-    await _account.createOAuth2Session(
-      provider: OAuthProvider.google,
-      success: success,
-      failure: failure,
-    );
+  // --- ADD THIS NEW METHOD ---
+  // This takes the token from the Web Button and runs your custom backend bridge!
+  Future<AppUser?> completeWebGoogleLogin(String idToken) async {
+    final bridge = await _invokeNativeGoogleBridge(idToken: idToken);
+    final userId = (bridge['userId'] ?? '').toString().trim();
+    final secret = (bridge['secret'] ?? '').toString().trim();
+
+    if (userId.isEmpty || secret.isEmpty) throw Exception('Bridge failed');
+
+    await _account.createSession(userId: userId, secret: secret);
     return await remote_getCurrentUser();
   }
 

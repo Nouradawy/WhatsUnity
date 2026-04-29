@@ -42,6 +42,7 @@ abstract class AuthRepository {
   Future<void> selectCompound({required String compoundId, required String compoundName, required bool atWelcome});
   Future<void> requestEmailChange(String newEmail, {String? redirectUrl});
   Future<void> updatePassword(String newPassword);
+  Future<AppUser?> completeWebGoogleLogin(String idToken);
 
   // ── Data-loading helpers used by AuthCubit ──────────────────────────────────
   Future<List<Category>> loadCompounds();

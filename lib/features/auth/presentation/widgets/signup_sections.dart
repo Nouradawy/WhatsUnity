@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in_web/web_only.dart'as web;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -590,7 +591,25 @@ Column signInProviders(
         ),
       Container(
         padding: EdgeInsets.symmetric(horizontal: MediaQuery.of(context).size.width * 0.075),
-        child: MaterialButton(
+        child: (kIsWeb && cubit.signupGoogleEmail == null) ?FutureBuilder(
+          // 1. Wait 500ms for AuthCubit to finish initializing the Google SDK
+          future: Future.delayed(const Duration(milliseconds: 500)),
+          builder: (context, snapshot) {
+            // 2. Show a loading spinner while we wait
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                height: 44,
+                child: Center(child: CircularProgressIndicator.adaptive()),
+              );
+            }
+            // 3. Render the HTML iframe safely after the SDK is loaded!
+            return SizedBox(
+              height: 44,
+              width: double.infinity,
+              child: web.renderButton(),
+            );
+          },
+        ): MaterialButton(
           height: 40,
           elevation: 0,
           disabledColor: Colors.grey.shade200,
