@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:google_sign_in_web/web_only.dart'as web;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,6 +14,8 @@ import 'package:WhatsUnity/core/constants/Constants.dart';
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/pages/welcome_page.dart';
+
+import '../../../../core/utils/google_button/google_button_stub.dart';
 
 Future<void> newCompound(BuildContext context) {
   return showDialog(
@@ -606,7 +607,7 @@ Column signInProviders(
             return SizedBox(
               height: 44,
               width: double.infinity,
-              child: web.renderButton(),
+              child: buildGoogleWebButton(),
             );
           },
         ): MaterialButton(
