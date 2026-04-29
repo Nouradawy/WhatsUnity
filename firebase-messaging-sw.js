@@ -17,10 +17,47 @@ firebase.initializeApp(self.__WHATSUNITY_FIREBASE_WEB_CONFIG__);
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload?.notification?.title || "WhatsUnity";
-  const body = payload?.notification?.body || "You have a new message";
-  self.registration.showNotification(title, {
+  const title = payload?.notification?.title || payload?.data?.title || "WhatsUnity";
+  const body = payload?.notification?.body || payload?.data?.body || "You have a new message";
+
+  // Tag helps deduplicate notifications for the same channel.
+  const tag = payload?.data?.tag || payload?.data?.channel_id || "default";
+
+  return self.registration.showNotification(title, {
     body,
+    tag,
     data: payload?.data || {},
+    icon: "/icons/Icon-192.png",
+    badge: "/icons/Icon-192.png",
   });
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  // Try to open the app or focus if already open.
+  const urlToOpen = new URL(self.location.origin).href;
+
+  const promiseChain = clients.matchAll({
+    type: "window",
+    includeUncontrolled: true
+  }).then((windowClients) => {
+    let matchingClient = null;
+
+    for (let i = 0; i < windowClients.length; i++) {
+      const windowClient = windowClients[i];
+      if (windowClient.url === urlToOpen || windowClient.url.startsWith(urlToOpen)) {
+        matchingClient = windowClient;
+        break;
+      }
+    }
+
+    if (matchingClient) {
+      return matchingClient.focus();
+    } else {
+      return clients.openWindow(urlToOpen);
+    }
+  });
+
+  event.waitUntil(promiseChain);
 });
