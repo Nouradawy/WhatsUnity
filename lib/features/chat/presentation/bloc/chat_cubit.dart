@@ -180,6 +180,34 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
+  /// Re-fetches the first page of messages and merges with the current state.
+  /// Primarily used on PWA resume to catch up on missed realtime events.
+  Future<void> refreshMessages() async {
+    final id = channelId;
+    if (id == null || state is ChatLoading) return;
+
+    try {
+      final messages = await fetchMessagesUsecase(
+        channelId: id,
+        currentUserId: currentUserId,
+        pageSize: _pageSize,
+        pageNum: 0,
+        onRemoteSynced: (synced, pageNum) {
+          if (pageNum == 0) {
+            _applyRemoteSyncedPage(synced, 0);
+          }
+        },
+      );
+      // Even if onRemoteSynced handles the merge, we ensure _messages is updated
+      // and state is emitted if we got fresh data from the direct call.
+      if (messages.isNotEmpty) {
+        _applyRemoteSyncedPage(messages, 0);
+      }
+    } catch (e) {
+      debugPrint('ChatCubit.refreshMessages failed: $e');
+    }
+  }
+
   Future<void> initChat({required String channelId, required String currentUserId}) async {
     this.channelId = channelId;
     _currentPage = 0;

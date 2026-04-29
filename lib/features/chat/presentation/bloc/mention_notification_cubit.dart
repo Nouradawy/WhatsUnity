@@ -126,6 +126,13 @@ class MentionNotificationCubit extends Cubit<MentionNotificationState> {
     );
   }
 
+  /// Force-refreshes unread mentions, bypassing the [_isRefreshInProgress] lock
+  /// if necessary (e.g. on app resume).
+  Future<void> refreshUnreadMentionsForce(Authenticated authState) async {
+    _isRefreshInProgress = false;
+    await refreshUnreadMentions(authState);
+  }
+
   Future<void> _refreshUnreadMentionsFromSnapshot(
     _MentionAuthSnapshot snapshot,
   ) async {

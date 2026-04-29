@@ -7,7 +7,7 @@ import 'package:condition_builder/condition_builder.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier, kIsWeb;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
@@ -94,7 +94,7 @@ class _MentionSuggestionItem {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _GeneralChatState extends State<GeneralChat>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   // ── AutomaticKeepAliveClientMixin ──────────────────────────────────────────
   //
   // Keeps this widget alive while the parent TabBarView is in the tree so that
@@ -255,6 +255,18 @@ class _GeneralChatState extends State<GeneralChat>
     // prevents an offstage GeneralChat in IndexedStack from setting up Supabase
     // subscriptions that pump operations into a SliverAnimatedList whose render
     // object is not fully active, causing the assertion crash.
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && kIsWeb) {
+      // On PWA resume, the WebSocket might have been disconnected while backgrounded.
+      // Re-fetch the latest messages to catch up on anything missed.
+      if (_channelId != null && mounted) {
+        context.read<ChatCubit>().refreshMessages();
+      }
+    }
   }
 
   @override
@@ -358,6 +370,8 @@ class _GeneralChatState extends State<GeneralChat>
     }
 
     _chatController.dispose();
+
+    WidgetsBinding.instance.removeObserver(this);
 
     // CRITICAL: dispose ReactionsController to remove any OverlayEntry widgets
     // (and their GlobalKeys). Failing to do this leaves stale GlobalKeys in the

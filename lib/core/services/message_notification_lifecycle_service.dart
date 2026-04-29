@@ -142,24 +142,22 @@ class MessageNotificationLifecycleService {
     final body = messageText.isEmpty ? 'You have a new message' : messageText;
     final title = trackedChannel.title;
 
-    if (kIsWeb) {
-      await _browserBridge.show(
-        title: title,
+    // Web/PWA: Avoid showing a "local" browser notification via Realtime while 
+    // in background/inactive state. The Service Worker (FCM) already handles 
+    // these states, and showing both results in duplication.
+    if (kIsWeb) return;
+
+    final id = _resolveChannelNotificationId(
+      trackedChannel.notificationChannelType,
+    );
+    final details = NotificationDetails(
+      android: _resolveAndroidNotificationDetails(
+        notificationChannelType: trackedChannel.notificationChannelType,
         body: body,
-        tag: 'msg_${trackedChannel.channelId}',
-      );
-    } else {
-      final id = _resolveChannelNotificationId(
-        trackedChannel.notificationChannelType,
-      );
-      final details = NotificationDetails(
-        android: _resolveAndroidNotificationDetails(
-          notificationChannelType: trackedChannel.notificationChannelType,
-          body: body,
-        ),
-      );
-      await _localNotifications.show(id, title, body, details);
-    }
+      ),
+    );
+    await _localNotifications.show(id, title, body, details);
+
     await _markMessageNotified(userId: currentUserId, messageId: messageId);
   }
 

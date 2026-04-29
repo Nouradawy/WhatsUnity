@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -67,6 +68,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     AppServices.messageNotificationLifecycleService.updateLifecycleState(state);
+    if (state == AppLifecycleState.resumed && kIsWeb) {
+      final authState = context.read<AuthCubit>().state;
+      if (authState is Authenticated) {
+        context.read<MentionNotificationCubit>().refreshUnreadMentionsForce(authState);
+      }
+    }
     super.didChangeAppLifecycleState(state);
   }
 
