@@ -17,8 +17,16 @@ firebase.initializeApp(self.__WHATSUNITY_FIREBASE_WEB_CONFIG__);
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload?.notification?.title || payload?.data?.title || "WhatsUnity";
-  const body = payload?.notification?.body || payload?.data?.body || "You have a new message";
+  // If the payload contains a 'notification' object, the browser (FCM)
+  // handles showing it automatically when the app is in the background.
+  // Calling showNotification here would result in duplication.
+  if (payload.notification) {
+    console.log("FCM notification handled by browser automatically.");
+    return;
+  }
+
+  const title = payload?.data?.title || "WhatsUnity";
+  const body = payload?.data?.body || "You have a new message";
 
   // Tag helps deduplicate notifications for the same channel.
   const tag = payload?.data?.tag || payload?.data?.channel_id || "default";
