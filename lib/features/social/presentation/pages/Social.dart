@@ -8,7 +8,7 @@ import 'package:WhatsUnity/features/social/presentation/widgets/social_feed_tab.
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../chat/presentation/bloc/mention_notification_cubit.dart';
-import '../../../chat/presentation/widgets/chatWidget/GeneralChat/GeneralChat.dart';
+import '../../../chat/presentation/widgets/chatWidget/GeneralChat/general_chat.dart';
 
 class Social extends StatefulWidget {
   Social({super.key});

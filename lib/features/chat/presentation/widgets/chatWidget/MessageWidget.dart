@@ -17,6 +17,8 @@ import '../../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../../auth/presentation/bloc/auth_state.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 import 'package:audioplayers/audioplayers.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_chat_ui/flutter_chat_ui.dart' show Avatar;
 import 'AudioWaveformPainter.dart';
 import '../../../data/models/chat_member_model.dart';
 import 'package:WhatsUnity/features/chat/presentation/utils/audio_message_playable.dart';
@@ -74,6 +76,8 @@ class MessageWidget extends StatelessWidget {
     required this.isUserScroll,
     required this.chatMembers,
     this.userRole,
+    this.avatarUrl,
+    this.cachedAvatarImageProvider,
   });
 
   final types.Message  message;
@@ -89,6 +93,8 @@ class MessageWidget extends StatelessWidget {
   final bool isUserScroll;
   final List<ChatMember> chatMembers;
   final Roles? userRole;
+  final String? avatarUrl;
+  final ImageProvider<Object>? cachedAvatarImageProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -199,6 +205,11 @@ class MessageWidget extends StatelessWidget {
     final isRental = member?.ownerType == OwnerTypes.rental;
 
     final List<Widget> userInformation =[
+      if (!isSentByMe)
+        Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: _buildAvatar(context, message.authorId),
+        ),
        Container(
           padding: EdgeInsets.symmetric(horizontal: 3,vertical: 1),
           decoration: BoxDecoration(
@@ -308,6 +319,40 @@ class MessageWidget extends StatelessWidget {
       ),
     );
   }
+  Widget _buildAvatar(BuildContext context, String userId) {
+    if (cachedAvatarImageProvider != null) {
+      return CircleAvatar(
+        radius: 10,
+        backgroundColor: Colors.transparent,
+        child: ClipOval(
+          child: Image(
+            image: cachedAvatarImageProvider!,
+            fit: BoxFit.cover,
+            width: 20,
+            height: 20,
+            errorBuilder: (_, __, ___) => Avatar(userId: userId),
+          ),
+        ),
+      );
+    }
+    if (avatarUrl != null) {
+      return CircleAvatar(
+        radius: 10,
+        backgroundColor: Colors.transparent,
+        child: ClipOval(
+          child: CachedNetworkImage(
+            imageUrl: avatarUrl!,
+            fit: BoxFit.cover,
+            width: 20,
+            height: 20,
+            errorWidget: (_, __, ___) => Avatar(userId: userId),
+          ),
+        ),
+      );
+    }
+    return Avatar(userId: userId);
+  }
+
 Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  message , String? fileId , bool isUserScroll,
     {bool isReply = false}){
   final meta = message.metadata ?? {};
@@ -616,7 +661,7 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
           id: existing.id,
           authorId: existing.authorId,
           createdAt: existing.createdAt,
-          text: existing is types.TextMessage ? existing.text : '',
+          text: existing.text,
           metadata: rollbackMeta,
           replyToMessageId: existing.replyToMessageId,
           deliveredAt: existing.deliveredAt,
@@ -653,9 +698,6 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
     final currentUserId = (authState is Authenticated) ? authState.user.id : null;
     final effectiveMeta = Map<String, dynamic>.from(message.metadata ?? const {});
     final question = effectiveMeta['question']?.toString() ?? '';
-    final expiresAt = effectiveMeta['expiresAt'] != null
-        ? DateTime.tryParse(effectiveMeta['expiresAt']?.toString() ?? '')
-        : null;
 
     // Normalize options to List<Map<String, dynamic>>
     final rawOptionsAny = effectiveMeta['options'];
@@ -667,8 +709,11 @@ Widget widgetByType(BuildContext context, Color msgTextColor , types.Message  me
         } else if (item is String) {
           try {
             final decoded = jsonDecode(item);
-            if (decoded is Map) rawOptions.add(Map<String, dynamic>.from(decoded));
-            else rawOptions.add(<String, dynamic>{});
+            if (decoded is Map) {
+              rawOptions.add(Map<String, dynamic>.from(decoded));
+            } else {
+              rawOptions.add(<String, dynamic>{});
+            }
           } catch (_) {
             rawOptions.add(<String, dynamic>{});
           }

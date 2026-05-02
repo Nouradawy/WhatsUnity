@@ -42,11 +42,18 @@ class ChatRepositoryImpl implements ChatRepository {
       debugPrint('fetchMessages local: $e\n$st');
     }
 
+    // For first-page sync, use local newest createdAt as a cursor so Appwrite
+    // only returns rows newer than what we already have cached.
+    final DateTime? sinceCreatedAt = pageNum == 0 && cached.isNotEmpty
+        ? cached.last.createdAt?.toUtc()
+        : null;
+
     unawaited(_syncRemoteThenNotify(
       channelId: channelId,
       currentUserId: currentUserId,
       pageSize: pageSize,
       pageNum: pageNum,
+      sinceCreatedAt: sinceCreatedAt,
       onRemoteSynced: onRemoteSynced,
     ));
 
@@ -58,6 +65,7 @@ class ChatRepositoryImpl implements ChatRepository {
     required String currentUserId,
     required int pageSize,
     required int pageNum,
+    DateTime? sinceCreatedAt,
     void Function(List<types.Message> messages, int pageNum)? onRemoteSynced,
   }) async {
     try {
@@ -66,6 +74,7 @@ class ChatRepositoryImpl implements ChatRepository {
         currentUserId: currentUserId,
         pageSize: pageSize,
         pageNum: pageNum,
+        sinceCreatedAt: sinceCreatedAt,
       );
       List<types.Message> syncedMessages;
       try {

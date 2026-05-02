@@ -199,8 +199,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
   Map<String, dynamic> _normalizeRow(Map<String, dynamic> raw) {
     final id = raw['id']?.toString() ?? '';
-    final channelId = _channelIdString(raw['channel_id']);
-    final authorId = raw['author_id']?.toString() ?? '';
+    final channelId = _channelIdString(raw['channel_id'] ?? raw['channelId']);
+    final authorId = (raw['author_id'] ?? raw['authorId'])?.toString() ?? '';
     final ms = ChatMessageMapCodec.extractCreatedAtMs(Map<String, dynamic>.from(raw));
     final meta = raw['metadata'];
     final metaStr = meta is String ? meta : jsonEncode(meta ?? <String, dynamic>{});

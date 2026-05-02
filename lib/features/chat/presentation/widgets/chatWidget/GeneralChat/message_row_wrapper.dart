@@ -118,6 +118,31 @@ class MessageRowWrapper extends StatelessWidget {
 
     final bool showHeader = showDateHeaders && baseHeaderCond;
 
+    final messageAuthorId = message.authorId.trim();
+    String? normalizeAvatarUrl(String? raw) {
+      if (raw == null) return null;
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty || trimmed.toLowerCase() == 'null') return null;
+      return trimmed;
+    }
+
+    final authState = context.read<AuthCubit>().state;
+    final member = authState is Authenticated
+        ? authState.chatMembers
+            .where((chatMember) => chatMember.id.trim() == messageAuthorId)
+            .firstOrNull
+        : null;
+    final resolvedUserAvatarUrl = normalizeAvatarUrl(
+      userCache[messageAuthorId]?.imageSource,
+    );
+    final memberAvatarUrl = normalizeAvatarUrl(member?.avatarUrl);
+    final avatarUrl = resolvedUserAvatarUrl ?? memberAvatarUrl;
+    final cachedAvatarImageProvider =
+        avatarImageProviderByUserId[messageAuthorId];
+    final shouldShowAvatarForRow = !isPreviousMessageFromSameUser;
+    final hasAvatar =
+        cachedAvatarImageProvider != null || avatarUrl != null;
+
     Future<void> _showUserPopup(BuildContext context, String userId) async {
       final member = chatMembers.where((chatMember) => chatMember.id.trim() == userId).firstOrNull;
       if (member == null) return;
@@ -447,6 +472,8 @@ class MessageRowWrapper extends StatelessWidget {
         isUserScroll: isUserScrolling,
         chatMembers: chatMembers,
         userRole: userRole,
+        avatarUrl: avatarUrl,
+        cachedAvatarImageProvider: cachedAvatarImageProvider,
       );
     }
      final messageContent = ChatMessageWrapper(
@@ -527,31 +554,6 @@ class MessageRowWrapper extends StatelessWidget {
        },
       child: contentWidget,
     );
-
-    final messageAuthorId = message.authorId.trim();
-    String? normalizeAvatarUrl(String? raw) {
-      if (raw == null) return null;
-      final trimmed = raw.trim();
-      if (trimmed.isEmpty || trimmed.toLowerCase() == 'null') return null;
-      return trimmed;
-    }
-
-    final authState = context.read<AuthCubit>().state;
-    final member = authState is Authenticated
-        ? authState.chatMembers
-            .where((chatMember) => chatMember.id.trim() == messageAuthorId)
-            .firstOrNull
-        : null;
-    final resolvedUserAvatarUrl = normalizeAvatarUrl(
-      userCache[messageAuthorId]?.imageSource,
-    );
-    final memberAvatarUrl = normalizeAvatarUrl(member?.avatarUrl);
-    final avatarUrl = resolvedUserAvatarUrl ?? memberAvatarUrl;
-    final cachedAvatarImageProvider =
-        avatarImageProviderByUserId[messageAuthorId];
-    final shouldShowAvatarForRow = !isPreviousMessageFromSameUser;
-    final hasAvatar =
-        cachedAvatarImageProvider != null || avatarUrl != null;
 
     final List<Widget> messageBody = [
       messageContent,

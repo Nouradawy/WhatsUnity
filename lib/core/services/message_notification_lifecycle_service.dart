@@ -11,8 +11,6 @@ import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'browser_notification_bridge.dart';
-
 /// Lifecycle-aware message notification service.
 ///
 /// - Foreground: suppresses local push (chat UI already updates in realtime).

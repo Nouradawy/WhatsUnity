@@ -110,8 +110,8 @@ class MessageModel with SyncMetadata {
 
     return MessageModel(
       id: (json[r'$id'] ?? json['id'] ?? '').toString(),
-      authorId: (json['author_id'] ?? '').toString(),
-      channelId: (json['channel_id'] ?? '').toString(),
+      authorId: (json['author_id'] ?? json['authorId'] ?? '').toString(),
+      channelId: (json['channel_id'] ?? json['channelId'] ?? '').toString(),
       text: json['text']?.toString(),
       uri: json['uri']?.toString(),
       type: json['type']?.toString(),

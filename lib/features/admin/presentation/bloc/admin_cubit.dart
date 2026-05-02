@@ -29,7 +29,7 @@ class AdminCubit extends Cubit<AdminState> {
   }
 
   /// [compoundId] is the Appwrite `compounds` document `\$id` (string FK everywhere).
-  Future<void> loadCompoundMembers(String compoundId) async {
+  Future<void> fetchCompoundMembers(String compoundId) async {
     emit(AdminLoading());
     try {
       allMembers = await adminRepository.getCompoundMembers(compoundId);
@@ -59,7 +59,7 @@ class AdminCubit extends Cubit<AdminState> {
     try {
       await adminRepository.updateUserStatus(userId, status.name);
       emit(AdminActionSuccess('User status updated to ${status.name}'));
-      await loadCompoundMembers(compoundId);
+      await fetchCompoundMembers(compoundId);
     } catch (e) {
       emit(AdminError(e.toString()));
     }

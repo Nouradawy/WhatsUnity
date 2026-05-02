@@ -34,8 +34,8 @@ Map<String, dynamic> _documentToMessageRow(aw_models.Document doc) {
   final v = int.tryParse(d['version']?.toString() ?? '') ?? 0;
   return {
     'id': doc.$id,
-    'author_id': d['author_id']?.toString() ?? '',
-    'channel_id': d['channel_id']?.toString() ?? '',
+    'author_id': (d['author_id'] ?? d['authorId'] ?? '').toString(),
+    'channel_id': (d['channel_id'] ?? d['channelId'] ?? '').toString(),
     'text': d['text']?.toString(),
     'uri': d['uri']?.toString(),
     'type': d['type']?.toString(),
@@ -63,8 +63,8 @@ Map<String, dynamic> _mapPayloadToMessageRow(Map<String, dynamic> raw) {
     final dv = int.tryParse(data['version']?.toString() ?? '') ?? 0;
     return {
       'id': raw[r'$id']?.toString() ?? '',
-      'author_id': data['author_id']?.toString() ?? '',
-      'channel_id': data['channel_id']?.toString() ?? '',
+      'author_id': (data['author_id'] ?? data['authorId'] ?? '').toString(),
+      'channel_id': (data['channel_id'] ?? data['channelId'] ?? '').toString(),
       'text': data['text']?.toString(),
       'uri': data['uri']?.toString(),
       'type': data['type']?.toString(),
@@ -80,8 +80,8 @@ Map<String, dynamic> _mapPayloadToMessageRow(Map<String, dynamic> raw) {
   // Only $id (delete tombstone) or flat data
   final m = <String, dynamic>{};
   m['id'] = raw[r'$id']?.toString() ?? raw['id']?.toString() ?? '';
-  m['author_id'] = raw['author_id']?.toString() ?? '';
-  m['channel_id'] = raw['channel_id']?.toString() ?? '';
+  m['author_id'] = (raw['author_id'] ?? raw['authorId'] ?? '').toString();
+  m['channel_id'] = (raw['channel_id'] ?? raw['channelId'] ?? '').toString();
   m['text'] = raw['text']?.toString();
   m['uri'] = raw['uri']?.toString();
   m['type'] = raw['type']?.toString();
@@ -112,6 +112,7 @@ abstract class ChatRemoteDataSource {
     required String currentUserId,
     required int pageSize,
     required int pageNum,
+    DateTime? sinceCreatedAt,
   });
 
   /// Creates a text message where [channelId] is the Appwrite `channels` document `$id`.
@@ -228,6 +229,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     required String currentUserId,
     required int pageSize,
     required int pageNum,
+    DateTime? sinceCreatedAt,
   }) async {
     // ignore: unused_local_variable — reserved for future permission-filtered fetches (legacy RPC)
     final _ = currentUserId;
@@ -239,6 +241,8 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       queries: [
         Query.equal('channel_id', channelId),
         Query.isNull('deleted_at'),
+        if (pageNum == 0 && sinceCreatedAt != null)
+          Query.greaterThan(r'$createdAt', sinceCreatedAt.toUtc().toIso8601String()),
         Query.orderDesc(r'$createdAt'),
         Query.limit(limit),
         if (pageNum > 0) Query.offset(pageNum * pageSize),
@@ -592,6 +596,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         .toList();
   }
 
+  //TODO:: Change to listDocuments
   @override
   Future<Map<String, dynamic>> remote_resolveUser(String id) async {
     final doc = await _databases.getRow(

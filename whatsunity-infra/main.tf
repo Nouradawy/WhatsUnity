@@ -35,3 +35,12 @@ resource "appwrite_tablesdb_column" "description" {
   required    = false  # If true, you cannot set a default value
 }
 
+# Make `user_roles.role_id` an enum so we store role names instead of numeric ids
+resource "appwrite_tablesdb_column" "user_roles_role_id" {
+  database_id = "69e992170000e2f90e12"
+  table_id    = "user_roles"
+  key         = "role_id"
+  type        = "enum"
+  elements    = ["user", "manager", "admin", "developer", "owner", "tenant"]
+  required    = true
+}

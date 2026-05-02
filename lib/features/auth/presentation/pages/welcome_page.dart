@@ -34,15 +34,15 @@ class _JoinCommunityState extends State<JoinCommunity> {
       if (kDebugMode) {
         debugPrint(
           '[JoinCommunity] init: state=${s.runtimeType} categories=${s.categories.length} '
-          'logos=${s.compoundsLogos.length} — will call loadCompounds='
+          'logos=${s.compoundsLogos.length} — will call fetchCompounds='
           '${s.categories.isEmpty || s.compoundsLogos.isEmpty}',
         );
       }
       if (cubit.state.categories.isEmpty) {
-        cubit.loadCompounds();
+        cubit.fetchCompounds();
       } else if (cubit.state.compoundsLogos.isEmpty) {
         // Categories already in memory (e.g. from preset) but logo manifest not loaded.
-        cubit.loadCompounds();
+        cubit.fetchCompounds();
       }
     });
   }
@@ -75,7 +75,7 @@ class _JoinCommunityState extends State<JoinCommunity> {
                     keyboardType: TextInputType.text,
                     SuffixIcon: Icons.search,
                     onChanged: (s) {
-                  cubit.getSuggestions(_searchController);
+                  cubit.fetchSuggestions(_searchController);
                 }),
                 Expanded(
                   child: BlocConsumer<AuthCubit, AuthState>(

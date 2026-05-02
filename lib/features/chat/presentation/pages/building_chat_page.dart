@@ -18,7 +18,7 @@ import 'package:WhatsUnity/core/media/recorder_upload_bridge.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_state.dart';
 import 'package:WhatsUnity/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/AudioWaveformPainter.dart';
-import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/GeneralChat/GeneralChat.dart';
+import 'package:WhatsUnity/features/chat/presentation/widgets/chatWidget/GeneralChat/general_chat.dart';
 import 'package:WhatsUnity/features/chat/presentation/widgets/chat_scope.dart';
 
 /// Shell for the bottom-nav **Chats** tab only (`channelName: BUILDING_CHAT`).

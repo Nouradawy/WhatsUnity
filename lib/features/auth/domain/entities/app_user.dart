@@ -9,7 +9,7 @@
 ///   • [id]           ← appwrite_models.User.$id
 ///   • [email]        ← appwrite_models.User.email
 ///   • [userMetadata] ← appwrite_models.User.prefs.data
-///     – must contain 'role_id' (int) to replicate the old Supabase userMetadata contract.
+///     – should contain 'role_id' as a string (for example: '1', '2', '3').
 class AppUser {
   const AppUser({
     required this.id,

@@ -71,7 +71,7 @@ Column roleSelection(
           ),
           child: MaterialButton(
             onPressed: () {
-              if (cubit.selectedCompoundId != null) cubit.resetUserData();
+              // if (cubit.selectedCompoundId != null) cubit.resetUserData();
               if (cubit.roleName != Roles.user) {
                 cubit.changeRole(Roles.user);
               } else {
@@ -223,7 +223,7 @@ Form apartmentInfo(
                 controller: apartmentNum,
                 validation: (value) {
                   if (value == null || value.trim().isEmpty) return "Apartment Number can't be Empty";
-                  if (cubit.apartmentConflict) return "Apartment already taken";
+                  if (cubit.isApartmentOccupied(buildingNum.text, value)) return "Apartment already taken";
                   return null;
                 },
                 keyboardType: TextInputType.number,
@@ -532,7 +532,10 @@ Column submitButton(
                       data: {
                         "display_name": displayName.text.trim(),
                         "full_name": fullName.text.trim(),
-                        "role_id": cubit.roleName!.index + 1,
+                        // Store role as enum name (e.g. "manager") so Appwrite enum column
+                        // can hold the canonical role value. Repository will normalize for
+                        // legacy consumers.
+                        "role_id": cubit.roleName!.name,
                         'compound_id': cubit.selectedCompoundId.toString(),
                         'building_num': cubit.roleName != Roles.manager ? buildingNum.text : '-1',
                         'apartment_num': cubit.roleName != Roles.manager ? apartmentNum.text : '-1',
@@ -664,12 +667,12 @@ Column signInProviders(
                         );
                         if (cubit.apartmentConflict) return;
                       }
-                      await cubit.completeRegistration(
+                      await cubit.submitRegistration(
                         fullName: fullName.text,
                         userName: userName.text,
                         ownerType: cubit.ownerType,
                         phoneNumber: phoneNumber.text,
-                        roleId: selectedRole.index + 1,
+                        roleId: selectedRole.name,
                         buildingName: selectedRole != Roles.manager ? buildingNum.text : '-1',
                         apartmentNum: selectedRole != Roles.manager ? apartmentNum.text : '-1',
                         compoundId: selectedCompoundId,

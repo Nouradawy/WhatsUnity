@@ -44,6 +44,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (p.user.id != c.user.id ||
         p.selectedCompoundId != c.selectedCompoundId ||
         p.role != c.role ||
+        p.timestamp != c.timestamp ||
+        p.user.userMetadata?['userState'] != c.user.userMetadata?['userState'] ||
         p.enabledMultiCompound != c.enabledMultiCompound) {
       return true;
     }
@@ -292,8 +294,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   label: "Chats",
                 ),
               BottomNavigationBarItem(
-                  icon: FaIcon(FontAwesomeIcons.userLarge
-                      , size: 19),
+                  icon: FaIcon(FontAwesomeIcons.user, size: 19),
                   label: "Profile"
               ),
               if (role == Roles.admin)

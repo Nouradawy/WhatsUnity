@@ -146,7 +146,7 @@ class ManagerHomepage extends StatelessWidget {
                       final compoundId = selectedKey.toString();
                       final compoundName = currentMyCompounds[selectedKey]!;
                       final auth = context.read<AuthCubit>();
-                      await auth.loadCompoundMembers(compoundId);
+                      await auth.fetchCompoundMembers(compoundId);
                       await auth.selectCompound(
                         compoundId: compoundId,
                         compoundName: compoundName,

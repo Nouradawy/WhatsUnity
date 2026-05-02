@@ -29,7 +29,6 @@ const _kColUserRoles = 'user_roles';
 const _kColUserApartments = 'user_apartments';
 const _kColBuildings = 'buildings';
 const _kColChannels = 'channels';
-const _kColCompounds = 'compounds';
 
 // ---------------------------------------------------------------------------
 // Open Runtimes: request body (supports bodyRaw, bodyText, bodyJson, body)
@@ -170,6 +169,10 @@ int? _intPref(Map<String, dynamic> m, List<String> keys) {
   return null;
 }
 
+String? _stringPref(Map<String, dynamic> m, List<String> keys) {
+  return _s(m, keys);
+}
+
 bool _isBlank(String? s) => s == null || s.trim().isEmpty;
 
 // ---------------------------------------------------------------------------
@@ -235,12 +238,12 @@ Future<void> _createOrReplaceUserRole(
   Databases db,
   String databaseId,
   String userId,
-  int roleId,
+  String roleName,
 ) async {
   final row = {
     'profile': userId,
     'user_id': userId,
-    'role_id': roleId,
+    'role_id': roleName,
     'version': 0,
   };
   try {
@@ -256,7 +259,7 @@ Future<void> _createOrReplaceUserRole(
         databaseId: databaseId,
         collectionId: _kColUserRoles,
         documentId: userId,
-        data: {'role_id': roleId},
+        data: {'role_id': roleName},
       );
     } else {
       rethrow;
@@ -340,7 +343,7 @@ Future<dynamic> main(final context) async {
     final fullName = _s(merged, const ['full_name', 'fullName']);
     final ownerType = _s(merged, const ['ownerType', 'owner_type']);
     final phoneNumber = _s(merged, const ['phoneNumber', 'phone_number']);
-    final roleId = _intPref(merged, const ['role_id', 'roleId']) ?? 1;
+    final roleId = _stringPref(merged, const ['role_id', 'roleId']) ?? 'user';
     final compoundId = _s(merged, const ['compound_id', 'compoundId']);
     final buildingNum = _s(merged, const ['building_num', 'buildingNum']);
     final apartmentNum = _s(merged, const ['apartment_num', 'apartmentNum']);

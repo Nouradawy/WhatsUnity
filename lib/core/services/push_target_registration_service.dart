@@ -66,8 +66,10 @@ class PushTargetRegistrationService {
 
   Future<void> _ensureFirebaseInitialized() async {
     if (_firebaseReady) return;
+    debugPrint('PushTargetRegistrationService: ensuring Firebase initialization...');
     try {
       if (Firebase.apps.isNotEmpty) {
+        debugPrint('PushTargetRegistrationService: Firebase already initialized.');
         _firebaseReady = true;
         return;
       }
@@ -99,12 +101,16 @@ class PushTargetRegistrationService {
           ),
         );
       } else {
-        await Firebase.initializeApp();
+        // On native platforms, we initialize in main.dart. 
+        // If it was skipped or failed there, we try a fallback here with a timeout.
+        debugPrint('PushTargetRegistrationService: performing fallback initialization for native...');
+        await Firebase.initializeApp().timeout(const Duration(seconds: 10));
       }
+      debugPrint('PushTargetRegistrationService: Firebase initialization complete.');
       _firebaseReady = true;
     } catch (e) {
       debugPrint(
-        'PushTargetRegistrationService: Firebase init failed: $e',
+        'PushTargetRegistrationService: Firebase init failed or timed out: $e',
       );
       _firebaseReady = false;
     }

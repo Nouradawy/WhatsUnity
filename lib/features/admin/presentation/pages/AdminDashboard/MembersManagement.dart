@@ -20,7 +20,7 @@ class _MembersManagementState extends State<MembersManagement> {
     super.initState();
     final authState = context.read<AuthCubit>().state;
     if (authState is Authenticated && authState.selectedCompoundId != null) {
-      context.read<AdminCubit>().loadCompoundMembers(authState.selectedCompoundId!);
+      context.read<AdminCubit>().fetchCompoundMembers(authState.selectedCompoundId!);
     }
   }
 

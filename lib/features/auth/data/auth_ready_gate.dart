@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../presentation/bloc/auth_cubit.dart';
+import '../presentation/bloc/auth_state.dart';
 import '../../../core/services/PresenceManager.dart';
 import '../../../core/services/app_permissions.dart';
 import '../../home/presentation/pages/main_screen.dart';
@@ -18,7 +19,14 @@ class _AuthReadyGateState extends State<AuthReadyGate> {
 
   Future<void> _init() async {
     final authCubit = context.read<AuthCubit>();
-    await authCubit.presetBeforeSignin();
+    // If we are already authenticated with a role, don't re-trigger initialization
+    // This prevents the infinite loop when main.dart rebuilds.
+    final state = authCubit.state;
+    if (state is Authenticated && state.role != null) {
+      debugPrint('AuthReadyGate: Already authenticated with role, skipping initialization');
+      return;
+    }
+    await authCubit.initializeAuthSession();
   }
 
   void _maybeShowPermissionsWelcome() {
@@ -46,7 +54,7 @@ class _AuthReadyGateState extends State<AuthReadyGate> {
         }
         if (snapshot.hasError) {
           debugPrint(
-            'AuthReadyGate: presetBeforeSignin failed: ${snapshot.error}\n'
+            'AuthReadyGate: initializeAuthSession failed: ${snapshot.error}\n'
             '${snapshot.stackTrace}',
           );
           return Scaffold(

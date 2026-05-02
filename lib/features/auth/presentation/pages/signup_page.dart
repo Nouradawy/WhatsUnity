@@ -6,12 +6,16 @@ import 'package:WhatsUnity/Layout/Cubit/cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:WhatsUnity/features/auth/presentation/pages/otp_screen.dart';
-import 'package:WhatsUnity/features/home/presentation/pages/main_screen.dart';
-import '../../../../core/services/PresenceManager.dart';
 import '../widgets/signup_sections.dart';
 
-class SignUp extends StatelessWidget {
-  SignUp({super.key});
+class SignUp extends StatefulWidget {
+  const SignUp({super.key});
+
+  @override
+  State<SignUp> createState() => _SignUpState();
+}
+
+class _SignUpState extends State<SignUp> {
   final TextEditingController fullName = TextEditingController();
   final TextEditingController displayName = TextEditingController();
   final TextEditingController email = TextEditingController();
@@ -24,30 +28,35 @@ class SignUp extends StatelessWidget {
   final _formKey3 = GlobalKey<FormState>();
 
   @override
+  void dispose() {
+    fullName.dispose();
+    displayName.dispose();
+    email.dispose();
+    password.dispose();
+    buildingNum.dispose();
+    apartmentNum.dispose();
+    phoneNumber.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
 
     return BlocConsumer<AuthCubit, AuthState>(
       listener: (context, state) {
         if (state is Authenticated) {
           final cubit = context.read<AuthCubit>();
-          // During Google sign-up, stay on this page until completeRegistration succeeds.
-          if (cubit.signInGoogle) return;
-          context.read<AuthCubit>().presetBeforeSignin().then((_) {
-            // Root [MyApp] may already have swapped SignUp for [AuthReadyGate];
-            // this context is then unmounted and Navigator must not run.
-            if (!context.mounted) return;
-            context.read<AppCubit>().bottomNavIndexChange(0);
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => PresenceManager(child: MainScreen()),
-              ),
-            );
-          }).catchError((Object e, StackTrace st) {
-            debugPrint(
-              'SignUp: presetBeforeSignin after Authenticated failed: $e\n$st',
-            );
-          });
+          
+          // CRITICAL: Prevent navigation if we are in the middle of Google 
+          // sign-up (profile incomplete) or if the preparation gate should 
+          // still be showing the loading spinner.
+          if (cubit.signInGoogle || cubit.signupGoogleEmail != null) return;
+          if (state.role == null) return;
+          
+          // Root [MyApp] (main.dart) will swap SignUp for [AuthReadyGate] 
+          // based on the Authenticated state. We only need to ensure 
+          // initial state for the app layout is set.
+          context.read<AppCubit>().bottomNavIndexChange(0);
         }
         if (state is SignUpSuccess) {
           if (!context.mounted) return;
@@ -58,21 +67,8 @@ class SignUp extends StatelessWidget {
           );
         }
         if (state is RegistrationSuccess) {
-          context.read<AuthCubit>().presetBeforeSignin().then((_) {
-            if (!context.mounted) return;
-            context.read<AppCubit>().bottomNavIndexChange(0);
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => PresenceManager(child: MainScreen()),
-              ),
-            );
-          }).catchError((Object e, StackTrace st) {
-            debugPrint(
-              'SignUp: presetBeforeSignin after RegistrationSuccess failed: '
-              '$e\n$st',
-            );
-          });
+          // Root [MyApp] (main.dart) will swap SignUp for [AuthReadyGate].
+          context.read<AppCubit>().bottomNavIndexChange(0);
         }
         if (state is AuthError) {
           ScaffoldMessenger.of(context).showSnackBar(

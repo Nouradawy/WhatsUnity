@@ -27,7 +27,7 @@ class MaintenanceReports {
 
   factory MaintenanceReports.fromJson(Map<String, dynamic> json) {
     return MaintenanceReports(
-      id: json["id"] != null ? json["id"].toString() : null,
+      id: json["id"]?.toString(),
       userId: json["user_id"],
       reportCode: json['report_code'],
       title: json["title"],
@@ -75,7 +75,7 @@ class MaintenanceReportsHistory {
 
   factory MaintenanceReportsHistory.fromJson(Map<String, dynamic> json) {
     return MaintenanceReportsHistory(
-        id: json["id"] != null ? json["id"].toString() : null,
+        id: json["id"]?.toString(),
         reportId: json["report_id"].toString(),
         actorId: json["actor_id"],
         action: json["action"],
@@ -108,8 +108,8 @@ class MaintenanceReportsAttachments {
 
   factory MaintenanceReportsAttachments.fromJson(Map<String, dynamic> json) {
     return MaintenanceReportsAttachments(
-        id: json['id'] != null ? json['id'].toString() : null,
-        reportId: json['report_id'] != null ? json['report_id'].toString() : null,
+        id: json['id']?.toString(),
+        reportId: json['report_id']?.toString(),
         sourceUrl: json['source_url'],
         createdAt: DateTime.tryParse(json['created_at']),
     );

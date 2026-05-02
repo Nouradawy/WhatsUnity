@@ -27,7 +27,7 @@ class AdminDashboard extends StatelessWidget {
       body: BlocListener<AuthCubit, AuthState>(
         listener: (context, state) {
           if ((state is CompoundSelected || state is CompoundMembersUpdated) && state is Authenticated) {
-            context.read<AdminCubit>().loadCompoundMembers(state.selectedCompoundId!);
+            context.read<AdminCubit>().fetchCompoundMembers(state.selectedCompoundId!);
             context.read<AdminCubit>().loadUserReports();
           }
         },

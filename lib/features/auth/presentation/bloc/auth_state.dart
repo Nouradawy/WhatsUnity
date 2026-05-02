@@ -13,7 +13,7 @@ abstract class AuthState {
   AuthState({
     this.categories = const [],
     this.compoundsLogos = const [],
-    this.timestamp =0,
+    required this.timestamp,
   });
 }
 
@@ -21,16 +21,16 @@ class AuthInitial extends AuthState {
   AuthInitial({
     super.categories,
     super.compoundsLogos,
-    super.timestamp,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class AuthLoading extends AuthState {
   AuthLoading({
     super.categories,
     super.compoundsLogos,
-    super.timestamp,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class Authenticated extends AuthState {
@@ -58,7 +58,7 @@ class Authenticated extends AuthState {
     this.googleUser,
     super.categories,
     super.compoundsLogos,
-    super.timestamp,
+    required super.timestamp,
   });
 
   Authenticated copyWith({
@@ -96,8 +96,8 @@ class Unauthenticated extends AuthState {
   Unauthenticated({
     super.categories,
     super.compoundsLogos,
-    super.timestamp
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class AuthError extends AuthState {
@@ -105,14 +105,16 @@ class AuthError extends AuthState {
   AuthError(this.message, {
     super.categories,
     super.compoundsLogos,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class RegistrationSuccess extends AuthState {
   RegistrationSuccess({
     super.categories,
     super.compoundsLogos,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class SignUpSuccess extends AuthState {
@@ -121,7 +123,8 @@ class SignUpSuccess extends AuthState {
     required this.email,
     super.categories,
     super.compoundsLogos,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class ApartmentTakenStatus extends AuthState {
@@ -130,7 +133,8 @@ class ApartmentTakenStatus extends AuthState {
     required this.isTaken,
     super.categories,
     super.compoundsLogos,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class CompoundSelected extends AuthState {
@@ -138,35 +142,40 @@ class CompoundSelected extends AuthState {
   CompoundSelected(this.compoundId, {
     super.categories,
     super.compoundsLogos,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class GoogleSignupState extends AuthState {
   GoogleSignupState({
     super.categories,
     super.compoundsLogos,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class ProfileUpdated extends AuthState {
   ProfileUpdated({
     super.categories,
     super.compoundsLogos,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class EmailChangeRequested extends AuthState {
   EmailChangeRequested({
     super.categories,
     super.compoundsLogos,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class PasswordUpdated extends AuthState {
   PasswordUpdated({
     super.categories,
     super.compoundsLogos,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 
 class CompoundMembersUpdated extends AuthState {
@@ -182,6 +191,7 @@ class CompoundMembersUpdated extends AuthState {
     this.currentUser,
     super.categories,
     super.compoundsLogos,
-  });
+    int? timestamp,
+  }) : super(timestamp: timestamp ?? DateTime.now().microsecondsSinceEpoch);
 }
 

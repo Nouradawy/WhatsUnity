@@ -22,7 +22,7 @@ class ReportAUsers {
 
   factory ReportAUsers.fromJson(Map<String, dynamic> json) {
     return ReportAUsers(
-      id: json['id'] != null ? json['id'].toString() : null,
+      id: json['id']?.toString(),
       authorId: json['authorId'],
       createdAt: DateTime.tryParse(json['createdAt'])!,
       reportedUserId: json['reportedUserId'],

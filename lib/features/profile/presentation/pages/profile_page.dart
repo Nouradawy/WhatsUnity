@@ -85,26 +85,22 @@ class _ProfilePageState extends State<ProfilePage> {
     final generalChatEnabled = await notificationService
         .fetchIsNotificationChannelEnabled(
           userId: normalizedUserId,
-          notificationPreferenceChannel:
-              NotificationPreferenceChannel.generalChat,
+          notificationPreferenceChannel: NotificationPreferenceChannel.generalChat,
         );
     final buildingChatEnabled = await notificationService
         .fetchIsNotificationChannelEnabled(
           userId: normalizedUserId,
-          notificationPreferenceChannel:
-              NotificationPreferenceChannel.buildingChat,
+          notificationPreferenceChannel: NotificationPreferenceChannel.buildingChat,
         );
     final adminNotificationsEnabled = await notificationService
         .fetchIsNotificationChannelEnabled(
           userId: normalizedUserId,
-          notificationPreferenceChannel:
-              NotificationPreferenceChannel.adminNotification,
+          notificationPreferenceChannel: NotificationPreferenceChannel.adminNotification,
         );
     final maintenanceNotificationsEnabled = await notificationService
         .fetchIsNotificationChannelEnabled(
           userId: normalizedUserId,
-          notificationPreferenceChannel:
-              NotificationPreferenceChannel.maintenanceNotification,
+          notificationPreferenceChannel: NotificationPreferenceChannel.maintenanceNotification,
         );
     if (!mounted) return;
     setState(() {

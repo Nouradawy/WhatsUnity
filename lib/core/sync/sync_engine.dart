@@ -54,13 +54,16 @@ class SyncEngine {
   void start() {
     if (_started) return;
     _started = true;
+    debugPrint('[Sync] Starting SyncEngine...');
     unawaited(_refreshConnectivity());
     _netSub = _connectivity.onConnectivityChanged.listen((_) {
+      debugPrint('[Sync] Connectivity changed, refreshing...');
       unawaited(_refreshConnectivity());
     });
   }
 
   Future<void> dispose() async {
+    debugPrint('[Sync] Disposing SyncEngine');
     await _netSub?.cancel();
     _netSub = null;
     _started = false;
@@ -70,7 +73,9 @@ class SyncEngine {
     try {
       final r = await _connectivity.checkConnectivity();
       _online = _resultsOnline(r);
-    } catch (_) {
+      debugPrint('[Sync] Online status: $_online');
+    } catch (e) {
+      debugPrint('[Sync] Connectivity check failed: $e');
       _online = true;
     }
     if (_online) {

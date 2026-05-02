@@ -240,8 +240,8 @@ class _OtpScreenState extends State<OtpScreen> {
 
   Future<void> _finishSignUpAfterVerification() async {
     final authCubit = context.read<AuthCubit>();
-    await authCubit.presetBeforeSignin();
-    await authCubit.verificationFilesUpload();
+    await authCubit.initializeAuthSession();
+    await authCubit.submitVerificationFiles();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
@@ -286,7 +286,7 @@ class _OtpScreenState extends State<OtpScreen> {
 
       final authCubit = context.read<AuthCubit>();
       if (widget.isProfile == true) {
-        await authCubit.presetBeforeSignin();
+        await authCubit.initializeAuthSession();
         if (!mounted) return;
         Navigator.pop(context);
         return;

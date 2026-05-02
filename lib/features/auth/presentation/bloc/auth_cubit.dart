@@ -1,27 +1,39 @@
+/**
+ * [AuthCubit]
+ *
+ * This file manages the UI state for authentication, registration, and user context.
+ */
 import 'dart:async';
 import 'dart:convert';
+import 'package:WhatsUnity/core/config/app_directory_types.dart' show Users;
 import 'package:WhatsUnity/core/config/runtime_env.dart';
 import 'package:appwrite/appwrite.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode ,kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/config/Enums.dart';
 import '../../../../core/config/appwrite.dart';
-import '../../../../core/config/app_directory_types.dart' show Users;
 import '../../../../core/constants/Constants.dart';
 import '../../../../core/models/CompoundsList.dart';
 import '../../../../core/network/CacheHelper.dart';
 import '../../../chat/data/models/chat_member_model.dart';
-import '../../domain/entities/app_user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import 'auth_state.dart';
 
+/// Manages the authentication lifecycle and UI state for the Auth feature.
+/// 
+/// Responsibilities:
+/// 1. Initialize sessions and restore local state.
+/// 2. Handle sign-in/up/out flows.
+/// 3. Observe realtime role changes and profile updates.
+/// 4. Manage multi-compound selection and member data.
 class AuthCubit extends Cubit<AuthState> {
   final AuthRepository repository;
 
-  // UI state moved from AppCubit
+  // ── UI State Fields ──────────────────────────────────────────────────────
+
   bool isPassword = true;
   IconData suffixIcon = Icons.visibility_off;
   bool signInToggler = true;
@@ -29,868 +41,187 @@ class AuthCubit extends Cubit<AuthState> {
   String? signupGoogleEmail;
   String? signupGoogleUserName;
   bool signInGoogle = false;
+  
+  /// Unique identifier for the current session. Used as a ValueKey in main.dart
+  /// to force a hard-refresh of the app tree for teardown safety and moderation.
   int authSessionNonce = DateTime.now().microsecondsSinceEpoch;
 
   bool signingIn = false;
   bool googleSigningIn = false;
+  bool enabledMultiCompound = false;
   List<XFile>? verFiles;
   final List<double> uploadProgress = [];
   bool apartmentConflict = false;
 
   List<Category> compoundSuggestions = [];
 
-  /// Prevents re-entrant [loadCompounds] when UI calls it from [build] (infinite AuthLoading loop).
-  bool _loadCompoundsInProgress = false;
-
   Roles? roleName;
   String? selectedCompoundId;
   Map<String, dynamic> myCompounds = {'0': "Add New Community"};
 
-  AuthCubit({required this.repository}) : super(AuthInitial()) {
+  /// Set of occupied apartment keys (building_apartment) for the currently 
+  /// selected/typed compound in the registration flow.
+  final Set<String> _occupiedApartments = {};
+  RealtimeSubscription? _occupancySubscription;
 
+  // ── Lifecycle & Realtime Fields ──────────────────────────────────────────
 
-    if (kIsWeb) {
-      // 1. Initialize the singleton with your Web Client ID
-      GoogleSignIn.instance.initialize(clientId: RuntimeEnv.googleServerClientId);
-
-      // 2. Listen to the new v7 event stream!
-      GoogleSignIn.instance.authenticationEvents.listen((event) async {
-
-        // Check if the event is a successful login
-        if (event is GoogleSignInAuthenticationEventSignIn) {
-          try {
-            print("🚀 [WEB GOOGLE] Account caught! Fetching token...");
-
-            // Extract the user account from the new event object
-            final account = event.user;
-            final auth = await account.authentication;
-
-            if (auth.idToken != null) {
-              print("🚀 [WEB GOOGLE] Token found! Sending to backend bridge...");
-              await repository.completeWebGoogleLogin(auth.idToken!);
-              print("🚀 [WEB GOOGLE] Bridge complete!");
-            }
-          } catch (e) {
-            print("❌ [WEB GOOGLE] SILENT CRASH: $e");
-          }
-        }
-      });
-
-      // 3. Kickstart using the new v7 lightweight method!
-    // --- THE FIX: PROPER ASYNC ERROR CATCHING ---
-    GoogleSignIn.instance.attemptLightweightAuthentication()?.catchError((error) {
-    // This safely swallows the FedCM 'canceled' error so Dart doesn't crash!
-    print("ℹ️ [WEB GOOGLE] Lightweight auth skipped (Normal behavior): $error");
-    });
-    }
-    // Listen to the Appwrite-backed auth stream.
-    // Emits AppUser? — non-null means signed in, null means signed out.
-    repository.onAuthStateChange.listen(
-      (appUser) {
-        try {
-          if (appUser != null) {
-            final isProfileIncomplete = appUser.userMetadata == null || appUser.userMetadata!['role_id'] == null;
-
-            if (isProfileIncomplete) {
-              // FORCE them to the completion form instead of logging them in!
-              signupGoogleEmail = appUser.email;
-              signupGoogleUserName = appUser.userMetadata?['full_name'] ?? appUser.userMetadata?['name'];
-              signInToggler = false;
-              emit(GoogleSignupState());
-              return;
-            }
-            _attachRealtimeUserObservers(appUser.id);
-            authSessionNonce = DateTime.now().microsecondsSinceEpoch;
-            if (state is Authenticated) {
-              // Preserve all loaded data (chatMembers, compounds, etc.);
-              // only refresh the user object itself.
-              emit((state as Authenticated).copyWith(user: appUser));
-            } else {
-              emit(Authenticated(
-                user: appUser,
-                enabledMultiCompound: enabledMultiCompound,
-                googleUser: googleUser,
-                categories: state.categories,
-                compoundsLogos: state.compoundsLogos,
-              ));
-            }
-          } else {
-            _detachRealtimeUserObservers();
-            authSessionNonce = DateTime.now().microsecondsSinceEpoch;
-            signInToggler = true;
-            emit(Unauthenticated(
-              categories: state.categories,
-              compoundsLogos: state.compoundsLogos,
-            ));
-          }
-        } catch (e, st) {
-          debugPrint('[AuthCubit] onAuthStateChange handler failed: $e\n$st');
-        }
-      },
-      onError: (Object e, StackTrace st) {
-        debugPrint('[AuthCubit] onAuthStateChange stream error: $e\n$st');
-      },
-    );
-  }
-
-  bool enabledMultiCompound = false;
-  GoogleSignInAccount? googleUser;
-  Future<void>? _presetBeforeSigninInFlight;
+  bool _fetchCompoundsInProgress = false;
+  Future<void>? _authSessionInitializationInFlight;
   bool _isSigningOut = false;
   RealtimeSubscription? _profilesRealtimeSubscription;
   RealtimeSubscription? _userRolesRealtimeSubscription;
   String? _realtimeObservedUserId;
   bool _refreshFromRealtimeInProgress = false;
 
-  Future<void> _persistCachedRoleId({
-    required String userId,
-    required String? email,
-    required Roles role,
-  }) async {
-    try {
-      final cacheKey = CacheHelper.cachedUserDataKey(userId);
-      final existingRaw =
-          await CacheHelper.getData(key: cacheKey, type: "String") as String?;
-      Map<String, dynamic> cached = <String, dynamic>{};
-      if (existingRaw != null && existingRaw.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(existingRaw);
-          if (decoded is Map) {
-            cached = Map<String, dynamic>.from(decoded);
-          }
-        } catch (_) {
-          cached = <String, dynamic>{};
-        }
-      }
-      cached['email'] = email ?? (cached['email'] ?? '');
-      cached['role_id'] = role.index + 1;
-      await CacheHelper.saveData(key: cacheKey, value: jsonEncode(cached));
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[AuthCubit] _persistCachedRoleId failed: $e');
-      }
-    }
+  AuthCubit({required this.repository}) : super(AuthInitial()) {
+    _setupWebGoogleAuth();
+    _listenToAuthState();
   }
 
-  Roles? _resolveRoleFromRoleId(dynamic roleRaw) {
-    if (roleRaw == null) return null;
-    final roleId = roleRaw is int ? roleRaw : int.tryParse(roleRaw.toString());
-    if (roleId == null || roleId <= 0 || roleId > Roles.values.length) {
-      return null;
-    }
-    return Roles.values[roleId - 1];
-  }
+  // ─────────────────────────────────────────────────────────────────────────
+  // 1. Lifecycle & Initialization
+  // ─────────────────────────────────────────────────────────────────────────
 
-  Future<Roles?> _fetchRemoteRoleForUser(String userId) async {
-    try {
-      final result = await appwriteTables.listRows(
-        databaseId: appwriteDatabaseId,
-        tableId: 'user_roles',
-        queries: [
-          Query.equal('user_id', userId),
-          Query.isNull('deleted_at'),
-          Query.orderDesc(r'$updatedAt'),
-          Query.limit(1),
-        ],
-      );
-      if (result.rows.isEmpty) return null;
-      return _resolveRoleFromRoleId(result.rows.first.data['role_id']);
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[AuthCubit] _fetchRemoteRoleForUser failed: $e');
-      }
-      return null;
-    }
-  }
-
-  Future<void> _refreshAuthenticatedStateFromRemote() async {
-    if (_refreshFromRealtimeInProgress) return;
-    _refreshFromRealtimeInProgress = true;
-    try {
-      final refreshedUser = await repository.fetchCurrentUser();
-      if (refreshedUser == null) return;
-
-      final roleFromUserRoles = await _fetchRemoteRoleForUser(refreshedUser.id);
-      final roleFromPrefs = _resolveRoleFromRoleId(
-        refreshedUser.userMetadata?['role_id'],
-      );
-      // Source of truth for runtime authorization is `user_roles`.
-      // Prefs can lag behind and must not override a fresh role change.
-      final resolvedRole = roleFromUserRoles ?? roleFromPrefs;
-      if (resolvedRole != null) {
-        await _persistCachedRoleId(
-          userId: refreshedUser.id,
-          email: refreshedUser.email,
-          role: resolvedRole,
-        );
-      }
-
-      final activeState = state;
-      final selectedCompoundId =
-          activeState is Authenticated ? activeState.selectedCompoundId : null;
-
-      List<ChatMember> refreshedMembers = const [];
-      List<Users> refreshedMembersData = const [];
-      ChatMember? refreshedCurrentMember;
-      if (selectedCompoundId != null && selectedCompoundId.isNotEmpty) {
-        try {
-          final membersResult = await repository.loadCompoundMembers(
-            selectedCompoundId,
-            role: resolvedRole,
-          );
-          refreshedMembers = membersResult.members;
-          refreshedMembersData = membersResult.membersData;
-          refreshedCurrentMember = refreshedMembers.firstWhere(
-            (member) => member.id.trim() == refreshedUser.id.trim(),
-            orElse: () => refreshedMembers.isNotEmpty
-                ? refreshedMembers.first
-                : throw StateError('No members found'),
-          );
-        } catch (_) {
-          refreshedCurrentMember = null;
-        }
-      }
-
-      if (activeState is Authenticated) {
-        emit(activeState.copyWith(
-          user: refreshedUser,
-          role: resolvedRole,
-          chatMembers: refreshedMembers,
-          membersData: refreshedMembersData,
-          currentUser: refreshedCurrentMember,
-          timestamp: DateTime.now().microsecondsSinceEpoch,
-        ));
-      } else {
-        emit(Authenticated(
-          user: refreshedUser,
-          role: resolvedRole,
-          chatMembers: refreshedMembers,
-          membersData: refreshedMembersData,
-          currentUser: refreshedCurrentMember,
-          timestamp: DateTime.now().microsecondsSinceEpoch,
-        ));
-      }
-    } catch (e, st) {
-      debugPrint(
-        '[AuthCubit] _refreshAuthenticatedStateFromRemote failed: $e\n$st',
-      );
-    } finally {
-      _refreshFromRealtimeInProgress = false;
-    }
-  }
-
-  void _attachRealtimeUserObservers(String userId) {
-    if (_realtimeObservedUserId == userId &&
-        _profilesRealtimeSubscription != null &&
-        _userRolesRealtimeSubscription != null) {
-      return;
-    }
-    _detachRealtimeUserObservers();
-    _realtimeObservedUserId = userId;
-
-    try {
-      final profileChannels = <String>[
-        'databases.$appwriteDatabaseId.collections.profiles.documents.$userId',
-      ];
-      _profilesRealtimeSubscription =
-          appwriteRealtime.subscribe(profileChannels);
-      _profilesRealtimeSubscription!.stream.listen(
-        (_) {
-          unawaited(_refreshAuthenticatedStateFromRemote());
-        },
-        onError: (Object e, StackTrace st) {
-          debugPrint('[AuthCubit] profiles realtime stream error: $e\n$st');
-        },
-      );
-
-      final userRoleChannels = <String>[
-        'databases.$appwriteDatabaseId.collections.user_roles.documents',
-        'databases.$appwriteDatabaseId.tables.user_roles.rows',
-      ];
-      _userRolesRealtimeSubscription =
-          appwriteRealtime.subscribe(userRoleChannels);
-      _userRolesRealtimeSubscription!.stream.listen(
-        (message) {
-          try {
-            final payload = Map<String, dynamic>.from(message.payload);
-            final eventUserId = (payload['user_id'] ?? payload[r'$id'] ?? '')
-                .toString()
-                .trim();
-            if (eventUserId != userId) return;
-
-            final roleFromPayload = _resolveRoleFromRoleId(payload['role_id']);
-            if (roleFromPayload != null && state is Authenticated) {
-              final currentState = state as Authenticated;
-              unawaited(
-                _persistCachedRoleId(
-                  userId: currentState.user.id,
-                  email: currentState.user.email,
-                  role: roleFromPayload,
-                ),
-              );
-              emit((state as Authenticated).copyWith(
-                role: roleFromPayload,
-                timestamp: DateTime.now().microsecondsSinceEpoch,
-              ));
-            }
-            unawaited(_refreshAuthenticatedStateFromRemote());
-          } catch (e, st) {
-            debugPrint(
-              '[AuthCubit] user_roles realtime message handler failed: $e\n$st',
-            );
-          }
-        },
-        onError: (Object e, StackTrace st) {
-          debugPrint('[AuthCubit] user_roles realtime stream error: $e\n$st');
-        },
-      );
-    } catch (e, st) {
-      debugPrint('[AuthCubit] _attachRealtimeUserObservers failed: $e\n$st');
-      _detachRealtimeUserObservers();
-      _realtimeObservedUserId = null;
-    }
-  }
-
-  void _detachRealtimeUserObservers() {
-    _profilesRealtimeSubscription?.close();
-    _profilesRealtimeSubscription = null;
-    _userRolesRealtimeSubscription?.close();
-    _userRolesRealtimeSubscription = null;
-    _realtimeObservedUserId = null;
-  }
-
-  void togglePasswordVisibility() {
-    isPassword = !isPassword;
-    suffixIcon = isPassword ? Icons.visibility_off : Icons.visibility;
-    if (state is Authenticated) {
-      emit((state as Authenticated).copyWith());
-    } else if (state is Unauthenticated) {
-      emit(Unauthenticated(
-          categories: state.categories,
-          compoundsLogos: state.compoundsLogos));
-    } else {
-      emit(AuthInitial(
-          categories: state.categories, compoundsLogos: state.compoundsLogos));
-    }
-  }
-
-  void toggleSignIn() {
-    signInToggler = !signInToggler;
-    if (state is Authenticated) {
-      emit((state as Authenticated).copyWith());
-    } else if (state is Unauthenticated) {
-      emit(Unauthenticated(
-          categories: state.categories,
-          compoundsLogos: state.compoundsLogos));
-    } else {
-      emit(AuthInitial(
-          categories: state.categories, compoundsLogos: state.compoundsLogos));
-    }
-  }
-
-  void changeRole(Roles? newRole) {
-    roleName = newRole ?? Roles.user;
-    if (state is Authenticated) {
-      emit((state as Authenticated).copyWith(role: roleName));
-    } else {
-      emit(AuthInitial());
-    }
-  }
-
-  void updateMember(ChatMember updatedMember) {
-    if (state is Authenticated) {
-      final s = state as Authenticated;
-      final members = List<ChatMember>.from(s.chatMembers);
-      final index = members.indexWhere((m) => m.id == updatedMember.id);
-      if (index != -1) {
-        members[index] = updatedMember;
-
-        ChatMember? current = s.currentUser;
-        if (current?.id == updatedMember.id) {
-          current = updatedMember;
-        }
-
-        emit(s.copyWith(chatMembers: members, currentUser: current));
-      }
-    }
-  }
-
-  void updateRole(Roles role) {
-    if (state is Authenticated) {
-      emit((state as Authenticated).copyWith(role: role));
-    }
-  }
-
-  void changeOwnerType(OwnerTypes newType) {
-    ownerType = newType;
-    emit(AuthInitial());
-  }
-
-  void signInSwitcher() {
-    signingIn = !signingIn;
-    emit(AuthInitial());
-  }
-
-  void googleSignInSwitcher() {
-    googleSigningIn = !googleSigningIn;
-    if (state is Authenticated) {
-      emit((state as Authenticated).copyWith());
-    } else if (state is Unauthenticated) {
-      emit(Unauthenticated(
-          categories: state.categories,
-          compoundsLogos: state.compoundsLogos));
-    } else {
-      emit(AuthInitial(
-          categories: state.categories, compoundsLogos: state.compoundsLogos));
-    }
-  }
-
-  Future<void> verFileImport() async {
-    final List<XFile> result = await ImagePicker().pickMultiImage(
-      imageQuality: 70,
-      maxWidth: 1440,
-    );
-
-    if (result.isEmpty) return;
-
-    verFiles = result;
-    emit(AuthInitial());
-  }
-
-  void clearVerFiles() {
-    verFiles = null;
-    emit(AuthInitial());
-  }
-
-  Future<void> verificationFilesUpload() async {
-    if (verFiles == null || verFiles!.isEmpty) return;
-
-    emit(AuthLoading());
-    try {
-      final s = state;
-      // Prefer the Authenticated state's user; fall back to cached repository user.
-      final userId = (s is Authenticated)
-          ? s.user.id
-          : repository.currentUser?.id;
-      if (userId == null) throw Exception("User ID not found");
-
-      await repository.uploadVerificationFiles(
-        files: verFiles!,
-        userId: userId,
-        onProgress: (index, progress) {
-          if (uploadProgress.length <= index) {
-            uploadProgress.add(progress);
-          } else {
-            uploadProgress[index] = progress;
-          }
-          emit(AuthInitial());
-        },
-      );
-      emit(AuthInitial());
-    } catch (e) {
-      emit(AuthError(e.toString()));
-    }
-  }
-
-  Future<void> isApartmentTaken({
-    required String compoundId,
-    required String buildingName,
-    required String apartmentNum,
-  }) async {
-    try {
-      final taken = await repository.isApartmentTaken(
-        compoundId: compoundId,
-        buildingName: buildingName,
-        apartmentNum: apartmentNum,
-      );
-      apartmentConflict = taken;
-      emit(ApartmentTakenStatus(isTaken: taken));
-    } catch (e) {
-      emit(AuthError(e.toString()));
-    }
-  }
-
-  Future<void> resetUserData() async {
-    emit(AuthInitial());
-  }
-
-  Future<void> selectCompound({
-    required String compoundId,
-    required String compoundName,
-    required bool atWelcome,
-  }) async {
-    try {
-      if (kDebugMode) {
-        debugPrint(
-          '[AuthCubit] selectCompound: id=$compoundId name="$compoundName" '
-          'atWelcome=$atWelcome state=${state.runtimeType}',
-        );
-      }
-      selectedCompoundId = compoundId;
-      if (atWelcome) {
-        myCompounds = {
-          '0': "Add New Community",
-          compoundId: compoundName,
-        };
-      } else {
-        myCompounds[compoundId] = compoundName;
-      }
-
-      await repository.selectCompound(
-        compoundId: compoundId,
-        compoundName: compoundName,
-        atWelcome: atWelcome,
-      );
-
-      if (state is Authenticated) {
-        emit((state as Authenticated).copyWith(
-          selectedCompoundId: compoundId,
-          myCompounds: Map<String, dynamic>.from(myCompounds),
-        ));
-        if (kDebugMode) {
-          debugPrint(
-            '[AuthCubit] selectCompound: done → Authenticated(selectedCompoundId=$compoundId)',
-          );
-        }
-      } else {
-        emit(CompoundSelected(compoundId));
-        if (kDebugMode) {
-          debugPrint(
-            '[AuthCubit] selectCompound: done → CompoundSelected($compoundId)',
-          );
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[AuthCubit] selectCompound: ERROR $e');
-      }
-      emit(AuthError(e.toString()));
-    }
-  }
-
-  /// Restores [selectedCompoundId] from cached JSON (legacy int or Appwrite String).
-  String? _coerceToCompoundId(dynamic value) {
-    if (value == null) return null;
-    if (value is String && value.isNotEmpty) return value;
-    final s = value.toString();
-    if (s.isEmpty || s == 'null') return null;
-    return s;
-  }
-
-  Map<String, dynamic> _parseMyCompoundsMap(dynamic raw) {
-    if (raw == null) return {'0': "Add New Community"};
-    if (raw is Map<String, dynamic>) {
-      return Map<String, dynamic>.from(raw);
-    }
-    if (raw is Map) {
-      return raw.map((k, v) => MapEntry(k.toString(), v));
-    }
-    return {'0': "Add New Community"};
-  }
-
-  /// Snapshots the signed-in user's compound data before sign-out so that
-  /// presetBeforeSignin can restore it on next login without a network round-trip.
-  Future<void> _cacheUserSnapshotOnSignOut() async {
-    // Read identity from the current Authenticated state instead of from
-    // supabase.auth.currentUser — the Appwrite session is authoritative now.
-    if (state is! Authenticated) return;
-    final user = (state as Authenticated).user;
-
-    final Map<String, dynamic> compounds = Map<String, dynamic>.from(
-      (state as Authenticated).myCompounds,
-    );
-    final String? compoundId = (state as Authenticated).selectedCompoundId;
-
-    final payload = <String, dynamic>{
-      'email': user.email ?? '',
-      'selectedCompoundId': compoundId,
-      'myCompounds': compounds,
-      if (user.userMetadata?['role_id'] != null)
-        'role_id': user.userMetadata!['role_id'],
-    };
-
-    await CacheHelper.saveData(
-      key: CacheHelper.cachedUserDataKey(user.id),
-      value: jsonEncode(payload),
-    );
-  }
-
-  Future<void> presetBeforeSignin() async {
-    final inFlight = _presetBeforeSigninInFlight;
+  /// Restores the auth session from local storage or Appwrite.
+  /// This is the primary entry point for the app's auth state bootstrap.
+  Future<void> initializeAuthSession() async {
+    final inFlight = _authSessionInitializationInFlight;
     if (inFlight != null) return inFlight;
 
-    final future = _presetBeforeSigninImpl();
-    _presetBeforeSigninInFlight = future;
+    final future = _initializeAuthSessionImpl();
+    _authSessionInitializationInFlight = future;
     try {
       await future;
     } finally {
-      if (identical(_presetBeforeSigninInFlight, future)) {
-        _presetBeforeSigninInFlight = null;
+      if (identical(_authSessionInitializationInFlight, future)) {
+        _authSessionInitializationInFlight = null;
       }
     }
   }
 
-  Future<void> _presetBeforeSigninImpl() async {
-    emit(AuthLoading(
-        categories: state.categories, compoundsLogos: state.compoundsLogos));
+  /// Implementation of session initialization. Fetches categories, current user,
+  /// role, and compound data from the repository.
+  Future<void> _initializeAuthSessionImpl() async {
+    debugPrint("[AuthCubit] _initializeAuthSessionImpl starting...");
+    // Only emit AuthLoading if we don't have enough state to show the current screen
+    if (state is AuthInitial || state is Unauthenticated) {
+      emit(AuthLoading(categories: state.categories, compoundsLogos: state.compoundsLogos));
+    }
     try {
-      List<Category> currentCategories = state.categories;
-      List<String> currentLogos = state.compoundsLogos;
+      final result = await repository.prepareAuthSession().timeout(const Duration(seconds: 25));
+      debugPrint("[AuthCubit] prepareAuthSession result: user=${result.user?.id}, role=${result.role}, incomplete=${result.isProfileIncomplete}");
 
-      if (currentCategories.isEmpty) {
-        try {
-          currentCategories = await repository.loadCompounds();
-        } catch (e, st) {
-          debugPrint(
-            '[AuthCubit] presetBeforeSignin: loadCompounds failed (offline?): $e\n$st',
-          );
-          currentCategories = state.categories;
-        }
-      }
-      if (currentLogos.isEmpty) {
-        currentLogos = await AssetHelper.loadCompoundLogos();
-      }
-
-      // Use repository.fetchCurrentUser() so we get the Appwrite session
-      // even when the constructor's _checkExistingSession is still in-flight.
-      AppUser? currentUserAuth;
-      try {
-        currentUserAuth = await repository.fetchCurrentUser();
-      } catch (e, st) {
-        debugPrint(
-          '[AuthCubit] presetBeforeSignin: fetchCurrentUser failed (offline?): $e\n$st',
-        );
-        currentUserAuth = null;
-      }
-
-      if (currentUserAuth == null) {
-        final lastUserId = await CacheHelper.getLastActiveUserId();
-        if (lastUserId != null && lastUserId.isNotEmpty) {
-          final String? cachedRaw = await CacheHelper.getData(
-            key: CacheHelper.cachedUserDataKey(lastUserId),
-            type: "String",
-          ) as String?;
-          if (cachedRaw != null && cachedRaw.isNotEmpty) {
-            try {
-              final decoded = jsonDecode(cachedRaw);
-              if (decoded is Map) {
-                final m = Map<String, dynamic>.from(decoded);
-                final email = m['email']?.toString();
-                final rid = m['role_id'];
-                final Map<String, dynamic>? meta =
-                    rid != null ? <String, dynamic>{'role_id': rid} : null;
-                currentUserAuth = AppUser(
-                  id: lastUserId,
-                  email: email,
-                  userMetadata: meta,
-                );
-                repository.primeCurrentUser(currentUserAuth);
-              }
-            } catch (e) {
-              debugPrint(
-                'presetBeforeSignin: offline user restore from cache failed ($e)',
-              );
-            }
-          }
-        }
-      }
-
-      if (currentUserAuth == null) {
+      if (result.user == null) {
         emit(Unauthenticated(
-          categories: currentCategories,
-          compoundsLogos: currentLogos,
+          categories: result.categories,
+          compoundsLogos: result.compoundsLogos,
         ));
         return;
       }
-      final String userId = currentUserAuth.id;
 
-      Map<String, dynamic> localMyCompounds = {'0': "Add New Community"};
-      String? localSelectedCompoundId;
+      // Handle incomplete profile (e.g. Google login without registration details)
+      if (result.isProfileIncomplete) {
+        // On Web, always go to registration if incomplete (native HTML button)
+        // On Android, only go to registration if explicitly in a Google flow
+        if (kIsWeb || (signInGoogle)) {
+          signupGoogleEmail ??= result.user?.email;
+          signupGoogleUserName ??= result.user?.userMetadata?['full_name'] ?? result.user?.userMetadata?['name'];
 
-      // 1) Prefer per-user snapshot from last sign-out.
-      final String? cachedRaw = await CacheHelper.getData(
-        key: CacheHelper.cachedUserDataKey(userId),
-        type: "String",
-      ) as String?;
-      if (cachedRaw != null && cachedRaw.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(cachedRaw);
-          if (decoded is Map) {
-            final m = Map<String, dynamic>.from(decoded);
-            localSelectedCompoundId = _coerceToCompoundId(m['selectedCompoundId']);
-            final mc = m['myCompounds'];
-            if (mc != null) {
-              localMyCompounds = _parseMyCompoundsMap(mc);
-            }
-          }
-        } catch (e) {
-          debugPrint(
-              'presetBeforeSignin: invalid cached user JSON, using fallback ($e)');
+          signInToggler = false;
+          emit(GoogleSignupState(
+            categories: state.categories,
+            compoundsLogos: state.compoundsLogos,
+          ));
+          return;
         }
       }
 
-      // 2) Fallback: user_apartments in Appwrite (string user_id + compound_id).
-      if (localSelectedCompoundId == null) {
-        try {
-          localSelectedCompoundId =
-              await repository.getDefaultCompoundId(userId);
-        } catch (e, st) {
-          debugPrint(
-            '[AuthCubit] presetBeforeSignin: getDefaultCompoundId failed: $e\n$st',
-          );
-        }
-      }
+      selectedCompoundId = result.selectedCompoundId;
+      myCompounds = result.myCompounds;
 
-      // 3) Device-local last compound ([CacheHelper.saveCompoundCurrentIndex]).
-      if (localSelectedCompoundId == null || localSelectedCompoundId.isEmpty) {
-        localSelectedCompoundId = _coerceToCompoundId(
-          await CacheHelper.getCompoundCurrentIndex(),
-        );
-      }
+      final currentSessionUser = repository.currentUser;
+      final role = result.role;
 
-      // 4) Resolve compound label from loaded categories when only default row exists.
-      if (localSelectedCompoundId != null && localMyCompounds.length <= 1) {
-        try {
-          final compound = currentCategories
-              .expand((cat) => cat.compounds)
-              .firstWhere((c) => c.id == localSelectedCompoundId);
-          localMyCompounds = {
-            '0': "Add New Community",
-            localSelectedCompoundId: compound.name.toString(),
-          };
-          await CacheHelper.saveData(
-            key: CacheHelper.cachedUserDataKey(userId),
-            value: jsonEncode({
-              'email': currentUserAuth.email ?? '',
-              'selectedCompoundId': localSelectedCompoundId,
-              'myCompounds': localMyCompounds,
-            }),
-          );
-        } catch (_) {
-          // Compound not found in categories — skip label resolution.
-        }
-      }
-
-      final roleFromUserRoles = await _fetchRemoteRoleForUser(userId);
-      final roleFromPrefs = _resolveRoleFromRoleId(
-        currentUserAuth.userMetadata?["role_id"],
-      );
-      final Roles? userRole = roleFromUserRoles ?? roleFromPrefs;
-      if (userRole == null) {
-        // The profile is incomplete! Stop all loading and show the form.
-        signupGoogleEmail = currentUserAuth.email;
-        signupGoogleUserName = currentUserAuth.userMetadata?['full_name'] ?? currentUserAuth.userMetadata?['name'];
-        emit(GoogleSignupState());
-        return;
-      }
-
-      await _persistCachedRoleId(
-        userId: userId,
-        email: currentUserAuth.email,
-        role: userRole,
-      );
-
-
-      List<ChatMember> chatMembers = [];
-      List<Users> membersData = [];
-      ChatMember? currentUser;
-
-      if (localSelectedCompoundId != null) {
-        selectedCompoundId = localSelectedCompoundId;
-        myCompounds = localMyCompounds;
-
-        try {
-          final result = await repository.loadCompoundMembers(
-            localSelectedCompoundId,
-            role: userRole,
-          );
-          chatMembers = result.members;
-          membersData = result.membersData;
-
-          final currentUserId = (state is Authenticated)
-              ? (state as Authenticated).user.id
-              : repository.currentUser?.id;
-          if (chatMembers.isEmpty) {
-            currentUser = null;
-          } else {
-            final uid = currentUserId?.trim() ?? '';
-            currentUser = chatMembers.firstWhere(
-              (member) => member.id.trim() == uid,
-              orElse: () => chatMembers.first,
-            );
-          }
-        } catch (e, st) {
-          debugPrint(
-            '[AuthCubit] presetBeforeSignin: loadCompoundMembers failed (offline?): $e\n$st',
-          );
-          chatMembers = [];
-          membersData = [];
-          currentUser = null;
-        }
-      }
-
-      if (state is Authenticated) {
-        emit((state as Authenticated).copyWith(
-          role: userRole,
-          selectedCompoundId: localSelectedCompoundId,
-          myCompounds: localMyCompounds,
-          chatMembers: chatMembers,
-          membersData: membersData,
-          currentUser: currentUser,
-          enabledMultiCompound: enabledMultiCompound,
-          googleUser: googleUser,
-          categories: currentCategories,
-          compoundsLogos: currentLogos,
+      if (currentSessionUser != null && role != null) {
+        _attachRealtimeUserObservers(currentSessionUser.id);
+        emit(Authenticated(
+          user: currentSessionUser,
+          role: role,
+          selectedCompoundId: result.selectedCompoundId,
+          myCompounds: result.myCompounds,
+          chatMembers: result.chatMembers,
+          membersData: result.membersData,
+          currentUser: result.currentUserMember,
+          categories: result.categories,
+          compoundsLogos: result.compoundsLogos,
+          timestamp: DateTime.now().microsecondsSinceEpoch,
         ));
       } else {
-        final currentSessionUser = repository.currentUser;
-        if (currentSessionUser != null) {
-          emit(Authenticated(
-            user: currentSessionUser,
-            role: userRole,
-            selectedCompoundId: localSelectedCompoundId,
-            myCompounds: localMyCompounds,
-            chatMembers: chatMembers,
-            membersData: membersData,
-            currentUser: currentUser,
-            enabledMultiCompound: enabledMultiCompound,
-            googleUser: googleUser,
-            categories: currentCategories,
-            compoundsLogos: currentLogos,
-          ));
-        } else {
-          emit(Unauthenticated(
-            categories: currentCategories,
-            compoundsLogos: currentLogos,
-          ));
-        }
+        debugPrint("[AuthCubit] Session data incomplete: user=$currentSessionUser, role=$role");
+        emit(Unauthenticated(
+          categories: result.categories,
+          compoundsLogos: result.compoundsLogos,
+        ));
       }
-    } catch (e) {
-      debugPrint("Error in presetBeforeSignin: $e");
-      emit(AuthError(e.toString(),
-          categories: state.categories,
-          compoundsLogos: state.compoundsLogos));
+    } catch (e, st) {
+      debugPrint("Error in initializeAuthSession: $e\n$st");
+      // Fallback to Unauthenticated if initialization fails, 
+      // ensuring we don't get stuck in a loading loop.
+      emit(Unauthenticated(
+        categories: state.categories, 
+        compoundsLogos: state.compoundsLogos
+      ));
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 2. Core Authentication Actions
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Standard email/password sign in flow.
   Future<void> signInWithPassword({
     required String email,
     required String password,
   }) async {
     emit(AuthLoading());
     try {
-      final user =
-          await repository.signInWithPassword(email: email, password: password);
+      final user = await repository.signInWithPassword(email: email, password: password);
       if (user != null) {
-        emit(Authenticated(user: user));
+        await repository.saveLocalSession();
+        // Transition to Authenticated/MainScreen is now handled by _listenToAuthState -> initializeAuthSession()
       } else {
-        emit(Unauthenticated());
+        emit(Unauthenticated(categories: state.categories, compoundsLogos: state.compoundsLogos));
       }
     } catch (e) {
-      emit(AuthError(e.toString()));
+      debugPrint("Sign in error: $e");
+      emit(AuthError(e.toString(), categories: state.categories, compoundsLogos: state.compoundsLogos));
     }
   }
 
+  /// Initiates Google OAuth flow via Appwrite.
+  Future<void> signInWithGoogle({bool isSignin = false}) async {
+    emit(AuthLoading());
+    try {
+      signInGoogle = !isSignin;
+      final user = await repository.signInWithGoogle();
+      if (user != null) {
+        // We no longer emit states manually here. 
+        // _listenToAuthState will detect the session and trigger initializeAuthSession().
+        await repository.saveLocalSession();
+      } else {
+        signInGoogle = false;
+        emit(Unauthenticated(categories: state.categories, compoundsLogos: state.compoundsLogos));
+      }
+    } catch (e) {
+      signInGoogle = false;
+      emit(AuthError(e.toString(), categories: state.categories, compoundsLogos: state.compoundsLogos));
+    } finally {
+      googleSigningIn = false;
+    }
+  }
+
+  /// Standard email/password sign up flow.
   Future<void> signUp({
     required String email,
     required String password,
@@ -899,62 +230,95 @@ class AuthCubit extends Cubit<AuthState> {
     emit(AuthLoading());
     try {
       await repository.signUp(email: email, password: password, data: data);
+      await repository.saveLocalSession();
       emit(SignUpSuccess(email: email));
     } catch (e) {
       emit(AuthError(e.toString()));
     }
   }
 
-  Future<void> signInWithGoogle({bool isSignin = false}) async {
-    emit(AuthLoading());
-    try {
-      signInGoogle = !isSignin;
-      final user = await repository.signInWithGoogle();
-      if (user != null) {
-        if (isSignin) {
-          signInGoogle = false;
-          emit(Authenticated(user: user));
-        } else {
-          signupGoogleEmail = user.email;
-          signupGoogleUserName =
-              user.userMetadata?['full_name'] ?? user.userMetadata?['name'];
-          emit(GoogleSignupState());
-        }
-      } else {
-        signInGoogle = false;
-        emit(Unauthenticated());
-      }
-    } catch (e) {
-      signInGoogle = false;
-      emit(AuthError(e.toString()));
-    } finally {
-      googleSigningIn = false;
-    }
-  }
-
+  /// Signs out the current user and clears local/remote sessions.
   Future<void> signOut() async {
     if (_isSigningOut) return;
     _isSigningOut = true;
-    emit(AuthLoading(
-        categories: state.categories, compoundsLogos: state.compoundsLogos));
+    emit(AuthLoading(categories: state.categories, compoundsLogos: state.compoundsLogos));
     try {
-      // Snapshot compound data before the session is destroyed.
-      await _cacheUserSnapshotOnSignOut();
+      await _cacheUserSnapshotOnSignOut(); // Backup for offline access
       await repository.signOut();
+      // Unauthenticated state is emitted by _listenToAuthState listener when repository notifies null.
     } catch (e) {
-      emit(AuthError(e.toString(),
-          categories: state.categories,
-          compoundsLogos: state.compoundsLogos));
+      emit(AuthError(e.toString(), categories: state.categories, compoundsLogos: state.compoundsLogos));
     } finally {
       _isSigningOut = false;
     }
   }
 
+  /// Finalizes user registration (profile, role, compound selection) after initial auth.
+  Future<void> submitRegistration({
+    required String fullName,
+    required String userName,
+    required OwnerTypes ownerType,
+    required String phoneNumber,
+    required dynamic roleId,
+    required String buildingName,
+    required String apartmentNum,
+    required String compoundId,
+  }) async {
+    emit(AuthLoading());
+    try {
+      // Normalize roleId
+      final roleIdString = roleId is Roles ? roleId.name : roleId.toString();
+
+      final result = await repository.processRegistration(
+        fullName: fullName,
+        userName: userName,
+        ownerType: ownerType,
+        phoneNumber: phoneNumber,
+        roleId: roleIdString,
+        buildingName: buildingName,
+        apartmentNum: apartmentNum,
+        compoundId: compoundId,
+      );
+
+      roleName = result.role;
+      selectedCompoundId = result.selectedCompoundId;
+      myCompounds = result.myCompounds;
+
+      signInGoogle = false;
+      signupGoogleEmail = null;
+      signupGoogleUserName = null;
+      
+      await repository.saveLocalSession();
+      
+      // Emit Authenticated immediately to trigger navigation
+      final user = repository.currentUser;
+      if (user != null) {
+        emit(Authenticated(
+          user: user,
+          role: result.role,
+          selectedCompoundId: compoundId,
+          myCompounds: myCompounds,
+          categories: state.categories,
+          compoundsLogos: state.compoundsLogos,
+          timestamp: DateTime.now().microsecondsSinceEpoch,
+        ));
+      }
+      
+      emit(RegistrationSuccess(
+        categories: state.categories,
+        compoundsLogos: state.compoundsLogos,
+      ));
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  /// Cancels a pending Google registration and signs the user out.
   Future<void> cancelPendingGoogleRegistration() async {
-    emit(AuthLoading(
-        categories: state.categories, compoundsLogos: state.compoundsLogos));
+    emit(AuthLoading(categories: state.categories, compoundsLogos: state.compoundsLogos));
     try {
       await repository.signOut();
+      // Reset all registration-related UI flags
       signInGoogle = false;
       signInToggler = true;
       signupGoogleEmail = null;
@@ -972,64 +336,15 @@ class AuthCubit extends Cubit<AuthState> {
         compoundsLogos: state.compoundsLogos,
       ));
     } catch (e) {
-      emit(AuthError(e.toString(),
-          categories: state.categories,
-          compoundsLogos: state.compoundsLogos));
+      emit(AuthError(e.toString(), categories: state.categories, compoundsLogos: state.compoundsLogos));
     }
   }
 
-  Future<void> completeRegistration({
-    required String fullName,
-    required String userName,
-    required OwnerTypes ownerType,
-    required String phoneNumber,
-    required int roleId,
-    required String buildingName,
-    required String apartmentNum,
-    required String compoundId,
-  }) async {
-    final categoriesBefore = state.categories;
-    emit(AuthLoading());
-    try {
-      await repository.completeRegistration(
-        fullName: fullName,
-        userName: userName,
-        ownerType: ownerType,
-        phoneNumber: phoneNumber,
-        roleId: roleId,
-        buildingName: buildingName,
-        apartmentNum: apartmentNum,
-        compoundId: compoundId,
-      );
-      roleName = Roles.values[roleId - 1];
-      selectedCompoundId = compoundId;
-      var compoundLabel = compoundId;
-      try {
-        if (categoriesBefore.isNotEmpty) {
-          compoundLabel = categoriesBefore
-              .expand((c) => c.compounds)
-              .firstWhere((co) => co.id == compoundId)
-              .name;
-        }
-      } catch (_) {}
-      myCompounds = {
-        '0': "Add New Community",
-        compoundId: compoundLabel,
-      };
-      await repository.selectCompound(
-        compoundId: compoundId,
-        compoundName: compoundLabel,
-        atWelcome: true,
-      );
-      signInGoogle = false;
-      signupGoogleEmail = null;
-      signupGoogleUserName = null;
-      emit(RegistrationSuccess());
-    } catch (e) {
-      emit(AuthError(e.toString()));
-    }
-  }
+  // ─────────────────────────────────────────────────────────────────────────
+  // 3. Profile & Account Management
+  // ─────────────────────────────────────────────────────────────────────────
 
+  /// Updates profile metadata in the Appwrite 'profiles' collection.
   Future<void> updateProfile({
     required String fullName,
     required String displayName,
@@ -1044,14 +359,15 @@ class AuthCubit extends Cubit<AuthState> {
         ownerType: ownerType,
         phoneNumber: phoneNumber,
       );
+      await repository.saveLocalSession();
       emit(ProfileUpdated());
     } catch (e) {
       emit(AuthError(e.toString()));
     }
   }
 
-  Future<void> requestEmailChange(String newEmail,
-      {String? redirectUrl}) async {
+  /// Requests an email change (Backend requires password verification).
+  Future<void> requestEmailChange(String newEmail, {String? redirectUrl}) async {
     emit(AuthLoading());
     try {
       await repository.requestEmailChange(newEmail, redirectUrl: redirectUrl);
@@ -1061,6 +377,7 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// Updates the current user's password.
   Future<void> updatePassword(String newPassword) async {
     emit(AuthLoading());
     try {
@@ -1071,80 +388,87 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  void getSuggestions(TextEditingController controller) {
-    final query = controller.text.trim().toLowerCase();
-    if (query.isEmpty) {
-      compoundSuggestions = [];
-    } else {
-      compoundSuggestions = state.categories.map((category) {
-        // Check if category name matches
-        final categoryNameMatches = category.name.toLowerCase().contains(query);
+  /// Uploads residency verification documents (KYC).
+  Future<void> submitVerificationFiles() async {
+    if (verFiles == null || verFiles!.isEmpty) return;
+    emit(AuthLoading());
+    try {
+      final userId = (state is Authenticated) ? (state as Authenticated).user.id : repository.currentUser?.id;
+      if (userId == null) throw Exception("User ID not found");
 
-        // Filter compounds that match
-        final matchingCompounds = category.compounds.where((compound) {
-          return compound.name.toLowerCase().contains(query) ||
-              (compound.developer?.toLowerCase().contains(query) ?? false);
-        }).toList();
-
-        if (categoryNameMatches) {
-          // If category matches, show all its compounds
-          return category;
-        } else if (matchingCompounds.isNotEmpty) {
-          // If only specific compounds match, return category with only those compounds
-          return Category(
-            id: category.id,
-            name: category.name,
-            compounds: matchingCompounds,
-          );
-        }
-        return null;
-      }).whereType<Category>().toList();
-    }
-    if (state is Authenticated) {
-      emit((state as Authenticated)
-          .copyWith(timestamp: DateTime.now().millisecondsSinceEpoch));
-    } else {
-      emit(AuthInitial(
-        categories: state.categories,
-        compoundsLogos: state.compoundsLogos,
-        timestamp: DateTime.now().millisecondsSinceEpoch,
-      ));
+      await repository.uploadVerificationFiles(
+        files: verFiles!,
+        userId: userId,
+        onProgress: (index, progress) {
+          if (uploadProgress.length <= index) {
+            uploadProgress.add(progress);
+          } else {
+            uploadProgress[index] = progress;
+          }
+          _refreshUI();
+        },
+      );
+      _refreshUI();
+    } catch (e) {
+      emit(AuthError(e.toString()));
     }
   }
 
-  Future<void> loadCompounds() async {
-    if (_loadCompoundsInProgress) {
-      if (kDebugMode) {
-        debugPrint('[AuthCubit] loadCompounds: skipped (already in progress)');
-      }
-      return;
-    }
-    _loadCompoundsInProgress = true;
-    if (kDebugMode) {
-      debugPrint(
-        '[AuthCubit] loadCompounds: start state=${state.runtimeType} '
-        'categories=${state.categories.length} logos=${state.compoundsLogos.length}',
-      );
-    }
-    emit(AuthLoading(
-        categories: state.categories, compoundsLogos: state.compoundsLogos));
+  // ─────────────────────────────────────────────────────────────────────────
+  // 4. Compound & Member Actions
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Switches the active compound for the current session.
+  Future<void> selectCompound({
+    required String compoundId,
+    required String compoundName,
+    required bool atWelcome,
+  }) async {
     try {
-      // Load Appwrite category/compound rows and local asset logo paths in parallel
-      // (logos are only ever read from the asset manifest — not from Appwrite).
+      selectedCompoundId = compoundId;
+      if (atWelcome) {
+        myCompounds = {
+          '0': "Add New Community",
+          compoundId: compoundName,
+        };
+      } else {
+        myCompounds[compoundId] = compoundName;
+      }
+
+      await repository.selectCompound(
+        compoundId: compoundId,
+        compoundName: compoundName,
+        atWelcome: atWelcome,
+      );
+      
+      await repository.saveLocalSession();
+
+      if (state is Authenticated) {
+        emit((state as Authenticated).copyWith(
+          selectedCompoundId: compoundId,
+          myCompounds: Map<String, dynamic>.from(myCompounds),
+        ));
+      } else {
+        emit(CompoundSelected(compoundId));
+      }
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  /// Fetches global list of available compounds and categories.
+  Future<void> fetchCompounds() async {
+    if (_fetchCompoundsInProgress) return;
+    _fetchCompoundsInProgress = true;
+    
+    emit(AuthLoading(categories: state.categories, compoundsLogos: state.compoundsLogos));
+    try {
       final results = await Future.wait<Object>([
         repository.loadCompounds(),
         AssetHelper.loadCompoundLogos(),
       ]);
       final fetchedCategories = results[0] as List<Category>;
       final fetchedLogos = results[1] as List<String>;
-      if (kDebugMode) {
-        final nCompounds = fetchedCategories.fold<int>(
-            0, (s, c) => s + c.compounds.length);
-        debugPrint(
-          '[AuthCubit] loadCompounds: success → ${fetchedCategories.length} category/column(s), '
-          '$nCompounds compound(s), ${fetchedLogos.length} asset logo path(s)',
-        );
-      }
 
       if (state is Authenticated) {
         emit((state as Authenticated).copyWith(
@@ -1157,36 +481,26 @@ class AuthCubit extends Cubit<AuthState> {
           compoundsLogos: fetchedLogos,
         ));
       }
-    } catch (e, st) {
-      if (kDebugMode) {
-        debugPrint('[AuthCubit] loadCompounds: ERROR $e\n$st');
-      }
-      emit(AuthError(e.toString(),
-          categories: state.categories,
-          compoundsLogos: state.compoundsLogos));
+    } catch (e) {
+      emit(AuthError(e.toString(), categories: state.categories, compoundsLogos: state.compoundsLogos));
     } finally {
-      _loadCompoundsInProgress = false;
+      _fetchCompoundsInProgress = false;
     }
   }
 
-  Future<void> loadCompoundMembers(String compoundId) async {
+  /// Loads member list for a specific compound (restricted by user role).
+  Future<void> fetchCompoundMembers(String compoundId) async {
     emit(AuthLoading());
     try {
-      final Roles? currentRole =
-          (state is Authenticated) ? (state as Authenticated).role : null;
-      final result = await repository.loadCompoundMembers(compoundId,
-          role: currentRole);
+      final Roles? currentRole = (state is Authenticated) ? (state as Authenticated).role : null;
+      final result = await repository.loadCompoundMembers(compoundId, role: currentRole);
       final members = result.members;
       final membersData = result.membersData;
 
-      final currentUserId = (state is Authenticated)
-          ? (state as Authenticated).user.id
-          : repository.currentUser?.id;
+      final currentUserId = (state is Authenticated) ? (state as Authenticated).user.id : repository.currentUser?.id;
       final currentMember = members.firstWhere(
         (member) => member.id.trim() == currentUserId,
-        orElse: () => members.isNotEmpty
-            ? members.first
-            : throw Exception("User not found in members"),
+        orElse: () => members.isNotEmpty ? members.first : throw Exception("User not found in members"),
       );
 
       if (state is Authenticated) {
@@ -1208,6 +522,7 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// Updates the chat members list in the state (UI helper).
   void updateChatMembers(List<ChatMember> updatedMembers) {
     if (state is Authenticated) {
       final s = state as Authenticated;
@@ -1221,6 +536,428 @@ class AuthCubit extends Cubit<AuthState> {
 
       emit(s.copyWith(chatMembers: updatedMembers, currentUser: newCurrent));
     }
+  }
+
+  /// Verifies if a specific apartment unit is already registered.
+  Future<void> isApartmentTaken({
+    required String compoundId,
+    required String buildingName,
+    required String apartmentNum,
+  }) async {
+    // 1. Initial check (transient)
+    final key = '${buildingName}_$apartmentNum';
+    if (_occupiedApartments.contains(key)) {
+      apartmentConflict = true;
+      emit(ApartmentTakenStatus(isTaken: true));
+      return;
+    }
+
+    try {
+      final taken = await repository.isApartmentTaken(
+        compoundId: compoundId,
+        buildingName: buildingName,
+        apartmentNum: apartmentNum,
+      );
+      apartmentConflict = taken;
+      if (taken) _occupiedApartments.add(key);
+      emit(ApartmentTakenStatus(isTaken: taken));
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  /// Checks if an apartment is already known to be occupied (realtime/cached).
+  bool isApartmentOccupied(String buildingName, String apartmentNum) {
+    return _occupiedApartments.contains('${buildingName}_$apartmentNum') || apartmentConflict;
+  }
+
+  /// Subscribes to realtime updates for a specific compound's occupancy and new members.
+  void subscribeToCompoundEvents(String compoundId) {
+    _occupancySubscription?.close();
+    
+    // Subscribe to user_apartments for this compound
+    _occupancySubscription = appwriteRealtime.subscribe([
+      'databases.$appwriteDatabaseId.collections.user_apartments.documents'
+    ]);
+
+    _occupancySubscription!.stream.listen((event) {
+      final data = event.payload;
+      // Filter by compoundId
+      if (data['compound_id'] != compoundId) return;
+
+      final b = data['building_name']?.toString() ?? '';
+      final a = data['apartment_num']?.toString() ?? '';
+      final key = '${b}_$a';
+
+      if (event.events.contains('*.create')) {
+        _occupiedApartments.add(key);
+        
+        // DETECTION OF NEWCOMERS:
+        // When a new apartment is registered, trigger a member sync
+        // and update the chat list.
+        _handleNewcomer(compoundId);
+      } else if (event.events.contains('*.delete')) {
+        _occupiedApartments.remove(key);
+      }
+      
+      _refreshUI();
+    });
+  }
+
+  Future<void> _handleNewcomer(String compoundId) async {
+    // Re-load members (delta-sync logic in repo handles the efficiency)
+    final result = await repository.loadCompoundMembers(compoundId);
+    
+    // Update state with new member list if already authenticated
+    if (state is Authenticated) {
+      final s = state as Authenticated;
+      emit(s.copyWith(
+        chatMembers: result.members,
+        membersData: result.membersData,
+      ));
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 5. UI Helpers & Form Handlers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Toggles visibility of the password field.
+  void togglePasswordVisibility() {
+    isPassword = !isPassword;
+    suffixIcon = isPassword ? Icons.visibility_off : Icons.visibility;
+    // DO NOT EMIT STATE HERE - just let the UI widgets use the local variable
+    // or use a dedicated local UI state if needed. 
+    // Emitting state here triggers app-wide refreshes if listeners are too broad.
+    _refreshUI();
+  }
+
+  /// Switches between Sign In and Sign Up views.
+  void toggleSignIn() {
+    signInToggler = !signInToggler;
+    _refreshUI();
+  }
+
+  /// Toggles the loading flag for standard sign-in.
+  void signInSwitcher() {
+    signingIn = !signingIn;
+    _refreshUI();
+  }
+
+  /// Toggles the loading flag for Google sign-in.
+  void googleSignInSwitcher() {
+    googleSigningIn = !googleSigningIn;
+    _refreshUI();
+  }
+
+  /// Updates the active role selection in the registration form.
+  void changeRole(Roles? newRole) {
+    roleName = newRole ?? Roles.user;
+    if (state is Authenticated) {
+      emit((state as Authenticated).copyWith(role: roleName));
+    }
+  }
+
+  /// Updates the owner/tenant selection.
+  void changeOwnerType(OwnerTypes newType) {
+    ownerType = newType;
+    _refreshUI();
+  }
+
+  /// Filters compound suggestions based on search query.
+  void fetchSuggestions(TextEditingController controller) {
+    final query = controller.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      compoundSuggestions = [];
+    } else {
+      compoundSuggestions = state.categories.map((category) {
+        final categoryNameMatches = category.name.toLowerCase().contains(query);
+        final matchingCompounds = category.compounds.where((compound) {
+          return compound.name.toLowerCase().contains(query) ||
+              (compound.developer?.toLowerCase().contains(query) ?? false);
+        }).toList();
+
+        if (categoryNameMatches) return category;
+        if (matchingCompounds.isNotEmpty) {
+          return Category(id: category.id, name: category.name, compounds: matchingCompounds);
+        }
+        return null;
+      }).whereType<Category>().toList();
+    }
+    _refreshUI();
+  }
+
+  /// Opens image picker for verification documents.
+  Future<void> verFileImport() async {
+    final List<XFile> result = await ImagePicker().pickMultiImage(imageQuality: 70, maxWidth: 1440);
+    if (result.isEmpty) return;
+    verFiles = result;
+    _refreshUI();
+  }
+
+  /// Clears selected verification files.
+  void clearVerFiles() {
+    verFiles = null;
+    _refreshUI();
+  }
+
+  /// Resets the auth state to AuthInitial.
+  Future<void> resetUserData() async {
+    emit(AuthInitial(categories: state.categories, compoundsLogos: state.compoundsLogos));
+  }
+
+  /// Manually updates the local role in the state (UI helper).
+  void updateRole(Roles role) {
+    if (state is Authenticated) {
+      emit((state as Authenticated).copyWith(role: role));
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 6. Realtime & Internal Helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Listens to authoritative auth state changes from the repository.
+  void _listenToAuthState() {
+    repository.onAuthStateChange.listen((appUser) {
+      debugPrint('[AuthCubit] _listenToAuthState received: ${appUser?.id}');
+      try {
+        if (appUser != null) {
+          final currentAuth = state is Authenticated ? (state as Authenticated) : null;
+          // Nonce management: only trigger app-wide refresh if a new user logged in.
+          if (currentAuth == null || currentAuth.user.id != appUser.id) {
+             debugPrint('[AuthCubit] New user or session detected via stream');
+             // Only update nonce on ACTUAL login/logout to stabilize UI
+             authSessionNonce = DateTime.now().microsecondsSinceEpoch;
+             
+             // If we are already initializing (e.g. at startup), don't trigger a second one
+             if (_authSessionInitializationInFlight == null) {
+                debugPrint('[AuthCubit] Triggering initialization from stream');
+                unawaited(initializeAuthSession());
+             } else {
+                debugPrint('[AuthCubit] Initialization already in flight, skipping stream trigger');
+             }
+          } else {
+            debugPrint('[AuthCubit] Existing user updated via stream');
+            _attachRealtimeUserObservers(appUser.id);
+            emit(currentAuth.copyWith(user: appUser));
+            unawaited(repository.saveLocalSession());
+          }
+        } else {
+          debugPrint('[AuthCubit] User is null in stream, clearing session');
+          _detachRealtimeUserObservers();
+          // Reset nonce on logout
+          authSessionNonce = DateTime.now().microsecondsSinceEpoch;
+          signInToggler = true;
+          emit(Unauthenticated(categories: state.categories, compoundsLogos: state.compoundsLogos));
+        }
+      } catch (e) {
+        debugPrint('[AuthCubit] auth stream handler error: $e');
+      }
+    });
+  }
+
+  /// Subscribes to Appwrite Realtime for profile and role updates.
+  void _attachRealtimeUserObservers(String userId) {
+    if (_realtimeObservedUserId == userId) return;
+    _detachRealtimeUserObservers();
+    _realtimeObservedUserId = userId;
+
+    const String colProfiles = 'profiles';
+    const String colUserRoles = 'user_roles';
+
+    try {
+      // 1. Profile updates (display name, user_state, etc.)
+      final profileChannels = [
+        'databases.$appwriteDatabaseId.collections.$colProfiles.documents',
+        'databases.$appwriteDatabaseId.tables.$colProfiles.rows',
+      ];
+      _profilesRealtimeSubscription = appwriteRealtime.subscribe(profileChannels);
+      _profilesRealtimeSubscription!.stream.listen((message) {
+        final payload = Map<String, dynamic>.from(message.payload);
+        final eventId = (payload[r'$id'] ?? payload['id'] ?? '').toString();
+        if (eventId.isEmpty) return;
+
+        if (eventId == userId) {
+          debugPrint('[AuthCubit] Realtime profile update received for CURRENT user');
+          unawaited(_refreshAuthenticatedStateFromRemote());
+        } else {
+          debugPrint('[AuthCubit] Realtime profile update received for user $eventId');
+          _handleOtherProfileUpdate(eventId, payload);
+        }
+      });
+
+      // 2. Role changes
+      final userRoleChannels = [
+        'databases.$appwriteDatabaseId.collections.$colUserRoles.documents',
+        'databases.$appwriteDatabaseId.tables.$colUserRoles.rows',
+      ];
+      _userRolesRealtimeSubscription = appwriteRealtime.subscribe(userRoleChannels);
+      _userRolesRealtimeSubscription!.stream.listen((message) {
+        final payload = Map<String, dynamic>.from(message.payload);
+        final eventUserId = (payload['user_id'] ?? payload[r'$id'] ?? '').toString().trim();
+        if (eventUserId.isEmpty) return;
+
+        final roleFromPayload = _resolveRoleFromRoleId(payload['role_id']);
+
+        if (eventUserId == userId) {
+          debugPrint('[AuthCubit] Realtime role update received for CURRENT user');
+          if (roleFromPayload != null && state is Authenticated) {
+            emit((state as Authenticated).copyWith(
+              role: roleFromPayload,
+              timestamp: DateTime.now().microsecondsSinceEpoch,
+            ));
+            unawaited(repository.saveLocalSession());
+          }
+          unawaited(_refreshAuthenticatedStateFromRemote());
+        } else {
+          debugPrint('[AuthCubit] Realtime role update received for user $eventUserId');
+          _handleOtherUserRoleUpdate(eventUserId, roleFromPayload);
+        }
+      });
+    } catch (e) {
+      debugPrint('[AuthCubit] Realtime setup failed: $e');
+    }
+  }
+
+  /// Updates the state when another user's profile changes.
+  void _handleOtherProfileUpdate(String eventId, Map<String, dynamic> payload) {
+    if (state is! Authenticated) return;
+    final current = state as Authenticated;
+
+    final updatedMembers = current.chatMembers.map((m) {
+      if (m.id == eventId) {
+        return m.copyWithProfileUpdate(payload);
+      }
+      return m;
+    }).toList();
+
+    // Also update membersData if the user is present there
+    final updatedMembersData = current.membersData.map((u) {
+      if (u.authorId == eventId) {
+        return Users(
+          authorId: u.authorId,
+          phoneNumber: (payload['phone_number'] ?? payload['phoneNumber'] ?? u.phoneNumber).toString(),
+          updatedAt: DateTime.tryParse((payload[r'$updatedAt'] ?? payload['updated_at'] ?? '').toString()) ?? u.updatedAt,
+          ownerShipType: (payload['owner_type'] ?? payload['ownerShipType'] ?? u.ownerShipType).toString(),
+          userState: (payload['userState'] ?? payload['user_state'] ?? u.userState).toString(),
+          actionTakenBy: u.actionTakenBy,
+          verFile: u.verFile,
+        );
+      }
+      return u;
+    }).toList();
+
+    emit(current.copyWith(
+      chatMembers: updatedMembers,
+      membersData: updatedMembersData,
+      timestamp: DateTime.now().microsecondsSinceEpoch,
+    ));
+  }
+
+  /// Updates the state when another user's role changes.
+  void _handleOtherUserRoleUpdate(String eventUserId, Roles? newRole) {
+    if (state is! Authenticated || newRole == null) return;
+    final current = state as Authenticated;
+
+    // In this app, roles are often handled separately from chatMembers profile data,
+    // but some UI elements might depend on the membersData list for admin views.
+    final updatedMembersData = current.membersData.map((u) {
+      if (u.authorId == eventUserId) {
+        // If Users entity had a role field, we would update it here.
+        // For now, we trigger a timestamp refresh to notify listeners.
+      }
+      return u;
+    }).toList();
+
+    emit(current.copyWith(
+      membersData: updatedMembersData,
+      timestamp: DateTime.now().microsecondsSinceEpoch,
+    ));
+  }
+
+  /// Forces a fresh pull of the current user profile from Appwrite.
+  Future<void> _refreshAuthenticatedStateFromRemote() async {
+    if (_refreshFromRealtimeInProgress) return;
+    _refreshFromRealtimeInProgress = true;
+    try {
+      final refreshedUser = await repository.fetchCurrentUser();
+      if (refreshedUser == null) return;
+      
+      // Trigger a full re-initialization to update all fields (role, userState in membersData, etc.)
+      // and notify all listeners (like MainScreen) with the new timestamp.
+      unawaited(initializeAuthSession());
+
+      await repository.saveLocalSession();
+    } finally {
+      _refreshFromRealtimeInProgress = false;
+    }
+  }
+
+  /// Closes all active realtime subscriptions.
+  void _detachRealtimeUserObservers() {
+    _profilesRealtimeSubscription?.close();
+    _profilesRealtimeSubscription = null;
+    _userRolesRealtimeSubscription?.close();
+    _userRolesRealtimeSubscription = null;
+    _realtimeObservedUserId = null;
+  }
+
+  /// Configures Google SDK for Web environments.
+  void _setupWebGoogleAuth() {
+    if (!kIsWeb) return;
+    GoogleSignIn.instance.initialize(clientId: RuntimeEnv.googleServerClientId);
+    GoogleSignIn.instance.authenticationEvents.listen((event) async {
+      if (event is GoogleSignInAuthenticationEventSignIn) {
+        final auth = event.user.authentication;
+        if (auth.idToken != null) await repository.signInWithGoogleWeb(auth.idToken!);
+      }
+    });
+    // DISABLED: prevent persistent popup on every refresh/boot.
+    // GoogleSignIn.instance.attemptLightweightAuthentication()?.catchError((_) => null);
+  }
+
+  /// Triggers a state rebuild with existing data to refresh UI listeners.
+  void _refreshUI() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    if (state is Authenticated) {
+      emit((state as Authenticated).copyWith(timestamp: now));
+    } else if (state is Unauthenticated) {
+      emit(Unauthenticated(categories: state.categories, compoundsLogos: state.compoundsLogos, timestamp: now));
+    } else if (state is GoogleSignupState) {
+      emit(GoogleSignupState(categories: state.categories, compoundsLogos: state.compoundsLogos, timestamp: now));
+    } else if (state is ApartmentTakenStatus) {
+      emit(ApartmentTakenStatus(isTaken: (state as ApartmentTakenStatus).isTaken, categories: state.categories, compoundsLogos: state.compoundsLogos, timestamp: now));
+    } else if (state is CompoundSelected) {
+      emit(CompoundSelected((state as CompoundSelected).compoundId, categories: state.categories, compoundsLogos: state.compoundsLogos, timestamp: now));
+    } else if (state is RegistrationSuccess) {
+      emit(RegistrationSuccess(categories: state.categories, compoundsLogos: state.compoundsLogos, timestamp: now));
+    } else {
+      emit(AuthInitial(categories: state.categories, compoundsLogos: state.compoundsLogos, timestamp: now));
+    }
+  }
+
+  /// Helper to map string role IDs to Roles enum.
+  Roles? _resolveRoleFromRoleId(dynamic roleRaw) {
+    if (roleRaw == null) return null;
+    final str = (roleRaw is String) ? roleRaw : roleRaw.toString();
+    final t = str.trim();
+    if (t.isEmpty) return null;
+    final byName = Roles.values.where((r) => r.name == t).toList();
+    return byName.isNotEmpty ? byName.first : null;
+  }
+
+  /// Caches a lightweight snapshot of the user before sign-out.
+  Future<void> _cacheUserSnapshotOnSignOut() async {
+    if (state is! Authenticated) return;
+    final user = (state as Authenticated).user;
+    final payload = {
+      'email': user.email ?? '',
+      'selectedCompoundId': (state as Authenticated).selectedCompoundId,
+      'myCompounds': (state as Authenticated).myCompounds,
+      'role_id': user.userMetadata?['role_id'],
+    };
+    await CacheHelper.saveData(key: CacheHelper.cachedUserDataKey(user.id), value: jsonEncode(payload));
   }
 
   @override

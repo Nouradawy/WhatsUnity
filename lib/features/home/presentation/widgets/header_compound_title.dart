@@ -38,7 +38,7 @@ Widget headerCompoundTitle(context ,isEnabledMultiCompound ,currentSelectedCompo
              Navigator.push(context, MaterialPageRoute(builder: (context) => JoinCommunity()));
            } else {
              final newCompoundId = selectedKey.toString();
-             authCubit.loadCompoundMembers(newCompoundId);
+             authCubit.fetchCompoundMembers(newCompoundId);
              await authCubit.selectCompound(
                compoundId: newCompoundId,
                compoundName: currentMyCompounds[selectedKey]!,

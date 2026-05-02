@@ -114,21 +114,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   List<types.Message> _messages = [];
 
-  /// `flutter_chat_ui` / [InMemoryChatController] expect chronological order:
-  /// index 0 = oldest, last index = newest (non-reversed [ChatAnimatedList]).
-  static int _compareCreatedAtAsc(types.Message a, types.Message b) {
-    final at = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-    final bt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-    final c = at.compareTo(bt);
-    if (c != 0) return c;
-    return a.id.compareTo(b.id);
-  }
 
-  static List<types.Message> _sortedCopyAsc(List<types.Message> list) {
-    final next = List<types.Message>.from(list);
-    next.sort(_compareCreatedAtAsc);
-    return next;
-  }
 
   void _emitChatMessagesLoadedIfReady() {
     if (state is! ChatMessagesLoaded) return;
@@ -224,7 +210,8 @@ class ChatCubit extends Cubit<ChatState> {
         pageNum: pageRequested,
         onRemoteSynced: (synced, pageNum) => _applyRemoteSyncedPage(synced, pageNum),
       );
-      _messages = _sortedCopyAsc(messages);
+      final reversedIncoming = messages.reversed.toList();
+      _messages = [...reversedIncoming, ..._messages];
       _currentPage++;
       _hasMore = messages.length >= _pageSize;
 
@@ -272,10 +259,7 @@ class ChatCubit extends Cubit<ChatState> {
       } else {
         // Older pages must be *prepended* so the list stays oldest → newest
         // (matches `InMemoryChatController` + non-reversed list).
-        _messages = _sortedCopyAsc([
-          ...List<types.Message>.from(messages),
-          ..._messages,
-        ]);
+        _applyRemoteSyncedPage(messages, pageRequested);
         _currentPage++;
       }
 
@@ -319,35 +303,48 @@ class ChatCubit extends Cubit<ChatState> {
 
   void _addOrUpdateMessage(types.Message message) {
     final index = _messages.indexWhere((m) => m.id == message.id);
+
     if (index != -1) {
-      if (_messages[index] == message) {
-        return;
-      }
+      // Update existing message
+      if (_messages[index] == message) return;
       final next = List<types.Message>.from(_messages);
       next[index] = message;
-      _messages = _sortedCopyAsc(next);
+      _messages = next; // Replaced without sorting
     } else {
-      _messages = _sortedCopyAsc([..._messages, message]);
+      // New message? Just tack it onto the end!
+      _messages = [..._messages, message];
     }
+
     _emitChatMessagesLoadedIfReady();
   }
 
   void _applyRemoteSyncedPage(List<types.Message> synced, int pageNum) {
-    if (isClosed) return;
-    if (synced.isEmpty) return;
+    if (isClosed || synced.isEmpty) return;
+
+    // Appwrite gives us Descending (newest at index 0).
+    // Reverse it to get Ascending (oldest at index 0).
+    final newAscending = synced.reversed.toList();
 
     if (pageNum == 0) {
-      _messages = _sortedCopyAsc(synced);
+      // SMART MERGE: Preserve older messages already in memory
+      final incomingIds = newAscending.map((m) => m.id).toSet();
+
+      // Keep messages from our current memory that ARE NOT in this new page 0 fetch
+      final preservedOlderMessages = _messages
+          .where((m) => !incomingIds.contains(m.id))
+          .toList();
+
+      // Since page 0 represents the LATEST messages, they go at the very end
+      _messages = [...preservedOlderMessages, ...newAscending];
     } else {
-      final ids = _messages.map((m) => m.id).toSet();
-      final olderIncoming = <types.Message>[];
-      for (final m in synced) {
-        if (!ids.contains(m.id)) {
-          olderIncoming.add(m);
-          ids.add(m.id);
-        }
-      }
-      _messages = _sortedCopyAsc([...olderIncoming, ..._messages]);
+      // For older pages (pageNum > 0), filter out duplicates
+      final existingIds = _messages.map((m) => m.id).toSet();
+      final uniqueOlder = newAscending
+          .where((m) => !existingIds.contains(m.id))
+          .toList();
+
+      // Older pages go at the BEGINNING of the ascending list
+      _messages = [...uniqueOlder, ..._messages];
     }
 
     _emitChatMessagesLoadedIfReady();

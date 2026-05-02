@@ -358,10 +358,6 @@ class _CreateMaintenanceReportDialogState
             value: c.name, label: c.name.toUpperCase()))
             .toList();
         break;
-      default:
-        categoryEntries = [
-          DropdownMenuEntry<String>(value: 'other', label: 'OTHER'),
-        ];
     }
   }
 
@@ -617,8 +613,9 @@ class _CreateMaintenanceReportDialogState
                   onPressed: isSending
                       ? null
                       : () async {
-                    if (!(_formKey.currentState?.validate() ?? false))
+                    if (!(_formKey.currentState?.validate() ?? false)) {
                       return;
+                    }
                     if (widget.issueCategory.text.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Please select a category')),
