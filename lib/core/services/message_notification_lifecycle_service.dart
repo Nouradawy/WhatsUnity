@@ -4,6 +4,7 @@ import 'package:WhatsUnity/core/config/appwrite.dart';
 import 'package:WhatsUnity/core/di/app_services.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:WhatsUnity/features/chat/data/datasources/chat_realtime_handle.dart';
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -251,7 +252,7 @@ class MessageNotificationLifecycleService {
         }
       }
     } catch (e, st) {
-      debugPrint('Failed to sync notification preferences to server: $e\n$st');
+      AppLogger.e("Failed to sync notification preferences to server", tag: 'MessageNotificationLifecycleService', error: e, stackTrace: st);
     }
   }
 

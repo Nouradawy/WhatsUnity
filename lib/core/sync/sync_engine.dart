@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 
 import '../media/media_upload_service.dart';
 import '../../features/chat/data/datasources/chat_local_data_source.dart';
@@ -54,16 +55,16 @@ class SyncEngine {
   void start() {
     if (_started) return;
     _started = true;
-    debugPrint('[Sync] Starting SyncEngine...');
+    AppLogger.d("Starting SyncEngine...", tag: 'SyncEngine');
     unawaited(_refreshConnectivity());
     _netSub = _connectivity.onConnectivityChanged.listen((_) {
-      debugPrint('[Sync] Connectivity changed, refreshing...');
+      AppLogger.d("Connectivity changed, refreshing...", tag: 'SyncEngine');
       unawaited(_refreshConnectivity());
     });
   }
 
   Future<void> dispose() async {
-    debugPrint('[Sync] Disposing SyncEngine');
+    AppLogger.d("Disposing SyncEngine", tag: 'SyncEngine');
     await _netSub?.cancel();
     _netSub = null;
     _started = false;
@@ -73,9 +74,9 @@ class SyncEngine {
     try {
       final r = await _connectivity.checkConnectivity();
       _online = _resultsOnline(r);
-      debugPrint('[Sync] Online status: $_online');
-    } catch (e) {
-      debugPrint('[Sync] Connectivity check failed: $e');
+      AppLogger.d("Online status: $_online", tag: 'SyncEngine');
+    } catch (e, st) {
+      AppLogger.e("Connectivity check failed", tag: 'SyncEngine', error: e, stackTrace: st);
       _online = true;
     }
     if (_online) {
@@ -109,7 +110,7 @@ class SyncEngine {
           await _dispatch(job);
           await _jobs.markCompleted(job.jobId);
         } catch (e, st) {
-          debugPrint('SyncEngine job ${job.jobId} failed: $e\n$st');
+          AppLogger.e("SyncEngine job ${job.jobId} failed", tag: 'SyncEngine', error: e, stackTrace: st);
           final nextAttempts = job.attempts + 1;
           if (nextAttempts >= kSyncMaxAttempts) {
             await _jobs.markDeadLetter(job.jobId, '$e');

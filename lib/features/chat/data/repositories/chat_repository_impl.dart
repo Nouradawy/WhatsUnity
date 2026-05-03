@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart' as types;
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 
 import '../../../../core/sync/lww_merge.dart';
 import '../../../../core/time/trusted_utc_now.dart';
@@ -39,7 +40,7 @@ class ChatRepositoryImpl implements ChatRepository {
       );
       cached = rows.map(MessageModel.fromMap).toList();
     } catch (e, st) {
-      debugPrint('fetchMessages local: $e\n$st');
+      AppLogger.e("fetchMessages local failed", tag: 'ChatRepository', error: e, stackTrace: st);
     }
 
     // For first-page sync, use local newest createdAt as a cursor so Appwrite
@@ -88,14 +89,14 @@ class ChatRepositoryImpl implements ChatRepository {
       } catch (e, st) {
         // Web/PWA fallback: if local DB initialization or writes fail, still
         // surface the remote payload so chat can render instead of staying empty.
-        debugPrint('fetchMessages local persist fallback: $e\n$st');
+        AppLogger.e("fetchMessages local persist fallback", tag: 'ChatRepository', error: e, stackTrace: st);
         syncedMessages = raw.map(MessageModel.fromMap).toList();
       }
       if (onRemoteSynced != null) {
         onRemoteSynced(syncedMessages, pageNum);
       }
     } catch (e, st) {
-      debugPrint('fetchMessages remote sync: $e\n$st');
+      AppLogger.e("fetchMessages remote sync failed", tag: 'ChatRepository', error: e, stackTrace: st);
     }
   }
 
@@ -202,9 +203,11 @@ class ChatRepositoryImpl implements ChatRepository {
     try {
       await localDataSource.local_insertMessagesFromTypes(channelId, [message]);
     } catch (e, st) {
-      debugPrint(
-        'updateMessageMetadata: local SQLite persist failed after remote save '
-        '(UI should still refresh from cubit): $e\n$st',
+      AppLogger.e(
+        "updateMessageMetadata: local SQLite persist failed",
+        tag: 'ChatRepository',
+        error: e,
+        stackTrace: st,
       );
     }
   }
@@ -221,11 +224,11 @@ class ChatRepositoryImpl implements ChatRepository {
           await localDataSource.local_insertMessagesFromTypes(ch, [msg]);
         }
       } catch (e, st) {
-        debugPrint('fetchMessageById local persist: $e\n$st');
+        AppLogger.e("fetchMessageById local persist failed", tag: 'ChatRepository', error: e, stackTrace: st);
       }
       return msg;
     } catch (e, st) {
-      debugPrint('fetchMessageById: $e\n$st');
+      AppLogger.e("fetchMessageById failed", tag: 'ChatRepository', error: e, stackTrace: st);
       return null;
     }
   }
@@ -322,7 +325,7 @@ class ChatRepositoryImpl implements ChatRepository {
       }
       await localDataSource.local_insertMessage(map);
     } catch (e, st) {
-      debugPrint('local persist ($reason): $e\n$st');
+      AppLogger.e("local persist ($reason) failed", tag: 'ChatRepository', error: e, stackTrace: st);
     }
   }
 }

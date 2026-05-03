@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'package:appwrite/appwrite.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -303,9 +304,7 @@ class _OtpScreenState extends State<OtpScreen> {
 
       await _finishSignUpAfterVerification();
     } on AppwriteException catch (e) {
-      if (kDebugMode) {
-        debugPrint('verify email: $e');
-      }
+      AppLogger.e("verify email failed", tag: 'OtpScreen', error: e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -315,7 +314,7 @@ class _OtpScreenState extends State<OtpScreen> {
         );
       }
     } catch (e) {
-      debugPrint('verifyOTP unknown error: $e');
+      AppLogger.e("verifyOTP unknown error", tag: 'OtpScreen', error: e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Verification failed. Try again.')),
@@ -354,7 +353,7 @@ class _OtpScreenState extends State<OtpScreen> {
           );
         }
       } else {
-        debugPrint('Resend unknown error: $e');
+        AppLogger.e("Resend unknown error", tag: 'OtpScreen', error: e);
       }
     } finally {
       if (mounted) setState(() => _resending = false);

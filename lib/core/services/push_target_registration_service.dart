@@ -4,6 +4,7 @@ import 'web_token_stub.dart' if (dart.library.js_interop) 'web_token_impl.dart';
 import 'package:WhatsUnity/core/config/appwrite.dart';
 import 'package:WhatsUnity/core/config/runtime_env.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'package:appwrite/appwrite.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -66,10 +67,10 @@ class PushTargetRegistrationService {
 
   Future<void> _ensureFirebaseInitialized() async {
     if (_firebaseReady) return;
-    debugPrint('PushTargetRegistrationService: ensuring Firebase initialization...');
+    AppLogger.d("PushTargetRegistrationService: ensuring Firebase initialization...", tag: "push_target_registration");
     try {
       if (Firebase.apps.isNotEmpty) {
-        debugPrint('PushTargetRegistrationService: Firebase already initialized.');
+        AppLogger.d("PushTargetRegistrationService: Firebase already initialized.", tag: "push_target_registration");
         _firebaseReady = true;
         return;
       }
@@ -80,7 +81,7 @@ class PushTargetRegistrationService {
         final projectId = RuntimeEnv.firebaseWebProjectId;
         final messagingSenderId = RuntimeEnv.firebaseWebMessagingSenderId;
         if ([apiKey, appId, projectId, messagingSenderId].any((v) => v == null || v.isEmpty)) {
-          debugPrint(
+          AppLogger.d(
             'PushTargetRegistrationService: missing web Firebase compile-time '
             'defines (FIREBASE_WEB_*). Run with --dart-define-from-file=.env, e.g. '
             'flutter run -d chrome --dart-define-from-file=.env. '
@@ -103,18 +104,17 @@ class PushTargetRegistrationService {
       } else {
         // On native platforms, we initialize in main.dart. 
         // If it was skipped or failed there, we try a fallback here with a timeout.
-        debugPrint('PushTargetRegistrationService: performing fallback initialization for native...');
+        AppLogger.d("PushTargetRegistrationService: performing fallback initialization for native...", tag: "push_target_registration");
         await Firebase.initializeApp().timeout(const Duration(seconds: 10));
       }
-      debugPrint('PushTargetRegistrationService: Firebase initialization complete.');
+      AppLogger.d("PushTargetRegistrationService: Firebase initialization complete.", tag: "push_target_registration");
       _firebaseReady = true;
-    } catch (e) {
-      debugPrint(
-        'PushTargetRegistrationService: Firebase init failed or timed out: $e',
-      );
+    } catch (e, st) {
+      AppLogger.e("PushTargetRegistrationService: Firebase init failed or timed out",error: e, stackTrace: st);
       _firebaseReady = false;
     }
   }
+
 
   Future<String?> _getMessagingToken() async {
     try {
@@ -129,30 +129,30 @@ class PushTargetRegistrationService {
         sound: true,
       );
       if (settings.authorizationStatus == AuthorizationStatus.denied) {
-        debugPrint('PushTargetRegistrationService: permission denied');
+        AppLogger.d("PushTargetRegistrationService: permission denied");
         return null;
       }
       final webVapidKey = RuntimeEnv.firebaseWebVapidKey;
 
       if (kIsWeb) {
-        debugPrint('PushTargetRegistrationService: fetching web token via JS bridge with VAPID: ${webVapidKey != null ? 'present' : 'null'}');
+        AppLogger.d("PushTargetRegistrationService: fetching web token via JS bridge with VAPID: ${webVapidKey != null ? 'present' : 'null'}");
         final token = await getWebTokenViaJS(webVapidKey ?? '');
 
         if (token == null || token.isEmpty) {
-          debugPrint('PushTargetRegistrationService: JS bridge returned null or empty token');
+          AppLogger.d("PushTargetRegistrationService: JS bridge returned null or empty token");
         } else {
-          debugPrint('PushTargetRegistrationService: web token fetched successfully via JS bridge');
+          AppLogger.d("PushTargetRegistrationService: web token fetched successfully via JS bridge");
         }
         return token;
       }
 
       final token = await messaging.getToken(vapidKey: null);
       if (token == null || token.isEmpty) {
-        debugPrint('PushTargetRegistrationService: token is null or empty');
+        AppLogger.d("PushTargetRegistrationService: token is null or empty");
       }
       return token?.trim();
     } catch (e, st) {
-      debugPrint('PushTargetRegistrationService: token fetch failed: $e\n$st');
+      AppLogger.e("PushTargetRegistrationService: token fetch failed", error: e, stackTrace: st);
       return null;
     }
   }
@@ -189,7 +189,7 @@ class PushTargetRegistrationService {
       );
       await prefs.setString(targetIdKey, created.$id);
       await prefs.setString(tokenKey, token);
-    } on AppwriteException catch (e) {
+    } on AppwriteException catch (e,st) {
       // If target id no longer exists or duplicate conditions occur, recreate target.
       if (e.code == 404 || e.code == 409 || e.type == 'document_not_found') {
         final created = await appwriteAccount.createPushTarget(
@@ -203,9 +203,9 @@ class PushTargetRegistrationService {
         await prefs.setString(tokenKey, token);
         return;
       }
-      debugPrint('PushTargetRegistrationService: Appwrite target upsert failed: ${e.message}');
-    } catch (e) {
-      debugPrint('PushTargetRegistrationService: target upsert failed: $e');
+      AppLogger.e("PushTargetRegistrationService: Appwrite target upsert failed",error:  e,stackTrace: st);
+    } catch (e, st) {
+      AppLogger.e("PushTargetRegistrationService: target upsert failed",error:  e, stackTrace: st);
     }
   }
 }

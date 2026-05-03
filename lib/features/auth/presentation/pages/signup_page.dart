@@ -3,9 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hexcolor/hexcolor.dart';
 import 'package:WhatsUnity/Layout/Cubit/cubit.dart';
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
 import 'package:WhatsUnity/features/auth/presentation/pages/otp_screen.dart';
+import 'package:WhatsUnity/features/auth/presentation/pages/signin_page.dart';
 import '../widgets/signup_sections.dart';
 
 class SignUp extends StatefulWidget {
@@ -41,23 +43,15 @@ class _SignUpState extends State<SignUp> {
 
   @override
   Widget build(BuildContext context) {
-
     return BlocConsumer<AuthCubit, AuthState>(
       listener: (context, state) {
         if (state is Authenticated) {
           final cubit = context.read<AuthCubit>();
-          
-          // CRITICAL: Prevent navigation if we are in the middle of Google 
-          // sign-up (profile incomplete) or if the preparation gate should 
-          // still be showing the loading spinner.
           if (cubit.signInGoogle || cubit.signupGoogleEmail != null) return;
           if (state.role == null) return;
-          
-          // Root [MyApp] (main.dart) will swap SignUp for [AuthReadyGate] 
-          // based on the Authenticated state. We only need to ensure 
-          // initial state for the app layout is set.
           context.read<AppCubit>().bottomNavIndexChange(0);
         }
+        ///Signing up with email address
         if (state is SignUpSuccess) {
           if (!context.mounted) return;
           Navigator.pushReplacement(
@@ -66,11 +60,12 @@ class _SignUpState extends State<SignUp> {
                 builder: (_) => const OtpScreen().copyWithEmail(state.email)),
           );
         }
+        /// When registering with google signup and clicked continue Registration
         if (state is RegistrationSuccess) {
-          // Root [MyApp] (main.dart) will swap SignUp for [AuthReadyGate].
           context.read<AppCubit>().bottomNavIndexChange(0);
         }
         if (state is AuthError) {
+          AppLogger.e(state.message, tag: 'SignUpPage');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: Colors.pink,
@@ -88,7 +83,6 @@ class _SignUpState extends State<SignUp> {
         }
       },
       builder: (BuildContext context, state) {
-
         final cubit = context.read<AuthCubit>();
         if (cubit.signupGoogleUserName != null && displayName.text.isEmpty) {
           displayName.text = cubit.signupGoogleUserName!;
@@ -111,7 +105,7 @@ class _SignUpState extends State<SignUp> {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           const SizedBox(height: 40),
-                          SignupHeadingSection(),
+                          SignupHeadingSection(isSignIn: false),
                           const SizedBox(height: 30),
                           SignupCredentialsFormSection(
                             email: email,
@@ -120,34 +114,30 @@ class _SignUpState extends State<SignUp> {
                             password: password,
                             phoneNumber: phoneNumber,
                             formKey: _formKey1,
+                            isSignIn: false,
                           ),
-                          if (cubit.signInToggler == false)
-                            Column(
-                              children: [
-                                const SizedBox(height: 20),
-                                Container(
-                                  padding: EdgeInsets.only(
-                                    left: MediaQuery.of(context).size.width *
-                                        0.075,
-                                  ),
-                                  alignment: AlignmentDirectional.centerStart,
-                                  child: Text(
-                                    "Select Your Role",
-                                    style: GoogleFonts.manrope(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w900,
-                                      color: HexColor("#111418"),
-                                    ),
-                                  ),
-                                ),
-                                SignupRoleSection(
-                                  buildingNum: buildingNum,
-                                  apartmentNum: apartmentNum,
-                                  roleFormKey: _formKey2,
-                                  managerFormKey: _formKey3,
-                                ),
-                              ],
+                          const SizedBox(height: 20),
+                          Container(
+                            padding: EdgeInsets.only(
+                              left: MediaQuery.of(context).size.width * 0.075,
                             ),
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(
+                              "Select Your Role",
+                              style: GoogleFonts.manrope(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: HexColor("#111418"),
+                              ),
+                            ),
+                          ),
+                          roleSelection(
+                            context,
+                            buildingNum,
+                            apartmentNum,
+                            _formKey2,
+                            _formKey3,
+                          ),
                           const SizedBox(height: 20),
                           if (cubit.signupGoogleEmail == null)
                             SignupSubmitSection(
@@ -160,6 +150,7 @@ class _SignUpState extends State<SignUp> {
                               phoneNumber: phoneNumber,
                               formKey1: _formKey1,
                               formKey2: _formKey2,
+                              isSignIn: false,
                             ),
                           SignupProvidersSection(
                             fullName: fullName,
@@ -169,15 +160,21 @@ class _SignUpState extends State<SignUp> {
                             userName: displayName,
                             formKey1: _formKey1,
                             formKey2: _formKey2,
+                            isSignIn: false,
                           ),
-                          const SizedBox(
-                            height: 70,
-                          ),
+                          const SizedBox(height: 70),
                         ],
                       ),
                     ),
                   ),
-                  Positioned(bottom: 0, child: footer(context)),
+                  Positioned(
+                    bottom: 0,
+                    child: footer(
+                      context,
+                      isSignIn: false,
+                      onToggle: () => cubit.toggleSignIn(),
+                    ),
+                  ),
                 ],
               ),
             ),

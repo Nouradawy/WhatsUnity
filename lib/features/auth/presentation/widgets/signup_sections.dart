@@ -35,12 +35,11 @@ Future<void> newCompound(BuildContext context) {
   );
 }
 
-Column heading(BuildContext context) {
-  final cubit = context.read<AuthCubit>();
+Column heading(BuildContext context, {required bool isSignIn}) {
   return Column(
     children: [
       Text(
-        cubit.signInToggler ? context.loc.signInHeading1 : context.loc.signUpHeading1,
+        isSignIn ? context.loc.signInHeading1 : context.loc.signUpHeading1,
         style: context.txt.signInHeading1,
       ),
       const SizedBox(height: 5),
@@ -56,101 +55,93 @@ Column roleSelection(
   GlobalKey formKey2,
   GlobalKey formKey3,
 ) {
-  final cubit = context.read<AuthCubit>();
+  final cubit = context.watch<AuthCubit>();
   return Column(
     children: [
       const SizedBox(height: 20),
-      if (cubit.roleName != Roles.manager)
-        Container(
-          width: MediaQuery.of(context).size.width * 0.85,
-          height: 80,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: cubit.roleName == Roles.user ? Border.all(color: Colors.black) : null,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: MaterialButton(
-            onPressed: () {
-              // if (cubit.selectedCompoundId != null) cubit.resetUserData();
-              if (cubit.roleName != Roles.user) {
-                cubit.changeRole(Roles.user);
-              } else {
-                cubit.changeRole(Roles.admin);
-              }
-            },
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            child: Row(
-              children: [
-                const SizedBox(width: 20),
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  width: 35,
-                  height: 35,
-                  decoration: BoxDecoration(color: HexColor("#dae7f7"), shape: BoxShape.circle),
-                  child: SvgPicture.asset("assets/person.svg"),
+      Container(
+        width: MediaQuery.of(context).size.width * 0.85,
+        height: 80,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: cubit.roleName == Roles.user ? Border.all(color: Colors.black) : null,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: MaterialButton(
+          onPressed: () {
+            if (cubit.roleName != Roles.user) {
+              cubit.changeRole(Roles.user);
+            }
+          },
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              const SizedBox(width: 20),
+              Container(
+                padding: const EdgeInsets.all(5),
+                width: 35,
+                height: 35,
+                decoration: BoxDecoration(color: HexColor("#dae7f7"), shape: BoxShape.circle),
+                child: SvgPicture.asset("assets/person.svg"),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.loc.residentRole, style: context.txt.role),
+                    Text(context.loc.residentRoleDescription, style: context.txt.roleDescription),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(context.loc.residentRole, style: context.txt.role),
-                      Text(context.loc.residentRoleDescription, style: context.txt.roleDescription),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
       const SizedBox(height: 10),
-      if (cubit.roleName != Roles.user)
-        Container(
-          width: MediaQuery.of(context).size.width * 0.85,
-          height: 80,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: cubit.roleName == Roles.manager ? Border.all(color: Colors.black) : null,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: MaterialButton(
-            onPressed: () {
-              if (cubit.selectedCompoundId != null) cubit.resetUserData();
-              if (cubit.roleName != Roles.manager) {
-                cubit.changeRole(Roles.manager);
-              } else {
-                cubit.changeRole(Roles.admin);
-              }
-            },
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            child: Row(
-              children: [
-                const SizedBox(width: 20),
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  width: 35,
-                  height: 35,
-                  decoration: BoxDecoration(color: HexColor("#dae7f7"), shape: BoxShape.circle),
-                  child: const Icon(Icons.work, size: 21),
+      Container(
+        width: MediaQuery.of(context).size.width * 0.85,
+        height: 80,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: cubit.roleName == Roles.manager ? Border.all(color: Colors.black) : null,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: MaterialButton(
+          onPressed: () {
+            if (cubit.roleName != Roles.manager) {
+              cubit.changeRole(Roles.manager);
+            }
+          },
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              const SizedBox(width: 20),
+              Container(
+                padding: const EdgeInsets.all(5),
+                width: 35,
+                height: 35,
+                decoration: BoxDecoration(color: HexColor("#dae7f7"), shape: BoxShape.circle),
+                child: const Icon(Icons.work, size: 21),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.loc.managerRole, style: context.txt.role),
+                    Text(context.loc.managerRoleDescription, style: context.txt.roleDescription),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(context.loc.managerRole, style: context.txt.role),
-                      Text(context.loc.managerRoleDescription, style: context.txt.roleDescription),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
       if (cubit.roleName == Roles.manager) managerInfo(context, formKey3),
       if (cubit.roleName == Roles.user) apartmentInfo(context, buildingNum, apartmentNum, formKey2),
     ],
@@ -358,25 +349,26 @@ class _VerificationFilesWidget extends StatelessWidget {
 }
 
 Form form(
-  BuildContext context,
-  TextEditingController email,
-  TextEditingController fullName,
-  TextEditingController displayName,
-  TextEditingController password,
-  TextEditingController phoneNumber,
-  GlobalKey formKey1,
-) {
-  final cubit = context.read<AuthCubit>();
+  BuildContext context, {
+  required TextEditingController email,
+  TextEditingController? fullName,
+  TextEditingController? displayName,
+  TextEditingController? password,
+  TextEditingController? phoneNumber,
+  required GlobalKey formKey1,
+  required bool isSignIn,
+}) {
+  final cubit = context.watch<AuthCubit>();
   return Form(
     key: formKey1,
     child: Column(
       children: [
-        if (!cubit.signInToggler) ...[
+        if (!isSignIn) ...[
           SizedBox(
             width: MediaQuery.of(context).size.width * 0.85,
             child: defaultTextForm(
               context,
-              controller: fullName,
+              controller: fullName!,
               validation: (value) => (value == null || value.trim().isEmpty) ? "Full Name can't be Empty" : null,
               keyboardType: TextInputType.name,
               labelText: context.loc.fullName,
@@ -388,7 +380,7 @@ Form form(
             width: MediaQuery.of(context).size.width * 0.85,
             child: defaultTextForm(
               context,
-              controller: displayName,
+              controller: displayName!,
               validation: (value) => (value == null || value.trim().isEmpty) ? "Username can't be Empty" : null,
               keyboardType: TextInputType.text,
               labelText: context.loc.displayName,
@@ -431,7 +423,7 @@ Form form(
               ],
             ),
           ),
-        if (cubit.signupGoogleEmail == null) ...[
+        if (cubit.signupGoogleEmail == null && password != null) ...[
           const SizedBox(height: 10),
           SizedBox(
             width: MediaQuery.of(context).size.width * 0.85,
@@ -447,7 +439,7 @@ Form form(
           ),
         ],
         const SizedBox(height: 10),
-        if (!cubit.signInToggler)
+        if (!isSignIn && phoneNumber != null)
           SizedBox(
             width: MediaQuery.of(context).size.width * 0.85,
             child: defaultTextForm(
@@ -465,22 +457,22 @@ Form form(
 }
 
 Column submitButton(
-  BuildContext buildContext,
-  TextEditingController email,
-  TextEditingController fullName,
-  TextEditingController displayName,
-  TextEditingController password,
-  TextEditingController buildingNum,
-  TextEditingController apartmentNum,
-  TextEditingController phoneNumber,
-  GlobalKey<FormState> formKey1,
-  GlobalKey<FormState> formKey2,
-) {
-  final cubit = buildContext.read<AuthCubit>();
+  BuildContext buildContext, {
+  required TextEditingController email,
+  TextEditingController? fullName,
+  TextEditingController? displayName,
+  required TextEditingController password,
+  TextEditingController? buildingNum,
+  TextEditingController? apartmentNum,
+  TextEditingController? phoneNumber,
+  required GlobalKey<FormState> formKey1,
+  GlobalKey<FormState>? formKey2,
+  required bool isSignIn,
+}) {
+  final cubit = buildContext.watch<AuthCubit>();
   return Column(
     children: [
-      if ((cubit.apartmentConflict && !cubit.signInToggler && cubit.roleName != Roles.manager) ||
-          (cubit.apartmentConflict && cubit.verFiles == null && cubit.signingIn && !cubit.signInToggler && cubit.roleName != Roles.manager)) ...[
+      if (!isSignIn && ((cubit.apartmentConflict && cubit.roleName != Roles.manager) || (cubit.apartmentConflict && cubit.verFiles == null && cubit.signingIn && cubit.roleName != Roles.manager))) ...[
         Text(buildContext.loc.apartmentConflict1, style: buildContext.txt.signSubtitle.copyWith(color: Colors.pinkAccent, fontWeight: FontWeight.w400)),
         Text(buildContext.loc.apartmentConflict2, style: buildContext.txt.signSubtitle.copyWith(color: Colors.pinkAccent, fontWeight: FontWeight.w400)),
         if (cubit.verFiles == null)
@@ -496,19 +488,17 @@ Column submitButton(
           onPressed: cubit.signingIn
               ? null
               : () async {
-                  if (!cubit.signInToggler) {
-                    // formKey1: full name, email, password, phone, etc. (always mounted)
+                  if (!isSignIn) {
                     final isForm1Valid = formKey1.currentState?.validate() ?? false;
                     if (!isForm1Valid) return;
 
                     if (cubit.roleName != Roles.manager) {
-                      // formKey2: building / apartment (only mounted for resident flow)
-                      final isForm2Valid = formKey2.currentState?.validate() ?? false;
+                      final isForm2Valid = formKey2?.currentState?.validate() ?? false;
                       if (!isForm2Valid) return;
                       await cubit.isApartmentTaken(
                         compoundId: cubit.selectedCompoundId!,
-                        buildingName: buildingNum.text,
-                        apartmentNum: apartmentNum.text,
+                        buildingName: buildingNum!.text,
+                        apartmentNum: apartmentNum!.text,
                       );
                       final building = buildingNum.text.trim();
                       final apartment = apartmentNum.text.trim();
@@ -530,17 +520,14 @@ Column submitButton(
                       email: email.text,
                       password: password.text,
                       data: {
-                        "display_name": displayName.text.trim(),
-                        "full_name": fullName.text.trim(),
-                        // Store role as enum name (e.g. "manager") so Appwrite enum column
-                        // can hold the canonical role value. Repository will normalize for
-                        // legacy consumers.
+                        "display_name": displayName!.text.trim(),
+                        "full_name": fullName!.text.trim(),
                         "role_id": cubit.roleName!.name,
                         'compound_id': cubit.selectedCompoundId.toString(),
-                        'building_num': cubit.roleName != Roles.manager ? buildingNum.text : '-1',
-                        'apartment_num': cubit.roleName != Roles.manager ? apartmentNum.text : '-1',
+                        'building_num': cubit.roleName != Roles.manager ? buildingNum!.text : '-1',
+                        'apartment_num': cubit.roleName != Roles.manager ? apartmentNum!.text : '-1',
                         "ownerType": cubit.ownerType.name,
-                        "phoneNumber": phoneNumber.text,
+                        "phoneNumber": phoneNumber!.text,
                       },
                     );
                     cubit.signInSwitcher();
@@ -562,7 +549,7 @@ Column submitButton(
                   if (cubit.signingIn)
                     const SizedBox(width: 20, height: 20, child: CircularProgressIndicator.adaptive()),
                   Text(
-                    cubit.signInToggler ? buildContext.loc.signIn : buildContext.loc.signUp,
+                    isSignIn ? buildContext.loc.signIn : buildContext.loc.signUp,
                     style: buildContext.txt.role.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -576,16 +563,17 @@ Column submitButton(
 }
 
 Column signInProviders(
-  BuildContext context,
-  TextEditingController fullName,
-  TextEditingController buildingNum,
-  TextEditingController apartmentNum,
-  TextEditingController phoneNumber,
-  TextEditingController userName,
-  GlobalKey<FormState> formKey1,
-  GlobalKey<FormState> formKey2,
-) {
-  final cubit = context.read<AuthCubit>();
+  BuildContext context, {
+  TextEditingController? fullName,
+  TextEditingController? buildingNum,
+  TextEditingController? apartmentNum,
+  TextEditingController? phoneNumber,
+  TextEditingController? userName,
+  required GlobalKey<FormState> formKey1,
+  GlobalKey<FormState>? formKey2,
+  required bool isSignIn,
+}) {
+  final cubit = context.watch<AuthCubit>();
   return Column(
     children: [
       if (cubit.signupGoogleEmail == null)
@@ -595,132 +583,131 @@ Column signInProviders(
         ),
       Container(
         padding: EdgeInsets.symmetric(horizontal: MediaQuery.of(context).size.width * 0.075),
-        child: (kIsWeb && cubit.signupGoogleEmail == null) ?FutureBuilder(
-          // 1. Wait 500ms for AuthCubit to finish initializing the Google SDK
-          future: Future.delayed(const Duration(milliseconds: 500)),
-          builder: (context, snapshot) {
-            // 2. Show a loading spinner while we wait
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const SizedBox(
-                height: 44,
-                child: Center(child: CircularProgressIndicator.adaptive()),
-              );
-            }
-            // 3. Render the HTML iframe safely after the SDK is loaded!
-            return SizedBox(
-              height: 44,
-              width: double.infinity,
-              child: buildGoogleWebButton(),
-            );
-          },
-        ): MaterialButton(
-          height: 40,
-          elevation: 0,
-          disabledColor: Colors.grey.shade200,
-          onPressed: cubit.googleSigningIn
-              ? null
-              : () async {
-                  cubit.googleSignInSwitcher();
-                  try {
-                    if (cubit.signInToggler) {
-                      await cubit.resetUserData();
-                      await cubit.signInWithGoogle(isSignin: true);
-                    } else if (cubit.signupGoogleEmail == null) {
-                      await cubit.resetUserData();
-                      await cubit.signInWithGoogle(isSignin: false);
-                    } else {
-                      final selectedRole = cubit.roleName;
-                      final selectedCompoundId = cubit.selectedCompoundId;
-                      if (selectedRole == null) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context)
-                          ..hideCurrentSnackBar()
-                          ..showSnackBar(
-                            const SnackBar(
-                              behavior: SnackBarBehavior.floating,
-                              content: Text('Please select your role before continuing.'),
-                            ),
-                          );
-                        return;
-                      }
-                      if (selectedCompoundId == null || selectedCompoundId.isEmpty) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context)
-                          ..hideCurrentSnackBar()
-                          ..showSnackBar(
-                            const SnackBar(
-                              behavior: SnackBarBehavior.floating,
-                              content: Text('Please select your compound before continuing.'),
-                            ),
-                          );
-                        return;
-                      }
-
-                      if (cubit.roleName != Roles.manager) {
-                        final isForm1Valid = formKey1.currentState?.validate() ?? false;
-                        final isForm2Valid = formKey2.currentState?.validate() ?? false;
-                        if (!isForm1Valid || !isForm2Valid) return;
-                        await cubit.isApartmentTaken(
-                          compoundId: selectedCompoundId,
-                          buildingName: buildingNum.text,
-                          apartmentNum: apartmentNum.text,
-                        );
-                        if (cubit.apartmentConflict) return;
-                      }
-                      await cubit.submitRegistration(
-                        fullName: fullName.text,
-                        userName: userName.text,
-                        ownerType: cubit.ownerType,
-                        phoneNumber: phoneNumber.text,
-                        roleId: selectedRole.name,
-                        buildingName: selectedRole != Roles.manager ? buildingNum.text : '-1',
-                        apartmentNum: selectedRole != Roles.manager ? apartmentNum.text : '-1',
-                        compoundId: selectedCompoundId,
-                      );
-                    }
-                  } catch (e) {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context)
-                      ..hideCurrentSnackBar()
-                      ..showSnackBar(
-                        SnackBar(
-                          behavior: SnackBarBehavior.floating,
-                          backgroundColor: Colors.pink,
-                          content: Text('Google registration failed: $e'),
-                        ),
-                      );
-                  } finally {
-                    if (cubit.googleSigningIn) {
-                      cubit.googleSignInSwitcher();
-                    }
+        child: (kIsWeb && cubit.signupGoogleEmail == null)
+            ? FutureBuilder(
+                future: Future.delayed(const Duration(milliseconds: 500)),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      height: 44,
+                      child: Center(child: CircularProgressIndicator.adaptive()),
+                    );
                   }
+                  return SizedBox(
+                    height: 44,
+                    width: double.infinity,
+                    child: buildGoogleWebButton(),
+                  );
                 },
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: const BorderSide(color: Colors.black26, width: 1),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            spacing: 15,
-            children: [
-              if (cubit.googleSigningIn)
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
-                )
-              else
-              Image.asset("assets/Google_icon-may25.webp", height: 25),
-              Text(
-                cubit.signupGoogleEmail != null
-                    ? "Continue Google Registration"
-                    : cubit.signInToggler
-                        ? "Sign in with Google"
-                        : "Register with Google",
+              )
+            : MaterialButton(
+                height: 40,
+                elevation: 0,
+                disabledColor: Colors.grey.shade200,
+                onPressed: cubit.googleSigningIn
+                    ? null
+                    : () async {
+                        cubit.googleSignInSwitcher();
+                        try {
+                          if (isSignIn) {
+                            await cubit.resetUserData();
+                            await cubit.signInWithGoogle(isSignin: true);
+                          } else if (cubit.signupGoogleEmail == null) {
+                            await cubit.resetUserData();
+                            await cubit.signInWithGoogle(isSignin: false);
+                          } else {
+                            final selectedRole = cubit.roleName;
+                            final selectedCompoundId = cubit.selectedCompoundId;
+                            if (selectedRole == null) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context)
+                                ..hideCurrentSnackBar()
+                                ..showSnackBar(
+                                  const SnackBar(
+                                    behavior: SnackBarBehavior.floating,
+                                    content: Text('Please select your role before continuing.'),
+                                  ),
+                                );
+                              return;
+                            }
+                            if (selectedCompoundId == null || selectedCompoundId.isEmpty) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context)
+                                ..hideCurrentSnackBar()
+                                ..showSnackBar(
+                                  const SnackBar(
+                                    behavior: SnackBarBehavior.floating,
+                                    content: Text('Please select your compound before continuing.'),
+                                  ),
+                                );
+                              return;
+                            }
+
+                            if (cubit.roleName != Roles.manager) {
+                              final isForm1Valid = formKey1.currentState?.validate() ?? false;
+                              final isForm2Valid = formKey2?.currentState?.validate() ?? false;
+                              if (!isForm1Valid || !isForm2Valid) return;
+                              await cubit.isApartmentTaken(
+                                compoundId: selectedCompoundId,
+                                buildingName: buildingNum!.text,
+                                apartmentNum: apartmentNum!.text,
+                              );
+                              if (cubit.apartmentConflict) return;
+                            }
+                            await cubit.submitRegistration(
+                              fullName: fullName!.text,
+                              userName: userName!.text,
+                              ownerType: cubit.ownerType,
+                              phoneNumber: phoneNumber!.text,
+                              roleId: selectedRole.name,
+                              buildingName: selectedRole != Roles.manager ? buildingNum!.text : '-1',
+                              apartmentNum: selectedRole != Roles.manager ? apartmentNum!.text : '-1',
+                              compoundId: selectedCompoundId,
+                            );
+                          }
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context)
+                            ..hideCurrentSnackBar()
+                            ..showSnackBar(
+                              SnackBar(
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: Colors.pink,
+                                content: Text('Google registration failed: $e'),
+                              ),
+                            );
+                        } finally {
+                          if (cubit.googleSigningIn) {
+                            cubit.googleSignInSwitcher();
+                          }
+                        }
+                      },
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(color: Colors.black26, width: 1),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: 15,
+                  children: [
+                    if (cubit.googleSigningIn)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                      )
+                    else
+                      Image.asset("assets/Google_icon-may25.webp", height: 25),
+                    Text(
+                      cubit.signupGoogleEmail != null
+                          ? "Continue Google Registration"
+                          : isSignIn
+                              ? "Sign in with Google"
+                              : "Register with Google",
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
       ),
       if (cubit.signupGoogleEmail != null)
         Container(
@@ -744,8 +731,7 @@ Column signInProviders(
   );
 }
 
-Container footer(BuildContext context) {
-  final cubit = context.read<AuthCubit>();
+Container footer(BuildContext context, {required bool isSignIn, required VoidCallback onToggle}) {
   return Container(
     color: Colors.grey.shade50,
     width: MediaQuery.of(context).size.width,
@@ -758,12 +744,12 @@ Container footer(BuildContext context) {
             style: context.txt.signSubtitle,
             children: <TextSpan>[
               TextSpan(
-                text: cubit.signInToggler ? context.loc.signUpQuestion : context.loc.haveAccountQuestion,
+                text: isSignIn ? context.loc.signUpQuestion : context.loc.haveAccountQuestion,
               ),
               TextSpan(
-                text: cubit.signInToggler ? " ${context.loc.signUpFooter}" : " ${context.loc.signIn}",
+                text: isSignIn ? " ${context.loc.signUpFooter}" : " ${context.loc.signIn}",
                 style: context.txt.signSubtitle.copyWith(color: Colors.blue, fontWeight: FontWeight.w800),
-                recognizer: TapGestureRecognizer()..onTap = cubit.toggleSignIn,
+                recognizer: TapGestureRecognizer()..onTap = onToggle,
               ),
             ],
           ),
@@ -774,40 +760,44 @@ Container footer(BuildContext context) {
 }
 
 class SignupHeadingSection extends StatelessWidget {
-  const SignupHeadingSection({super.key});
+  final bool isSignIn;
+  const SignupHeadingSection({super.key, required this.isSignIn});
 
   @override
-  Widget build(BuildContext context) => heading(context);
+  Widget build(BuildContext context) => heading(context, isSignIn: isSignIn);
 }
 
 class SignupCredentialsFormSection extends StatelessWidget {
   final TextEditingController email;
-  final TextEditingController fullName;
-  final TextEditingController displayName;
-  final TextEditingController password;
-  final TextEditingController phoneNumber;
+  final TextEditingController? fullName;
+  final TextEditingController? displayName;
+  final TextEditingController? password;
+  final TextEditingController? phoneNumber;
   final GlobalKey<FormState> formKey;
+  final bool isSignIn;
 
   const SignupCredentialsFormSection({
     super.key,
     required this.email,
-    required this.fullName,
-    required this.displayName,
-    required this.password,
-    required this.phoneNumber,
+    this.fullName,
+    this.displayName,
+    this.password,
+    this.phoneNumber,
     required this.formKey,
+    required this.isSignIn,
   });
 
   @override
   Widget build(BuildContext context) {
     return form(
       context,
-      email,
-      fullName,
-      displayName,
-      password,
-      phoneNumber,
-      formKey,
+      email: email,
+      fullName: fullName,
+      displayName: displayName,
+      password: password,
+      phoneNumber: phoneNumber,
+      formKey1: formKey,
+      isSignIn: isSignIn,
     );
   }
 }
@@ -840,76 +830,82 @@ class SignupRoleSection extends StatelessWidget {
 
 class SignupSubmitSection extends StatelessWidget {
   final TextEditingController email;
-  final TextEditingController fullName;
-  final TextEditingController displayName;
+  final TextEditingController? fullName;
+  final TextEditingController? displayName;
   final TextEditingController password;
-  final TextEditingController buildingNum;
-  final TextEditingController apartmentNum;
-  final TextEditingController phoneNumber;
+  final TextEditingController? buildingNum;
+  final TextEditingController? apartmentNum;
+  final TextEditingController? phoneNumber;
   final GlobalKey<FormState> formKey1;
-  final GlobalKey<FormState> formKey2;
+  final GlobalKey<FormState>? formKey2;
+  final bool isSignIn;
 
   const SignupSubmitSection({
     super.key,
     required this.email,
-    required this.fullName,
-    required this.displayName,
+    this.fullName,
+    this.displayName,
     required this.password,
-    required this.buildingNum,
-    required this.apartmentNum,
-    required this.phoneNumber,
+    this.buildingNum,
+    this.apartmentNum,
+    this.phoneNumber,
     required this.formKey1,
-    required this.formKey2,
+    this.formKey2,
+    required this.isSignIn,
   });
 
   @override
   Widget build(BuildContext context) {
     return submitButton(
       context,
-      email,
-      fullName,
-      displayName,
-      password,
-      buildingNum,
-      apartmentNum,
-      phoneNumber,
-      formKey1,
-      formKey2,
+      email: email,
+      fullName: fullName,
+      displayName: displayName,
+      password: password,
+      buildingNum: buildingNum,
+      apartmentNum: apartmentNum,
+      phoneNumber: phoneNumber,
+      formKey1: formKey1,
+      formKey2: formKey2,
+      isSignIn: isSignIn,
     );
   }
 }
 
 class SignupProvidersSection extends StatelessWidget {
-  final TextEditingController fullName;
-  final TextEditingController buildingNum;
-  final TextEditingController apartmentNum;
-  final TextEditingController phoneNumber;
-  final TextEditingController userName;
+  final TextEditingController? fullName;
+  final TextEditingController? buildingNum;
+  final TextEditingController? apartmentNum;
+  final TextEditingController? phoneNumber;
+  final TextEditingController? userName;
   final GlobalKey<FormState> formKey1;
-  final GlobalKey<FormState> formKey2;
+  final GlobalKey<FormState>? formKey2;
+  final bool isSignIn;
 
   const SignupProvidersSection({
     super.key,
-    required this.fullName,
-    required this.buildingNum,
-    required this.apartmentNum,
-    required this.phoneNumber,
-    required this.userName,
+    this.fullName,
+    this.buildingNum,
+    this.apartmentNum,
+    this.phoneNumber,
+    this.userName,
     required this.formKey1,
-    required this.formKey2,
+    this.formKey2,
+    required this.isSignIn,
   });
 
   @override
   Widget build(BuildContext context) {
     return signInProviders(
       context,
-      fullName,
-      buildingNum,
-      apartmentNum,
-      phoneNumber,
-      userName,
-      formKey1,
-      formKey2,
+      fullName: fullName,
+      buildingNum: buildingNum,
+      apartmentNum: apartmentNum,
+      phoneNumber: phoneNumber,
+      userName: userName,
+      formKey1: formKey1,
+      formKey2: formKey2,
+      isSignIn: isSignIn,
     );
   }
 }

@@ -7,8 +7,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:WhatsUnity/core/config/app_directory_types.dart' show Users;
 import 'package:WhatsUnity/core/config/runtime_env.dart';
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'package:appwrite/appwrite.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -103,14 +104,14 @@ class AuthCubit extends Cubit<AuthState> {
   /// Implementation of session initialization. Fetches categories, current user,
   /// role, and compound data from the repository.
   Future<void> _initializeAuthSessionImpl() async {
-    debugPrint("[AuthCubit] _initializeAuthSessionImpl starting...");
+    AppLogger.d("_initializeAuthSessionImpl starting...",  tag: "AuthCubit");
     // Only emit AuthLoading if we don't have enough state to show the current screen
     if (state is AuthInitial || state is Unauthenticated) {
       emit(AuthLoading(categories: state.categories, compoundsLogos: state.compoundsLogos));
     }
     try {
       final result = await repository.prepareAuthSession().timeout(const Duration(seconds: 25));
-      debugPrint("[AuthCubit] prepareAuthSession result: user=${result.user?.id}, role=${result.role}, incomplete=${result.isProfileIncomplete}");
+      AppLogger.d("prepareAuthSession result: user=${result.user?.id}, role=${result.role}, incomplete=${result.isProfileIncomplete}", tag: "AuthCubit");
 
       if (result.user == null) {
         emit(Unauthenticated(
@@ -135,6 +136,12 @@ class AuthCubit extends Cubit<AuthState> {
           ));
           return;
         }
+      } else {
+        // If the profile is NOT incomplete, ensure we reset the Google-registration flags
+        // so the UI doesn't think we are still trying to sign up.
+        signInGoogle = false;
+        signupGoogleEmail = null;
+        signupGoogleUserName = null;
       }
 
       selectedCompoundId = result.selectedCompoundId;
@@ -144,6 +151,7 @@ class AuthCubit extends Cubit<AuthState> {
       final role = result.role;
 
       if (currentSessionUser != null && role != null) {
+        AppLogger.d("Authenticated session ready for user: ${currentSessionUser.id}", tag: "AuthCubit");
         _attachRealtimeUserObservers(currentSessionUser.id);
         emit(Authenticated(
           user: currentSessionUser,
@@ -158,14 +166,14 @@ class AuthCubit extends Cubit<AuthState> {
           timestamp: DateTime.now().microsecondsSinceEpoch,
         ));
       } else {
-        debugPrint("[AuthCubit] Session data incomplete: user=$currentSessionUser, role=$role");
+        AppLogger.d("Session data incomplete: user=${currentSessionUser?.id}, role=$role. Emitting Unauthenticated.", tag: "AuthCubit");
         emit(Unauthenticated(
           categories: result.categories,
           compoundsLogos: result.compoundsLogos,
         ));
       }
     } catch (e, st) {
-      debugPrint("Error in initializeAuthSession: $e\n$st");
+      AppLogger.e("Error in initializeAuthSession", error: e, stackTrace: st, tag: "AuthCubit");
       // Fallback to Unauthenticated if initialization fails, 
       // ensuring we don't get stuck in a loading loop.
       emit(Unauthenticated(
@@ -184,36 +192,46 @@ class AuthCubit extends Cubit<AuthState> {
     required String email,
     required String password,
   }) async {
-    emit(AuthLoading());
+    AppLogger.d("signInWithPassword started for $email", tag: "AuthCubit");
+    emit(AuthLoading(categories: state.categories, compoundsLogos: state.compoundsLogos));
     try {
       final user = await repository.signInWithPassword(email: email, password: password);
       if (user != null) {
+        AppLogger.d("signInWithPassword successful for ${user.id}", tag: "AuthCubit");
         await repository.saveLocalSession();
-        // Transition to Authenticated/MainScreen is now handled by _listenToAuthState -> initializeAuthSession()
+        // Force reset UI flags before initializing session
+        signInGoogle = false;
+        signupGoogleEmail = null;
+        signupGoogleUserName = null;
+        // _listenToAuthState will handle the navigation by triggering initializeAuthSession
       } else {
+        AppLogger.d("signInWithPassword returned null user", tag: "AuthCubit");
         emit(Unauthenticated(categories: state.categories, compoundsLogos: state.compoundsLogos));
       }
     } catch (e) {
-      debugPrint("Sign in error: $e");
+      AppLogger.e("signInWithPassword error", error: e, tag: "AuthCubit");
       emit(AuthError(e.toString(), categories: state.categories, compoundsLogos: state.compoundsLogos));
     }
   }
 
   /// Initiates Google OAuth flow via Appwrite.
   Future<void> signInWithGoogle({bool isSignin = false}) async {
-    emit(AuthLoading());
+    AppLogger.d("signInWithGoogle started (isSignin: $isSignin)", tag: "AuthCubit");
+    emit(AuthLoading(categories: state.categories, compoundsLogos: state.compoundsLogos));
     try {
       signInGoogle = !isSignin;
       final user = await repository.signInWithGoogle();
       if (user != null) {
-        // We no longer emit states manually here. 
-        // _listenToAuthState will detect the session and trigger initializeAuthSession().
+        AppLogger.d("signInWithGoogle session established: ${user.id}", tag: "AuthCubit");
         await repository.saveLocalSession();
+        // _listenToAuthState will handle the navigation by triggering initializeAuthSession
       } else {
+        AppLogger.d("signInWithGoogle cancelled or failed", tag: "AuthCubit");
         signInGoogle = false;
         emit(Unauthenticated(categories: state.categories, compoundsLogos: state.compoundsLogos));
       }
     } catch (e) {
+      AppLogger.e("signInWithGoogle error", error: e, tag: "AuthCubit");
       signInGoogle = false;
       emit(AuthError(e.toString(), categories: state.categories, compoundsLogos: state.compoundsLogos));
     } finally {
@@ -232,6 +250,14 @@ class AuthCubit extends Cubit<AuthState> {
       await repository.signUp(email: email, password: password, data: data);
       await repository.saveLocalSession();
       emit(SignUpSuccess(email: email));
+    } on AppwriteException catch (e) {
+      if (e.code == 409) {
+        // User already exists.
+        emit(AuthError("User with this email already exists. Please sign in.", categories: state.categories, compoundsLogos: state.compoundsLogos));
+        // We can also just emit Unauthenticated to stay on the screen or handle it in UI
+      } else {
+        emit(AuthError(e.toString()));
+      }
     } catch (e) {
       emit(AuthError(e.toString()));
     }
@@ -653,9 +679,7 @@ class AuthCubit extends Cubit<AuthState> {
   /// Updates the active role selection in the registration form.
   void changeRole(Roles? newRole) {
     roleName = newRole ?? Roles.user;
-    if (state is Authenticated) {
-      emit((state as Authenticated).copyWith(role: roleName));
-    }
+    _refreshUI();
   }
 
   /// Updates the owner/tenant selection.
@@ -720,39 +744,41 @@ class AuthCubit extends Cubit<AuthState> {
   /// Listens to authoritative auth state changes from the repository.
   void _listenToAuthState() {
     repository.onAuthStateChange.listen((appUser) {
-      debugPrint('[AuthCubit] _listenToAuthState received: ${appUser?.id}');
+      if (appUser == null) {
+        AppLogger.d("User is null in stream, clearing session", tag: "AuthCubit");
+        _detachRealtimeUserObservers();
+        // Reset nonce on logout
+        authSessionNonce = DateTime.now().microsecondsSinceEpoch;
+        signInToggler = true;
+        emit(Unauthenticated(categories: state.categories, compoundsLogos: state.compoundsLogos));
+        return;
+      }
+
+      AppLogger.d("_listenToAuthState received: ${appUser.id}", tag: "AuthCubit");
       try {
-        if (appUser != null) {
-          final currentAuth = state is Authenticated ? (state as Authenticated) : null;
-          // Nonce management: only trigger app-wide refresh if a new user logged in.
-          if (currentAuth == null || currentAuth.user.id != appUser.id) {
-             debugPrint('[AuthCubit] New user or session detected via stream');
-             // Only update nonce on ACTUAL login/logout to stabilize UI
-             authSessionNonce = DateTime.now().microsecondsSinceEpoch;
-             
-             // If we are already initializing (e.g. at startup), don't trigger a second one
-             if (_authSessionInitializationInFlight == null) {
-                debugPrint('[AuthCubit] Triggering initialization from stream');
-                unawaited(initializeAuthSession());
-             } else {
-                debugPrint('[AuthCubit] Initialization already in flight, skipping stream trigger');
-             }
-          } else {
-            debugPrint('[AuthCubit] Existing user updated via stream');
-            _attachRealtimeUserObservers(appUser.id);
-            emit(currentAuth.copyWith(user: appUser));
-            unawaited(repository.saveLocalSession());
-          }
+        final currentAuth = state is Authenticated ? (state as Authenticated) : null;
+        
+        // Nonce management: only trigger app-wide refresh if a new user logged in.
+        if (currentAuth == null || currentAuth.user.id != appUser.id) {
+           AppLogger.d("New user or session detected via stream", tag: "AuthCubit");
+           // Only update nonce on ACTUAL login/logout to stabilize UI
+           authSessionNonce = DateTime.now().microsecondsSinceEpoch;
+           
+           // If we are already initializing (e.g. at startup), don't trigger a second one
+           if (_authSessionInitializationInFlight == null) {
+              AppLogger.d("Triggering initialization from stream", tag: "AuthCubit");
+              unawaited(initializeAuthSession());
+           } else {
+              AppLogger.d("Initialization already in flight, skipping stream trigger", tag: "AuthCubit");
+           }
         } else {
-          debugPrint('[AuthCubit] User is null in stream, clearing session');
-          _detachRealtimeUserObservers();
-          // Reset nonce on logout
-          authSessionNonce = DateTime.now().microsecondsSinceEpoch;
-          signInToggler = true;
-          emit(Unauthenticated(categories: state.categories, compoundsLogos: state.compoundsLogos));
+          AppLogger.d("Existing user updated via stream", tag: "AuthCubit");
+          _attachRealtimeUserObservers(appUser.id);
+          emit(currentAuth.copyWith(user: appUser));
+          unawaited(repository.saveLocalSession());
         }
       } catch (e) {
-        debugPrint('[AuthCubit] auth stream handler error: $e');
+        AppLogger.e("auth stream handler error", error: e, tag: "AuthCubit");
       }
     });
   }
@@ -779,10 +805,10 @@ class AuthCubit extends Cubit<AuthState> {
         if (eventId.isEmpty) return;
 
         if (eventId == userId) {
-          debugPrint('[AuthCubit] Realtime profile update received for CURRENT user');
+          AppLogger.d("Realtime profile update received for CURRENT user", tag: "AuthCubit");
           unawaited(_refreshAuthenticatedStateFromRemote());
         } else {
-          debugPrint('[AuthCubit] Realtime profile update received for user $eventId');
+          AppLogger.d("Realtime profile update received for user $eventId", tag: "AuthCubit");
           _handleOtherProfileUpdate(eventId, payload);
         }
       });
@@ -801,7 +827,7 @@ class AuthCubit extends Cubit<AuthState> {
         final roleFromPayload = _resolveRoleFromRoleId(payload['role_id']);
 
         if (eventUserId == userId) {
-          debugPrint('[AuthCubit] Realtime role update received for CURRENT user');
+          AppLogger.d("Realtime role update received for CURRENT user", tag: "AuthCubit");
           if (roleFromPayload != null && state is Authenticated) {
             emit((state as Authenticated).copyWith(
               role: roleFromPayload,
@@ -811,12 +837,12 @@ class AuthCubit extends Cubit<AuthState> {
           }
           unawaited(_refreshAuthenticatedStateFromRemote());
         } else {
-          debugPrint('[AuthCubit] Realtime role update received for user $eventUserId');
+          AppLogger.d("Realtime role update received for user $eventUserId", tag: "AuthCubit");
           _handleOtherUserRoleUpdate(eventUserId, roleFromPayload);
         }
       });
     } catch (e) {
-      debugPrint('[AuthCubit] Realtime setup failed: $e');
+      AppLogger.e("Realtime setup failed", error: e, tag: "AuthCubit");
     }
   }
 

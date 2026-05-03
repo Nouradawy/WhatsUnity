@@ -47,7 +47,7 @@ abstract class AuthRepository {
   Future<AppUser?> signInWithGoogleWeb(String idToken);
 
   // ── Data-loading helpers used by AuthCubit ──────────────────────────────────
-  Future<List<Category>> loadCompounds();
+  Future<List<Category>> loadCompounds({bool forceRefresh = false});
   Future<CompoundMembersResult> loadCompoundMembers(String compoundId, {Roles? role});
 
   /// Resolves the compound ID that was last assigned to [userId] in

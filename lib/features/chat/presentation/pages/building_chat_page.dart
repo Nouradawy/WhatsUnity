@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:WhatsUnity/features/auth/presentation/bloc/auth_state.dart';
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -179,7 +180,7 @@ class _BuildingChatState extends State<BuildingChat> with WidgetsBindingObserver
                               );
                         }
                       } catch (e, st) {
-                        debugPrint('Voice upload failed: $e\n$st');
+                        AppLogger.e("Voice upload failed", tag: 'BuildingChatPage', error: e, stackTrace: st);
                       } finally {
                         if (!kIsWeb) {
                           try {

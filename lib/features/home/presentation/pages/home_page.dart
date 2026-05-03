@@ -2,7 +2,8 @@ import 'dart:io';
 
 import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:WhatsUnity/features/home/presentation/widgets/header_compound_title.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:WhatsUnity/core/utils/app_logger.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -218,7 +219,7 @@ class HomePage extends StatelessWidget {
                               },
                               // This is called when the user finishes recording
                               sendRequestFunction: (soundFile, duration) async {
-                                debugPrint("attempting to save");
+                                AppLogger.d("attempting to save voice note", tag: 'HomePage');
                                 final parts = duration.split(':');
                                 final minutes = int.tryParse(parts[0]) ?? 0;
                                 final seconds = int.tryParse(parts[1]) ?? 0;
@@ -249,7 +250,7 @@ class HomePage extends StatelessWidget {
                                     );
                                   }
                                 } catch (e, st) {
-                                  debugPrint('Voice upload failed: $e\n$st');
+                                  AppLogger.e("Voice upload failed", tag: 'HomePage', error: e, stackTrace: st);
                                 } finally {
                                   if (!kIsWeb) {
                                     try {
@@ -369,7 +370,9 @@ class _TabChangeHandlerState extends State<TabChangeHandler> {
         );
       }
     }
-    print("_handleTabSelection called : ${_tabController!.index}");
+    if (kDebugMode) {
+      AppLogger.d("_handleTabSelection called : ${_tabController!.index}", tag: 'HomePage');
+    }
     if (_tabController != null) {
       // To prevent duplicate calls, only emit if the index has actually changed
       if (AppCubit.get(context).tabBarIndex != _tabController!.index) {

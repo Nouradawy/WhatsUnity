@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:WhatsUnity/core/utils/app_logger.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -32,10 +33,9 @@ class _JoinCommunityState extends State<JoinCommunity> {
       final cubit = context.read<AuthCubit>();
       final s = cubit.state;
       if (kDebugMode) {
-        debugPrint(
-          '[JoinCommunity] init: state=${s.runtimeType} categories=${s.categories.length} '
-          'logos=${s.compoundsLogos.length} — will call fetchCompounds='
-          '${s.categories.isEmpty || s.compoundsLogos.isEmpty}',
+        AppLogger.d(
+          "init: state=${s.runtimeType} categories=${s.categories.length} logos=${s.compoundsLogos.length} — will call fetchCompounds=${s.categories.isEmpty || s.compoundsLogos.isEmpty}",
+          tag: 'JoinCommunity',
         );
       }
       if (cubit.state.categories.isEmpty) {

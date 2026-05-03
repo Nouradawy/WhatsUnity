@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -189,8 +190,8 @@ class ChatCubit extends Cubit<ChatState> {
       if (messages.isNotEmpty) {
         _applyRemoteSyncedPage(messages, 0);
       }
-    } catch (e) {
-      debugPrint('ChatCubit.refreshMessages failed: $e');
+    } catch (e, st) {
+      AppLogger.e("refreshMessages failed", tag: 'ChatCubit', error: e, stackTrace: st);
     }
   }
 
@@ -280,7 +281,7 @@ class ChatCubit extends Cubit<ChatState> {
         return;
       }
     } catch (e, st) {
-      debugPrint('ChatCubit: connectivity check failed, skip realtime: $e\n$st');
+      AppLogger.e("connectivity check failed, skip realtime", tag: 'ChatCubit', error: e, stackTrace: st);
       return;
     }
     try {
@@ -297,7 +298,7 @@ class ChatCubit extends Cubit<ChatState> {
         },
       );
     } catch (e, st) {
-      debugPrint('ChatCubit: realtime subscribe failed: $e\n$st');
+      AppLogger.e("realtime subscribe failed", tag: 'ChatCubit', error: e, stackTrace: st);
     }
   }
 

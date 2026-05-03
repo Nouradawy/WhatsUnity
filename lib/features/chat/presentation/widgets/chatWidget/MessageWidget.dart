@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_chat_bubble/chat_bubble.dart';
@@ -167,7 +168,7 @@ class MessageWidget extends StatelessWidget {
       right: 20,
       child: StackedReactions(
         reactionBackgroundColor: Colors.black87,
-        onTap: ()=>debugPrint("reaction taped"),
+        onTap: () {},
         messageId: message!.id,
         controller: controller,
         maxReactionsToShow: 3,
@@ -181,7 +182,7 @@ class MessageWidget extends StatelessWidget {
       left: 15,
       child: StackedReactions(
         reactionBackgroundColor: Colors.black87,
-        onTap: ()=>debugPrint("reaction taped"),
+        onTap: () {},
         size: 20,
         messageId: message!.id,
         controller: controller,
@@ -1041,8 +1042,8 @@ String? extractDriveFileId(String url) {
     if (uri.path == '/uc' && uri.queryParameters.containsKey('id')) {
       return uri.queryParameters['id'];
     }
-  } catch (e) {
-    debugPrint("Error parsing Drive URL: $e");
+  } catch (e, st) {
+    AppLogger.e("Error parsing Drive URL", tag: 'MessageWidget', error: e, stackTrace: st);
   }
   return null;
 }

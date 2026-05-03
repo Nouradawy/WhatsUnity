@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common/sqlite_api.dart';
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'database_open_delegate.dart';
 
 /// Singleton access to the app SQLite database.
@@ -30,7 +31,7 @@ class DatabaseHelper {
       final dir = await getApplicationDocumentsDirectory();
       path = p.join(dir.path, _dbName);
     }
-    debugPrint('[DB] Opening database at $path');
+    AppLogger.d("Opening database at $path", tag: 'DatabaseHelper');
     return openPlatformDatabase(
       path: path,
       version: _dbVersion,
@@ -40,7 +41,7 @@ class DatabaseHelper {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    debugPrint('[DB] Upgrading database from $oldVersion to $newVersion');
+    AppLogger.d("Upgrading database from $oldVersion to $newVersion", tag: 'DatabaseHelper');
     if (oldVersion < 2) {
       // v2: channel_id is TEXT to support Appwrite string ids (local cache is best-effort).
       await db.execute('DROP INDEX IF EXISTS idx_messages_channel_time');
@@ -64,12 +65,12 @@ class DatabaseHelper {
     if (oldVersion < 8) {
       await _createMembersTable(db);
     }
-    debugPrint('[DB] Upgrade complete');
+    AppLogger.d("Upgrade complete", tag: 'DatabaseHelper');
   }
 
   /// MIGRATION_PLAN §1.2–1.3: sync metadata on messages + outbound job queue.
   Future<void> _migrateV3Sync(Database db) async {
-    debugPrint('[DB] Migrating to V3 Sync...');
+    AppLogger.d("Migrating to V3 Sync...", tag: 'DatabaseHelper');
     await db.execute('''
 CREATE TABLE IF NOT EXISTS sync_jobs (
   job_id TEXT PRIMARY KEY NOT NULL,
@@ -93,7 +94,7 @@ CREATE TABLE IF NOT EXISTS sync_jobs (
       final rows = await db.rawQuery('PRAGMA table_info(messages)');
       final exists = rows.any((r) => r['name'] == name);
       if (!exists) {
-        debugPrint('[DB] Adding column $name to messages');
+        AppLogger.d("Adding column $name to messages", tag: 'DatabaseHelper');
         await db.execute(ddl);
       }
     }
@@ -122,14 +123,14 @@ CREATE TABLE IF NOT EXISTS sync_jobs (
   }
 
   Future<void> _onCreate(Database db, int version) async {
-    debugPrint('[DB] Creating database version $version');
+    AppLogger.d("Creating database version $version", tag: 'DatabaseHelper');
     await _createMessagesTable(db);
     // onUpgrade is skipped for new DBs — must create queue here too.
     await _migrateV3Sync(db);
     await _createMaintenanceLocalTables(db);
     await _createSessionsTable(db);
     await _createMembersTable(db);
-    debugPrint('[DB] Creation complete');
+    AppLogger.d("Creation complete", tag: 'DatabaseHelper');
   }
 
   /// IMPROVE_IMPLEMENTATION.md: local session cache for robust offline restoration.

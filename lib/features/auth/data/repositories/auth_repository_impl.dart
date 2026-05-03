@@ -7,9 +7,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:appwrite/appwrite.dart';
-import 'package:flutter/foundation.dart' show compute, debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart' show compute, kDebugMode;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import '../../../../core/config/app_directory_types.dart';
 import '../../../../core/config/Enums.dart';
 import '../../../../core/config/appwrite.dart' show appwriteDatabaseId;
@@ -53,6 +54,9 @@ class AuthRepositoryImpl implements AuthRepository {
   final Account _appwriteAccount;
   final TablesDB _tables;
 
+  List<Category>? _cachedCategories;
+  List<String>? _cachedLogos;
+
   /// Returns the authoritative authenticated user id from Appwrite [Account],
   /// falling back to the cached [_currentUser] when the account endpoint is unavailable.
   Future<String?> _fetchAuthenticatedUserId() async {
@@ -73,7 +77,7 @@ class AuthRepositoryImpl implements AuthRepository {
   AppUser? _currentUser;
 
   void _notify(AppUser? user) {
-    debugPrint('[AuthRepositoryImpl] _notify: user=${user?.id}');
+    AppLogger.d("_notify: user=${user?.id}");
     _currentUser = user;
     if (user != null) {
       unawaited(CacheHelper.saveLastActiveUserId(user.id));
@@ -97,7 +101,7 @@ class AuthRepositoryImpl implements AuthRepository {
       final user = await remoteDataSource.remoteFetchCurrentUser();
       _notify(user);
     } catch (e, st) {
-      debugPrint('AuthRepositoryImpl._remoteCheckExistingSession: $e\n$st');
+      AppLogger.e("_remoteCheckExistingSession failed", error: e, stackTrace: st);
       _notify(null);
     }
   }
@@ -120,49 +124,58 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<AuthSessionPreparationResult> prepareAuthSession() async {
-    debugPrint('[AuthRepo] prepareAuthSession starting...');
-    List<Category> currentCategories = [];
-    List<String> currentLogos = [];
+    AppLogger.d("prepareAuthSession starting...");
+    
+    // Use cached data if available to avoid redundant network calls
+    List<Category> currentCategories = _cachedCategories ?? [];
+    List<String> currentLogos = _cachedLogos ?? [];
 
     try {
-      debugPrint('[AuthRepo] Loading compounds...');
-      currentCategories = await loadCompounds();
-      debugPrint('[AuthRepo] Compounds loaded: ${currentCategories.length}');
+      if (currentCategories.isEmpty) {
+        AppLogger.d("Loading compounds (cache empty)...");
+        currentCategories = await loadCompounds();
+      } else {
+        AppLogger.d("Using cached compounds (${currentCategories.length} categories)");
+      }
     } catch (e, st) {
-      debugPrint('[AuthRepo] prepareAuthSession: loadCompounds failed: $e\n$st');
+      AppLogger.e("prepareAuthSession: loadCompounds failed", error: e, stackTrace: st);
     }
 
     try {
-      debugPrint('[AuthRepo] Loading compound logos...');
-      currentLogos = await AssetHelper.loadCompoundLogos();
-      debugPrint('[AuthRepo] Logos loaded: ${currentLogos.length}');
+      if (currentLogos.isEmpty) {
+        AppLogger.d("Loading compound logos (cache empty)...");
+        currentLogos = await AssetHelper.loadCompoundLogos();
+        _cachedLogos = currentLogos;
+      } else {
+        AppLogger.d("Using cached compound logos (${currentLogos.length} logos)");
+      }
     } catch (e, st) {
-      debugPrint('[AuthRepo] prepareAuthSession: loadCompoundLogos failed: $e\n$st');
+      AppLogger.e("prepareAuthSession: loadCompoundLogos failed", error: e, stackTrace: st);
     }
 
     AppUser? currentUserAuth;
     try {
-      debugPrint('[AuthRepo] Fetching current remote user...');
+      AppLogger.d("Fetching current remote user...");
       currentUserAuth = await fetchCurrentUser();
-      debugPrint('[AuthRepo] Current remote user: ${currentUserAuth?.id}');
+      AppLogger.d("Current remote user: ${currentUserAuth?.id}");
     } catch (e, st) {
-      debugPrint('[AuthRepo] prepareAuthSession: fetchCurrentUser failed: $e\n$st');
+      AppLogger.e("prepareAuthSession: fetchCurrentUser failed", error: e, stackTrace: st);
       currentUserAuth = null;
     }
 
-    debugPrint('[AuthRepo] Checking local session...');
+    AppLogger.d("Checking local session...");
     final lastUserId = await CacheHelper.getLastActiveUserId();
     Map<String, dynamic>? localSession;
 
     if (lastUserId != null && lastUserId.isNotEmpty) {
-      debugPrint('[AuthRepo] Fetching local session for $lastUserId');
+      AppLogger.d("Fetching local session for $lastUserId");
       localSession = await localDataSource.localFetchSession(lastUserId);
-      debugPrint('[AuthRepo] Local session found: ${localSession != null}');
+      AppLogger.d("Local session found: ${localSession != null}");
     }
 
     if (currentUserAuth == null && localSession != null) {
       try {
-        debugPrint('[AuthRepo] Restoring user from local session');
+        AppLogger.d("Restoring user from local session");
         final email = localSession['email']?.toString();
         final rid = localSession['role_id'];
         final Map<String, dynamic>? meta = rid != null ? <String, dynamic>{'role_id': rid} : null;
@@ -172,8 +185,8 @@ class AuthRepositoryImpl implements AuthRepository {
           userMetadata: meta,
         );
         primeCurrentUser(currentUserAuth);
-      } catch (e) {
-        debugPrint('[AuthRepo] prepareAuthSession: offline user restore from SQLite failed: $e');
+      } catch (e, st) {
+        AppLogger.e("prepareAuthSession: offline user restore from SQLite failed", error: e, stackTrace: st);
       }
     }
     
@@ -181,7 +194,7 @@ class AuthRepositoryImpl implements AuthRepository {
     // Actually I should add more logs to the rest of the method as well.
 
     if (currentUserAuth == null) {
-      debugPrint('[AuthRepo] User still null, checking legacy CacheHelper...');
+      AppLogger.d("User still null, checking legacy CacheHelper...");
       // Legacy fallback to CacheHelper
       if (lastUserId != null && lastUserId.isNotEmpty) {
         final String? cachedRaw = await CacheHelper.getData(
@@ -202,17 +215,17 @@ class AuthRepositoryImpl implements AuthRepository {
                 userMetadata: meta,
               );
               primeCurrentUser(currentUserAuth);
-              debugPrint('[AuthRepo] Restored user from legacy cache');
+              AppLogger.d("Restored user from legacy cache");
             }
-          } catch (e) {
-            debugPrint('[AuthRepo] prepareAuthSession: offline user restore from CacheHelper failed: $e');
+          } catch (e, st) {
+            AppLogger.e("prepareAuthSession: offline user restore from CacheHelper failed", error: e, stackTrace: st);
           }
         }
       }
     }
 
     if (currentUserAuth == null) {
-      debugPrint('[AuthRepo] Returning anonymous preparation result');
+      AppLogger.d("Returning anonymous preparation result");
       return AuthSessionPreparationResult(
         categories: currentCategories,
         compoundsLogos: currentLogos,
@@ -223,12 +236,12 @@ class AuthRepositoryImpl implements AuthRepository {
     }
 
     final String userId = currentUserAuth.id;
-    debugPrint('[AuthRepo] Proceeding with userId: $userId');
+    AppLogger.d("Proceeding with userId: $userId");
     Map<String, dynamic> localMyCompounds = {'0': "Add New Community"};
     String? localSelectedCompoundId;
 
     if (localSession != null) {
-      debugPrint('[AuthRepo] Reading compound info from local session');
+      AppLogger.d("Reading compound info from local session");
       localSelectedCompoundId = _coerceToCompoundId(localSession['selected_compound_id']);
       final mcRaw = localSession['my_compounds_json'];
       if (mcRaw != null) {
@@ -239,7 +252,7 @@ class AuthRepositoryImpl implements AuthRepository {
     }
 
     if (localSelectedCompoundId == null) {
-      debugPrint('[AuthRepo] Selected compound null, checking legacy CacheHelper...');
+      AppLogger.d("Selected compound null, checking legacy CacheHelper...", tag: 'AuthRepository');
       final String? cachedRaw = await CacheHelper.getData(
         key: CacheHelper.cachedUserDataKey(userId),
         type: "String",
@@ -255,27 +268,27 @@ class AuthRepositoryImpl implements AuthRepository {
               localMyCompounds = _parseMyCompoundsMap(mc);
             }
           }
-        } catch (e) {
-          debugPrint('[AuthRepo] prepareAuthSession: invalid cached user JSON: $e');
+        } catch (e, st) {
+          AppLogger.e("prepareAuthSession: invalid cached user JSON", tag: 'AuthRepository', error: e, stackTrace: st);
         }
       }
     }
 
     if (localSelectedCompoundId == null) {
       try {
-        debugPrint('[AuthRepo] Fetching default compound ID...');
+        AppLogger.d("Fetching default compound ID...");
         localSelectedCompoundId = await getDefaultCompoundId(userId);
       } catch (e, st) {
-        debugPrint('[AuthRepo] prepareAuthSession: getDefaultCompoundId failed: $e\n$st');
+        AppLogger.e("prepareAuthSession: getDefaultCompoundId failed",error:  e, stackTrace: st);
       }
     }
 
     if (localSelectedCompoundId == null || localSelectedCompoundId.isEmpty) {
-      debugPrint('[AuthRepo] Falling back to index from CacheHelper');
+      AppLogger.d("Falling back to index from CacheHelper");
       localSelectedCompoundId = _coerceToCompoundId(await CacheHelper.getCompoundCurrentIndex());
     }
 
-    debugPrint('[AuthRepo] Selected compound ID: $localSelectedCompoundId');
+    AppLogger.d("Selected compound ID: $localSelectedCompoundId");
 
     if (localSelectedCompoundId != null && localMyCompounds.length <= 1) {
       try {
@@ -286,19 +299,19 @@ class AuthRepositoryImpl implements AuthRepository {
           '0': "Add New Community",
           localSelectedCompoundId: compound.name,
         };
-        debugPrint('[AuthRepo] Re-mapped myCompounds from global list');
+        AppLogger.d("Re-mapped myCompounds from global list");
       } catch (_) {}
     }
 
-    debugPrint('[AuthRepo] Resolving user role...');
+    AppLogger.d("Resolving user role...");
     final roleFromUserRoles = await _fetchRemoteRoleForUser(userId);
     final roleFromPrefs = _resolveRoleFromRoleId(currentUserAuth.userMetadata?["role_id"]);
     final roleFromLocal = _resolveRoleFromRoleId(localSession?['role_id']);
     final Roles? userRole = roleFromUserRoles ?? roleFromPrefs ?? roleFromLocal;
-    debugPrint('[AuthRepo] User role: $userRole');
+    AppLogger.d("User role: $userRole");
 
     if (userRole == null) {
-      debugPrint('[AuthRepo] Incomplete profile (role null)');
+      AppLogger.d("Incomplete profile (role null)");
       return AuthSessionPreparationResult(
         user: currentUserAuth,
         myCompounds: localMyCompounds,
@@ -322,28 +335,28 @@ class AuthRepositoryImpl implements AuthRepository {
 
     if (localSelectedCompoundId != null) {
       try {
-        debugPrint('[AuthRepo] Loading members for compound: $localSelectedCompoundId');
+        AppLogger.d("Loading members for compound: $localSelectedCompoundId");
         final result = await loadCompoundMembers(localSelectedCompoundId, role: userRole);
         chatMembers = result.members;
         membersData = result.membersData;
-        debugPrint('[AuthRepo] Members loaded: ${chatMembers.length}');
+        AppLogger.d("Members loaded: ${chatMembers.length}");
 
         final uid = currentUserAuth.id.trim();
         if (chatMembers.isNotEmpty) {
           currentUserMember = chatMembers.firstWhere(
             (member) => member.id.trim() == uid,
             orElse: () {
-              debugPrint('[AuthRepo] Current user $uid not found in members list');
+              AppLogger.d("Current user $uid not found in members list");
               return chatMembers.first;
             },
           );
         }
       } catch (e, st) {
-        debugPrint('[AuthRepo] prepareAuthSession: loadCompoundMembers failed: $e\n$st');
+        AppLogger.e("prepareAuthSession: loadCompoundMembers failed", error: e, stackTrace: st);
       }
     }
 
-    debugPrint('[AuthRepo] prepareAuthSession complete.');
+    AppLogger.d("prepareAuthSession complete.");
     return AuthSessionPreparationResult(
       user: currentUserAuth,
       role: userRole,
@@ -411,8 +424,8 @@ class AuthRepositoryImpl implements AuthRepository {
       );
       if (result.rows.isEmpty) return null;
       return _resolveRoleFromRoleId(result.rows.first.data['role_id']);
-    } catch (e) {
-      if (kDebugMode) debugPrint('[AuthRepositoryImpl] _fetchRemoteRoleForUser failed: $e');
+    } catch (e, st) {
+      AppLogger.e("_fetchRemoteRoleForUser failed", error: e, stackTrace: st);
       return null;
     }
   }
@@ -494,9 +507,9 @@ class AuthRepositoryImpl implements AuthRepository {
       final googleSignIn = GoogleSignIn.instance;
       await googleSignIn.signOut();
 
-    } catch (e) {
+    } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('Google signOut cleanup skipped: $e');
+        AppLogger.w("Google signOut cleanup skipped", tag: 'AuthRepository');
       }
     }
     await CacheHelper.removeData(CacheHelper.compoundCurrentIndexKey);
@@ -747,9 +760,9 @@ class AuthRepositoryImpl implements AuthRepository {
       final v = res.rows.first.data['compound_id'];
       if (v == null) return null;
       return v.toString();
-    } catch (e) {
+    } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('getDefaultCompoundId (Appwrite): $e');
+        AppLogger.e("getDefaultCompoundId failed", tag: 'AuthRepository', error: e, stackTrace: st);
       }
       return null;
     }
@@ -762,9 +775,9 @@ class AuthRepositoryImpl implements AuthRepository {
     required bool atWelcome,
   }) async {
     if (kDebugMode) {
-      debugPrint(
-        '[Appwrite] selectCompound: saving compoundId=$compoundId name="$compoundName" '
-        'atWelcome=$atWelcome (CacheHelper + MyCompounds JSON)',
+      AppLogger.d(
+        "selectCompound: saving compoundId=$compoundId name=\"$compoundName\" atWelcome=$atWelcome (CacheHelper + MyCompounds JSON)",
+        tag: 'AuthRepository',
       );
     }
     await CacheHelper.saveCompoundCurrentIndex(compoundId);
@@ -831,12 +844,17 @@ class AuthRepositoryImpl implements AuthRepository {
   // ── Data-loading helpers ──────────────────────────────────────────────────
 
   @override
-  Future<List<Category>> loadCompounds() async {
-    return _loadCompoundsFromAppwrite();
+  Future<List<Category>> loadCompounds({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedCategories != null && _cachedCategories!.isNotEmpty) {
+      return _cachedCategories!;
+    }
+    final result = await _loadCompoundsFromAppwrite();
+    _cachedCategories = result;
+    return result;
   }
 
   Future<List<Category>> _loadCompoundsFromAppwrite() async {
-    debugPrint('[Appwrite/Trace] Listing categories from table $_kColCompoundCategories...');
+    AppLogger.d("Listing categories from table $_kColCompoundCategories...");
     final catDocs = await _tables.listRows(
       databaseId: appwriteDatabaseId,
       tableId: _kColCompoundCategories,
@@ -846,21 +864,21 @@ class AuthRepositoryImpl implements AuthRepository {
         Query.limit(500),
       ],
     ).timeout(const Duration(seconds: 15));
-    debugPrint('[Appwrite/Trace] Categories received: ${catDocs.rows.length}');
+    AppLogger.d("Categories received: ${catDocs.rows.length}");
 
-    debugPrint('[Appwrite/Trace] Listing compounds from table $_kColCompounds...');
+    AppLogger.d("Listing compounds from table $_kColCompounds...");
     final compoundDocs = await _tables.listRows(
       databaseId: appwriteDatabaseId,
       tableId: _kColCompounds,
       queries: [Query.isNull('deleted_at'), Query.limit(5000)],
     ).timeout(const Duration(seconds: 15));
-    debugPrint('[Appwrite/Trace] Compounds received: ${compoundDocs.rows.length}');
+    AppLogger.d("Compounds received: ${compoundDocs.rows.length}");
 
     if (kDebugMode) {
-      debugPrint(
-        '[Appwrite] loadCompounds listRows: databaseId=$appwriteDatabaseId '
-        'categoriesTable=$_kColCompoundCategories compoundsTable=$_kColCompounds '
-        '→ ${catDocs.rows.length} category row(s), ${compoundDocs.rows.length} compound row(s)',
+      AppLogger.d(
+        "loadCompounds listRows: databaseId=$appwriteDatabaseId "
+        "categoriesTable=$_kColCompoundCategories compoundsTable=$_kColCompounds "
+        "→ ${catDocs.rows.length} category row(s), ${compoundDocs.rows.length} compound row(s)",
       );
     }
 
@@ -870,42 +888,40 @@ class AuthRepositoryImpl implements AuthRepository {
     if (kDebugMode && (catDocs.rows.isEmpty || compoundDocs.rows.isEmpty)) {
       try {
         final u = await _appwriteAccount.get();
-        debugPrint(
-          '[Appwrite] loadCompounds: listRows is empty but a session exists '
-          '(userId=${u.$id}). If the console shows rows, add Read permissions on '
-          'tables $_kColCompoundCategories & $_kColCompounds for Users (or Any '
-          'if this screen runs before sign-in).',
+        AppLogger.d(
+          "loadCompounds: listRows is empty but a session exists (userId=${u.$id}). If the console shows rows, add Read permissions on tables $_kColCompoundCategories & $_kColCompounds for Users (or Any if this screen runs before sign-in).",
+          tag: 'AuthRepository',
         );
       } on AppwriteException catch (e) {
         if (e.code == 401) {
-          debugPrint(
-            '[Appwrite] loadCompounds: no Appwrite session (401). listRows for '
-            'compounds is empty. Either sign in first, or add table Read=**Any** '
-            'for the community list during signup, then tighten later.',
+          AppLogger.d(
+            "loadCompounds: no Appwrite session (401). listRows for compounds is empty. Either sign in first, or add table Read=**Any** for the community list during signup, then tighten later.",
+            tag: 'AuthRepository',
           );
         } else {
-          debugPrint(
-            '[Appwrite] loadCompounds: could not read session: ${e.message}',
+          AppLogger.d(
+            "loadCompounds: could not read session: ${e.message}",
+            tag: 'AuthRepository',
           );
         }
-      } catch (e) {
-        debugPrint('[Appwrite] loadCompounds: session check failed: $e');
+      } catch (e, st) {
+        AppLogger.e("loadCompounds: session check failed", tag: 'AuthRepository', error: e, stackTrace: st);
       }
     }
 
-    debugPrint('[Appwrite/Trace] Starting isolate compute for compounds...');
+    AppLogger.d("Starting isolate compute for compounds...", tag: 'AuthRepository');
     final parsed =
         await compute(parseAppwriteCompoundsForIsolate, <String, dynamic>{
           'categories': catDocs.rows.map((r) => r.toMap()).toList(),
           'compounds': compoundDocs.rows.map((r) => r.toMap()).toList(),
         });
-    debugPrint('[Appwrite/Trace] Isolate compute finished.');
+    AppLogger.d("Isolate compute finished.", tag: 'AuthRepository');
 
     if (kDebugMode) {
       final total = parsed.fold<int>(0, (sum, c) => sum + c.compounds.length);
-      debugPrint(
-        '[Appwrite] loadCompounds after compute: ${parsed.length} category bucket(s), '
-        '$total compound(s) in tree (UI categories may include "Other" for unmatched)',
+      AppLogger.d(
+        "loadCompounds after compute: ${parsed.length} category bucket(s), $total compound(s) in tree (UI categories may include \"Other\" for unmatched)",
+        tag: 'AuthRepository',
       );
     }
 
@@ -962,7 +978,7 @@ class AuthRepositoryImpl implements AuthRepository {
       
       return deltaMembers;
     } catch (e, st) {
-      debugPrint('[AuthRepo] _syncMembersFromRemote failed: $e\n$st');
+      AppLogger.e("_syncMembersFromRemote failed", tag: 'AuthRepository', error: e, stackTrace: st);
       return [];
     }
   }

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 
 import '../../../../core/services/database_helper.dart';
 import '../../../../core/sync/lww_merge.dart';
@@ -57,7 +58,7 @@ class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } on DatabaseException catch (e, st) {
-      debugPrint('MaintenanceLocalDataSource.local_upsertReport: $e\n$st');
+      AppLogger.e("local_upsertReport failed", tag: 'MaintenanceLocalDataSource', error: e, stackTrace: st);
       rethrow;
     }
   }
@@ -81,7 +82,7 @@ class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } on DatabaseException catch (e, st) {
-      debugPrint('MaintenanceLocalDataSource.local_upsertAttachment: $e\n$st');
+      AppLogger.e("local_upsertAttachment failed", tag: 'MaintenanceLocalDataSource', error: e, stackTrace: st);
       rethrow;
     }
   }
@@ -101,7 +102,7 @@ class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
       );
       return rows.map(_reportRowToJson).toList();
     } on DatabaseException catch (e, st) {
-      debugPrint('MaintenanceLocalDataSource.local_getReports: $e\n$st');
+      AppLogger.e("local_getReports failed", tag: 'MaintenanceLocalDataSource', error: e, stackTrace: st);
       return [];
     }
   }
@@ -121,7 +122,7 @@ class MaintenanceLocalDataSourceImpl implements MaintenanceLocalDataSource {
       );
       return rows.map(_attachmentRowToJson).toList();
     } on DatabaseException catch (e, st) {
-      debugPrint('MaintenanceLocalDataSource.local_getAttachments: $e\n$st');
+      AppLogger.e("local_getAttachments failed", tag: 'MaintenanceLocalDataSource', error: e, stackTrace: st);
       return [];
     }
   }

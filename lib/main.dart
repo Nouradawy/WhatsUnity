@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'core/utils/app_logger.dart';
 import 'core/services/database_helper.dart';
 import 'core/utils/BlocObserver.dart';
 import 'core/config/runtime_env.dart';
@@ -34,6 +35,7 @@ import 'features/admin/presentation/bloc/report_cubit.dart';
 import 'features/admin/presentation/bloc/admin_cubit.dart';
 
 import 'features/auth/presentation/pages/signup_page.dart';
+import 'features/auth/presentation/pages/signin_page.dart';
 import 'features/auth/data/auth_ready_gate.dart';
 import 'features/ui_ux_prototypes/presentation/pages/uiux_prototype_catalog_page.dart';
 
@@ -49,50 +51,50 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Ensure Firebase is initialized for background processing if needed.
   // This must be minimal to avoid blocking the OS notification delivery.
   await Firebase.initializeApp();
-  debugPrint("Handling a background message: ${message.messageId}");
+  AppLogger.d("Handling a background message: ${message.messageId}", tag: 'Main');
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  debugPrint('[Main] Starting WhatsUnity initialization...');
+  AppLogger.d("Starting WhatsUnity initialization...", tag: 'Main');
 
   // ── Firebase (native push) ────────────────────────────────────────────────
   // Initialized early in main() to ensure background handlers are registered
   // before the UI tree starts.
   if (!kIsWeb) {
     try {
-      debugPrint('[Main] Initializing Firebase...');
+      AppLogger.d("Initializing Firebase...", tag: 'Main');
       await Firebase.initializeApp().timeout(const Duration(seconds: 10));
-      debugPrint('[Main] Firebase initialized.');
+      AppLogger.d("Firebase initialized.", tag: 'Main');
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-      debugPrint('[Main] FCM background handler registered.');
+      AppLogger.d("FCM background handler registered.", tag: 'Main');
     } catch (e) {
-      debugPrint('[Main] Firebase early initialization failed or timed out: $e');
+      AppLogger.e("Firebase early initialization failed or timed out", tag: 'Main', error: e);
     }
   }
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-    debugPrint(details.exceptionAsString());
+    AppLogger.e(details.exceptionAsString(), tag: 'Main');
   };
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-    debugPrint('Uncaught async error: $error\n$stack');
+    AppLogger.e("Uncaught async error", tag: 'Main', error: error, stackTrace: stack);
     return true;
   };
 
-  debugPrint('[Main] Initializing UI and ScreenUtil...');
+  AppLogger.d("Initializing UI and ScreenUtil...", tag: 'Main');
   await ScreenUtil.ensureScreenSize();
   Bloc.observer = const SimpleBlocObserver();
 
   // ── Appwrite (auth primary backend) ───────────────────────────────────────
-  debugPrint('[Main] Initializing Appwrite and AppServices...');
+  AppLogger.d("Initializing Appwrite and AppServices...", tag: 'Main');
   try {
     await initAppwrite();
     initMediaUploadService();
     AppServices.initialize();
-    debugPrint('[Main] Backend services ready.');
+    AppLogger.d("Backend services ready.", tag: 'Main');
   } catch (e, st) {
-    debugPrint('[Main] WhatsUnity startup failed: $e\n$st');
+    AppLogger.e("WhatsUnity startup failed", tag: 'Main', error: e, stackTrace: st);
     runApp(
       MaterialApp(
         home: Scaffold(
@@ -116,7 +118,7 @@ void main() async {
     return;
   }
 
-  debugPrint('[Main] Running MyApp.');
+  AppLogger.d("Running MyApp.", tag: 'Main');
   runApp(const MyApp());
 }
 
@@ -213,34 +215,56 @@ class MyApp extends StatelessWidget {
             home: BlocBuilder<AuthCubit, AuthState>(
               builder: (context, state) {
                 final authCubit = context.read<AuthCubit>();
+                AppLogger.d("Routing Builder: state=${state.runtimeType}, userEmail=${authCubit.signupGoogleEmail}, signingGoogle=${authCubit.signInGoogle}", tag: 'Main');
                 
                 // 1. Prioritize authenticated/registered gate
-                // MUST have role and selectedCompoundId (or at least attempt load) before swapping.
                 if (state is Authenticated || state is RegistrationSuccess) {
                   final bool isDataReady = (state is Authenticated) ? (state.role != null && state.selectedCompoundId != null) : true;
                   
+                  // Reset registration flags if we are truly authenticated and ready
+                  if (isDataReady && (authCubit.signupGoogleEmail != null || authCubit.signInGoogle)) {
+                    AppLogger.d("User authenticated with data, forcing flag reset to exit registration UI", tag: 'Main');
+                  }
+
+                  ///Signing in with email address Or loggingIn during app start
                   if (authCubit.signupGoogleEmail == null && authCubit.signInGoogle == false && isDataReady) {
                     return AuthReadyGate(
                       key: ValueKey(authCubit.authSessionNonce),
                     );
                   }
                   
-                  // If authenticated but data isn't ready, stay on a loader to prevent empty UI.
+                  // If authenticated but data isn't ready (e.g. still in AuthLoading phase of initialization), 
+                  // or if we are still technically in a "Google Signup" state despite being Authenticated,
+                  // we check if we can skip the signup page.
+                  if (isDataReady) {
+                    return AuthReadyGate(
+                      key: ValueKey(authCubit.authSessionNonce),
+                    );
+                  }
+
                   return const Scaffold(body: Center(child: CircularProgressIndicator.adaptive()));
                 }
 
                 // 2. Only show full-screen spinner if we have no UI to show yet
-                // (e.g. cold boot before community list is loaded)
                 if (state is AuthLoading && state.categories.isEmpty) {
                   return const Scaffold(body: Center(child: CircularProgressIndicator.adaptive()));
                 }
 
                 if (state is SignUpSuccess) {
-                   return SignUp();
+                   return const SignUp();
                 }
 
-                // Default to SignUp for Unauthenticated, AuthInitial, AuthError, GoogleSignupState
-                return SignUp();
+                // Default to SignIn for Unauthenticated, AuthInitial, AuthError
+                // If Google registration is pending AND profile is incomplete, show SignUp.
+                if (state is GoogleSignupState || (authCubit.signupGoogleEmail != null && state is! Authenticated)) {
+                  return const SignUp();
+                }
+
+                if (state is Unauthenticated || state is AuthInitial || state is AuthError) {
+                   return authCubit.signInToggler ? const SignIn() : const SignUp();
+                }
+
+                return const SignIn();
               },
             ),
           );

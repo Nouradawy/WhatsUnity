@@ -559,7 +559,6 @@ class MessageRowWrapper extends StatelessWidget {
       messageContent,
       InkResponse(
         onTapDown: (_) {
-          debugPrint(userRole.toString());
           _showUserPopup(context, message.authorId);
         },
         child: !shouldShowAvatarForRow

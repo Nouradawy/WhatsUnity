@@ -4,6 +4,7 @@ import 'package:WhatsUnity/core/theme/lightTheme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:carousel_slider/carousel_slider.dart';
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -347,7 +348,7 @@ class _PostCarouselState extends State<PostCarousel> {
     try {
       _controller.nextPage();
     } catch (e) {
-      debugPrint('carousel nextPage ignored: $e');
+      AppLogger.w("carousel nextPage ignored: $e", tag: 'Constants');
     }
   }
 
@@ -355,7 +356,7 @@ class _PostCarouselState extends State<PostCarousel> {
     try {
       _controller.previousPage();
     } catch (e) {
-      debugPrint('carousel previousPage ignored: $e');
+      AppLogger.w("carousel previousPage ignored: $e", tag: 'Constants');
     }
   }
 

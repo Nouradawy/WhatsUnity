@@ -1,3 +1,4 @@
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../presentation/bloc/auth_cubit.dart';
@@ -23,9 +24,11 @@ class _AuthReadyGateState extends State<AuthReadyGate> {
     // This prevents the infinite loop when main.dart rebuilds.
     final state = authCubit.state;
     if (state is Authenticated && state.role != null) {
-      debugPrint('AuthReadyGate: Already authenticated with role, skipping initialization');
+      AppLogger.d("Already authenticated with role, skipping initialization", tag: 'AuthReadyGate');
       return;
     }
+    
+    // AuthCubit.initializeAuthSession handles idempotency (in-flight futures)
     await authCubit.initializeAuthSession();
   }
 
@@ -53,10 +56,7 @@ class _AuthReadyGateState extends State<AuthReadyGate> {
           );
         }
         if (snapshot.hasError) {
-          debugPrint(
-            'AuthReadyGate: initializeAuthSession failed: ${snapshot.error}\n'
-            '${snapshot.stackTrace}',
-          );
+          AppLogger.e("initializeAuthSession failed", tag: 'AuthReadyGate', error: snapshot.error, stackTrace: snapshot.stackTrace);
           return Scaffold(
             body: Center(
               child: Padding(

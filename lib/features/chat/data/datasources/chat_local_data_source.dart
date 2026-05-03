@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:WhatsUnity/core/utils/app_logger.dart';
 
 import '../../../../core/services/database_helper.dart';
 import '../utils/chat_message_map_codec.dart';
@@ -65,7 +66,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.local_insertMessage: $e\n$st');
+      AppLogger.e("local_insertMessage failed", tag: 'ChatLocalDataSource', error: e, stackTrace: st);
       rethrow;
     }
   }
@@ -85,7 +86,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       }
       await batch.commit(noResult: true);
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.local_insertMessages: $e\n$st');
+      AppLogger.e("local_insertMessages failed", tag: 'ChatLocalDataSource', error: e, stackTrace: st);
       rethrow;
     }
   }
@@ -121,8 +122,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       // Remote/UI lists are chronological ascending; this page was fetched DESC.
       return out.reversed.toList();
     } on DatabaseException catch (e, st) {
-      debugPrint(
-          'ChatLocalDataSource.local_getMessagesByChannelWithPagination: $e\n$st');
+      AppLogger.e("local_getMessagesByChannelWithPagination failed", tag: 'ChatLocalDataSource', error: e, stackTrace: st);
       return [];
     }
   }
@@ -137,7 +137,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         whereArgs: [channelId],
       );
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.local_clearChannelMessages: $e\n$st');
+      AppLogger.e("local_clearChannelMessages failed", tag: 'ChatLocalDataSource', error: e, stackTrace: st);
       rethrow;
     }
   }
@@ -165,8 +165,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       }
       return out;
     } on DatabaseException catch (e, st) {
-      debugPrint(
-          'ChatLocalDataSource.local_getAllMessagesForChannelAscending: $e\n$st');
+      AppLogger.e("local_getAllMessagesForChannelAscending failed", tag: 'ChatLocalDataSource', error: e, stackTrace: st);
       return [];
     }
   }
@@ -178,7 +177,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       final db = await _db;
       await db.delete(_table, where: 'id = ?', whereArgs: [messageId]);
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.local_deleteMessageById: $e\n$st');
+      AppLogger.e("local_deleteMessageById failed", tag: 'ChatLocalDataSource', error: e, stackTrace: st);
     }
   }
 
@@ -274,7 +273,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       if (rows.isEmpty) return null;
       return Map<String, dynamic>.from(rows.first);
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.local_getRawMessageRow: $e\n$st');
+      AppLogger.e("local_getRawMessageRow failed", tag: 'ChatLocalDataSource', error: e, stackTrace: st);
       return null;
     }
   }
@@ -301,7 +300,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         whereArgs: [messageId],
       );
     } on DatabaseException catch (e, st) {
-      debugPrint('ChatLocalDataSource.local_markMessageSyncClean: $e\n$st');
+      AppLogger.e("local_markMessageSyncClean failed", tag: 'ChatLocalDataSource', error: e, stackTrace: st);
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:WhatsUnity/core/utils/app_logger.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 import '../../../core/config/Enums.dart';
 import '../../../core/config/app_directory_types.dart' show CompoundMembersResult, Users;
@@ -125,10 +126,11 @@ List<Category> parseAppwriteCompoundsForIsolate(Map<String, dynamic> payload) {
     final totalCompounds =
         categories.fold<int>(0, (sum, category) => sum + category.compounds.length);
     final uncategorizedCount = otherCategoryCompounds?.length ?? 0;
-    debugPrint(
-      '[Appwrite/isolate] parseAppwriteCompounds: ${categoryRows.length} category row(s), '
-      '${compoundRows.length} compound row(s) → ${categories.length} category bucket(s), '
-      '$totalCompounds compound(s) listed ($uncategorizedCount in "Other" from unmatched category_id)',
+    AppLogger.d(
+      "parseAppwriteCompounds: ${categoryRows.length} category row(s), "
+      "${compoundRows.length} compound row(s) → ${categories.length} category bucket(s), "
+      "$totalCompounds compound(s) listed ($uncategorizedCount in \"Other\" from unmatched category_id)",
+      tag: 'Appwrite/isolate',
     );
   }
   return categories;

@@ -433,7 +433,6 @@ class _CreateMaintenanceReportDialogState
                     setState(() {
                       widget.issueCategory.text = value ?? 'other';
                     });
-                    debugPrint(widget.issueCategory.text);
                   },
                   label: Text(context.loc.maintenanceIssueSelect),
                   dropdownMenuEntries: categoryEntries,
